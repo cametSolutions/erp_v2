@@ -1,6 +1,13 @@
-// src/components/Layout/HomeLayout.jsx
-import { useState } from "react";
-import { Outlet } from "react-router-dom";
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
 import {
   Home,
   Wallet,
@@ -8,85 +15,166 @@ import {
   Settings,
   Building2,
   CircleUserRound,
-} from "lucide-react";
-
-import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-
-import {
   Users,
   Package,
   AlertCircle,
   FileText,
   Boxes,
   Banknote,
+  MoreVertical,
+  ChevronLeft,
 } from "lucide-react";
 
-function DesktopShell() {
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { Card, CardContent, CardHeader } from "@/components/ui/card";
+
+const mobileTabs = [
+  { id: "home", label: "Home", icon: Home, to: "/home" },
+  { id: "company", label: "Company", icon: Building2, to: "/company" },
+  { id: "user", label: "User", icon: CircleUserRound, to: "/user" },
+  { id: "settings", label: "Settings", icon: Settings, to: "/settings" },
+];
+
+const routeTitleMap = {
+  "/home": "Home",
+  "/company": "Company",
+  "/user": "User",
+  "/settings": "Settings",
+  "/customers": "Customers",
+  "/products": "Products",
+  "/outstandings": "Outstandings",
+  "/statements": "Statements",
+  "/stock-register": "Stock Register",
+  "/cash-bank": "Cash / Bank",
+  "/create-order": "Create Order",
+  "/create-receipt": "Create Receipt",
+};
+
+const DEFAULT_MOBILE_HEADER_OPTIONS = {
+  showMenuDots: true,
+  onMenuClick: undefined,
+  menuItems: [],
+};
+
+const MobileHeaderContext = createContext(null);
+
+function useMobileHeaderContext() {
+  const context = useContext(MobileHeaderContext);
+
+  if (!context) {
+    throw new Error("useMobileHeader must be used within HomeLayout.");
+  }
+
+  return context;
+}
+
+// eslint-disable-next-line react-refresh/only-export-components
+export function useMobileHeader() {
+  const { pathname } = useLocation();
+  const { setHeaderOptionsForPath, resetHeaderOptionsForPath } =
+    useMobileHeaderContext();
+
+  const setHeaderOptions = useCallback(
+    (options) => {
+      setHeaderOptionsForPath(pathname, options);
+    },
+    [pathname, setHeaderOptionsForPath],
+  );
+
+  const resetHeaderOptions = useCallback(() => {
+    resetHeaderOptionsForPath(pathname);
+  }, [pathname, resetHeaderOptionsForPath]);
+
+  return { setHeaderOptions, resetHeaderOptions };
+}
+
+function getPageTitle(pathname) {
+  if (routeTitleMap[pathname]) return routeTitleMap[pathname];
+  const segment = pathname.split("/").filter(Boolean).at(-1);
+  if (!segment) return "Home";
+  return segment.charAt(0).toUpperCase() + segment.slice(1);
+}
+
+function isHomePath(pathname) {
+  return pathname === "/home";
+}
+
+function MobileHeaderActions({ options, tone = "light" }) {
+  const showMenuDots = options?.showMenuDots ?? true;
+  const isDarkTone = tone === "dark";
+  const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  const actionButtonClass = isDarkTone
+    ? "flex h-9 w-9 items-center justify-center text-white transition-colors hover:text-white/75"
+    : "flex h-9 w-9 items-center justify-center text-slate-700 transition-colors hover:text-slate-900";
+  const menuPanelClass = isDarkTone
+    ? "absolute right-0 top-11 z-40 min-w-[160px] overflow-hidden rounded-xl bg-slate-900/95 py-1 text-white shadow-xl backdrop-blur"
+    : "absolute right-0 top-11 z-40 min-w-[160px] overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-slate-800 shadow-lg";
+  const menuItems = options?.menuItems ?? [];
+
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+
+    const onOutsideClick = (event) => {
+      if (!menuRef.current?.contains(event.target)) {
+        setMenuOpen(false);
+      }
+    };
+
+    document.addEventListener("mousedown", onOutsideClick);
+    return () => document.removeEventListener("mousedown", onOutsideClick);
+  }, [menuOpen]);
+
   return (
-    <div className="hidden md:flex h-screen bg-white">
-      {/* Sidebar */}
-      <aside className="w-64 bg-white border-r flex flex-col">
-        <div className="h-16 flex items-center px-4 border-b font-semibold">
-          MyWallet
+    <div className="relative flex items-center gap-2" ref={menuRef}>
+      {showMenuDots && (
+        <button
+          type="button"
+          onClick={() => {
+            if (options?.onMenuClick) {
+              options.onMenuClick();
+              return;
+            }
+            if (menuItems.length > 0) {
+              setMenuOpen((prev) => !prev);
+            }
+          }}
+          className={actionButtonClass}
+          aria-label="More options"
+        >
+          <MoreVertical className="h-4 w-4" />
+        </button>
+      )}
+      {showMenuDots && menuOpen && menuItems.length > 0 && (
+        <div className={menuPanelClass}>
+          {menuItems.map((item) => (
+            <button
+              key={item.label}
+              type="button"
+              onClick={() => {
+                item.onSelect?.();
+                setMenuOpen(false);
+              }}
+              className={`block w-full px-3 py-2 text-left text-sm transition-colors ${
+                isDarkTone ? "hover:bg-white/10" : "hover:bg-slate-100"
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
         </div>
-        <nav className="flex-1 px-4 py-4 space-y-2 text-sm">
-          <button className="flex items-center gap-2 w-full text-left font-medium text-primary">
-            <Home className="h-4 w-4" />
-            Dashboard
-          </button>
-          <button className="flex items-center gap-2 w-full text-left text-muted-foreground">
-            <Wallet className="h-4 w-4" />
-            Transactions
-          </button>
-          <button className="flex items-center gap-2 w-full text-left text-muted-foreground">
-            <Bell className="h-4 w-4" />
-            Notifications
-          </button>
-          <button className="flex items-center gap-2 w-full text-left text-muted-foreground">
-            <Settings className="h-4 w-4" />
-            Settings
-          </button>
-        </nav>
-        <div className="p-4 border-t text-xs text-muted-foreground">
-          © 2026 MyWallet
-        </div>
-      </aside>
-
-      {/* Main area */}
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="h-16 border-b bg-white flex items-center justify-between px-6">
-          <div>
-            <p className="text-xs text-muted-foreground">Welcome back</p>
-            <p className="text-sm font-semibold">Hello, Alexandre!</p>
-          </div>
-          <Avatar className="h-9 w-9">
-            <AvatarImage src="" alt="Alexandre" />
-            <AvatarFallback>AX</AvatarFallback>
-          </Avatar>
-        </header>
-
-        {/* Desktop content (reuse the same card style as mobile) */}
-        <main className="flex-1 overflow-y-auto p-6">
-          <div className="max-w-md">
-            <MobileWalletCard />
-          </div>
-          <div className="mt-6">
-            <Outlet />
-          </div>
-        </main>
-      </div>
+      )}
     </div>
   );
 }
 
-function MobileWalletCard() {
+function MobileWalletCard({ headerOptions }) {
+  const navigate = useNavigate();
+
   return (
-    <div className="bg-linear-to-b from-blue-800 to-indigo-600   text-white">
+    <div className="bg-linear-to-b from-blue-800 to-indigo-600 text-white">
       <div className="relative overflow-hidden bg-gradient-to-br from-blue-900 via-blue-800 to-indigo-700 text-white">
-        {/* Subtle background pattern */}
         <svg
           className="absolute inset-0 h-full w-full opacity-[0.07]"
           xmlns="http://www.w3.org/2000/svg"
@@ -106,20 +194,17 @@ function MobileWalletCard() {
           <rect width="100%" height="100%" fill="url(#dots)" />
         </svg>
 
-        {/* Decorative blurred blobs */}
         <div className="absolute -top-10 -right-10 h-40 w-40 rounded-full bg-blue-500/30 blur-3xl" />
         <div className="absolute -bottom-6 -left-6 h-28 w-28 rounded-full bg-indigo-400/20 blur-2xl" />
 
         <div className="relative p-5">
-          {/* Header row */}
-          <div className="flex items-center justify-between mb-6">
+          <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              {/* Avatar */}
-              <div className="h-10 w-10 rounded-full bg-gradient-to-br from-blue-300 to-indigo-400 flex items-center justify-center ring-2 ring-white/20 shadow-lg">
+              <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-300 to-indigo-400 ring-2 ring-white/20 shadow-lg">
                 <span className="text-sm font-bold text-white">A</span>
               </div>
               <div>
-                <p className="text-[11px] text-blue-200 leading-tight">
+                <p className="text-[11px] leading-tight text-blue-200">
                   Welcome back
                 </p>
                 <p className="text-sm font-semibold leading-tight">
@@ -128,51 +213,61 @@ function MobileWalletCard() {
               </div>
             </div>
 
-            {/* Bell */}
-            <button className="relative h-9 w-9 rounded-full bg-white/10 hover:bg-white/20 transition-colors flex items-center justify-center backdrop-blur-sm">
-              <Bell className="h-4 w-4" />
-              {/* Notification dot */}
-              <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-sky-400 ring-1 ring-blue-900" />
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition-colors hover:bg-white/20"
+              >
+                <Bell className="h-4 w-4" />
+                <span className="absolute top-1.5 right-1.5 h-2 w-2 rounded-full bg-sky-400 ring-1 ring-blue-900" />
+              </button>
+              <MobileHeaderActions options={headerOptions} tone="dark" />
+            </div>
           </div>
 
-          {/* Balance card */}
-          <div className="relative bg-white/10 backdrop-blur-sm border border-white/10 rounded-2xl py-6 text-center mb-5 overflow-hidden">
-            {/* Inner shimmer line */}
+          <div className="relative mb-5 overflow-hidden rounded-2xl border border-white/10 bg-white/10 py-6 text-center backdrop-blur-sm">
             <div className="absolute top-0 left-1/4 right-1/4 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
-            <p className="text-[11px] text-blue-200 mb-1 tracking-wide uppercase">
+            <p className="mb-1 text-[11px] uppercase tracking-wide text-blue-200">
               Total Balance
             </p>
             <p className="text-3xl font-bold tracking-tight">$3,756.00</p>
-            <p className="text-[11px] text-blue-300 mt-1">↑ 4.2% this month</p>
+            <p className="mt-1 text-[11px] text-blue-300">↑ 4.2% this month</p>
           </div>
 
-          {/* Action buttons */}
           <div className="flex gap-3">
-            <Button className="flex-1 bg-sky-500/90 hover:bg-sky-500 text-white rounded-xl py-5 text-[13px] font-semibold shadow-md shadow-sky-900/30 transition-all hover:-translate-y-0.5 border border-sky-400/30">
+            <Button
+              type="button"
+              onClick={() => navigate("/create-order")}
+              className="flex-1 rounded-xl border border-sky-400/30 bg-sky-500/90 py-5 text-[13px] font-semibold text-white shadow-md shadow-sky-900/30 transition-all hover:-translate-y-0.5 hover:bg-sky-500"
+            >
               Create Order
             </Button>
-            <Button className="flex-1 bg-rose-500/90 hover:bg-rose-500 text-white rounded-xl py-5 text-[13px] font-semibold shadow-md shadow-rose-900/30 transition-all hover:-translate-y-0.5 border border-rose-400/30">
+            <Button
+              type="button"
+              onClick={() => navigate("/create-receipt")}
+              className="flex-1 rounded-xl border border-rose-400/30 bg-rose-500/90 py-5 text-[13px] font-semibold text-white shadow-md shadow-rose-900/30 transition-all hover:-translate-y-0.5 hover:bg-rose-500"
+            >
               Create Receipt
             </Button>
           </div>
         </div>
       </div>
 
-      <Card className="bg-white border-none ring-0 shadow-none text-slate-900 w-full rounded-t-[30px] rounded-b-none pt-6">
-        <CardHeader className="pb-2">
-          {/* <CardTitle className="text-sm font-extrabold">Just for you</CardTitle> */}
-        </CardHeader>
+      <Card className="w-full rounded-t-[30px] rounded-b-none border-none bg-white pt-6 text-slate-900 shadow-none ring-0">
+        <CardHeader className="pb-2" />
         <CardContent className="space-y-4 pb-7">
           <div className="flex items-center justify-between">
             <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-400">
               Quick Actions
             </p>
-            {/* <p className="text-[11px] font-medium text-slate-500">6 modules</p> */}
           </div>
 
           <div className="grid grid-cols-2 gap-3 text-xs">
-            <button className="group relative rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+            <button
+              type="button"
+              onClick={() => navigate("/customers")}
+              className="group relative rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+            >
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
                 <Users className="h-4 w-4" />
               </div>
@@ -185,7 +280,11 @@ function MobileWalletCard() {
               </span>
             </button>
 
-            <button className="group relative rounded-3xl border border-pink-100 bg-gradient-to-br from-pink-50 to-white p-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+            <button
+              type="button"
+              onClick={() => navigate("/products")}
+              className="group relative rounded-3xl border border-pink-100 bg-gradient-to-br from-pink-50 to-white p-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+            >
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-pink-100 text-pink-600">
                 <Package className="h-4 w-4" />
               </div>
@@ -198,7 +297,11 @@ function MobileWalletCard() {
               </span>
             </button>
 
-            <button className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+            <button
+              type="button"
+              onClick={() => navigate("/outstandings")}
+              className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+            >
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-red-100 text-red-500">
                   <AlertCircle className="h-4 w-4" />
@@ -215,7 +318,11 @@ function MobileWalletCard() {
               </span>
             </button>
 
-            <button className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+            <button
+              type="button"
+              onClick={() => navigate("/statements")}
+              className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 text-indigo-500">
                 <FileText className="h-4 w-4" />
               </div>
@@ -226,7 +333,11 @@ function MobileWalletCard() {
               </div>
             </button>
 
-            <button className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+            <button
+              type="button"
+              onClick={() => navigate("/stock-register")}
+              className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+            >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-100 text-green-500">
                 <Boxes className="h-4 w-4" />
               </div>
@@ -237,7 +348,11 @@ function MobileWalletCard() {
               </div>
             </button>
 
-            <button className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-gradient-to-r from-teal-50/80 to-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md">
+            <button
+              type="button"
+              onClick={() => navigate("/cash-bank")}
+              className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-gradient-to-r from-teal-50/80 to-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
+            >
               <div className="flex items-center gap-3">
                 <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-100 text-teal-500">
                   <Banknote className="h-4 w-4" />
@@ -260,76 +375,233 @@ function MobileWalletCard() {
   );
 }
 
-function MobileShell() {
-  const [activeTab, setActiveTab] = useState("home");
+function MobileTopHeader({ isHome, title, headerOptions }) {
+  const navigate = useNavigate();
 
-  const mobileTabs = [
-    { id: "home", label: "Home", icon: Home },
-    { id: "company", label: "Company", icon: Building2 },
-    { id: "user", label: "User", icon: CircleUserRound },
-    { id: "settings", label: "Settings", icon: Settings },
-  ];
+  if (isHome) return null;
+
+  const onBack = () => {
+    if (window.history.length > 1) {
+      navigate(-1);
+      return;
+    }
+    navigate("/home", { replace: true });
+  };
 
   return (
-    <div className="md:hidden min-h-screen bg-white flex flex-col border-none">
-      {/* main content */}
-      <main className="flex-1 pb-[104px]">
-        <MobileWalletCard />
-        <div className="mt-4">
-          <Outlet />
+    <header className="sticky top-0 z-20 bg-white  px-4 py-2 text-slate-900 shadow-sm backdrop-blur mb-2">
+      <div className="relative mx-auto flex w-full max-w-md items-center justify-between">
+        <button
+          type="button"
+          onClick={onBack}
+          aria-label="Go back"
+        >
+          <ChevronLeft className="h-4 w-4 text-blue-600 font-extrabold" />
+        </button>
+        <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-sm font-bold text-slate-900">
+          {title}
+        </h1>
+        <div>
+          <MobileHeaderActions options={headerOptions} tone="light" />
         </div>
-      </main>
+      </div>
+    </header>
+  );
+}
 
-      {/* bottom bar */}
-      <nav className="fixed bottom-3 left-0 right-0 px-4">
-        <div className="mx-auto h-[76px] max-w-md rounded-3xl border border-slate-200/80 bg-white/90 px-2 shadow-[0_8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md">
-          <div className="grid h-full grid-cols-4 items-center text-xs">
-            {mobileTabs.map((tab) => {
-              const Icon = tab.icon;
-              const isActive = activeTab === tab.id;
+function MobileBottomBar() {
+  return (
+    <nav className="fixed bottom-3 left-0 right-0 z-30 px-4 md:hidden">
+      <div className="mx-auto h-[76px] max-w-md rounded-3xl border border-slate-200/80 bg-white/90 px-2 shadow-[0_8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md">
+        <div className="grid h-full grid-cols-4 items-center text-xs">
+          {mobileTabs.map((tab) => {
+            const Icon = tab.icon;
 
-              return (
-                <button
-                  key={tab.id}
-                  type="button"
-                  onClick={() => setActiveTab(tab.id)}
-                  className="relative z-10 flex flex-col items-center justify-center"
-                >
-                  <div
-                    className={`flex items-center justify-center transition-all duration-300 ${
-                      isActive
-                        ? "h-10 w-16 rounded-2xl bg-slate-600 text-white shadow-md"
-                        : "h-10 w-10 rounded-full text-slate-500"
-                    }`}
-                  >
-                    <Icon
-                      className={`h-5 w-5 transition-transform duration-300 ${
-                        isActive ? "scale-105" : "scale-100"
+            return (
+              <NavLink
+                key={tab.id}
+                to={tab.to}
+                end
+                className={() => "relative z-10 flex flex-col items-center justify-center"}
+              >
+                {({ isActive }) => (
+                  <>
+                    <div
+                      className={`flex items-center justify-center transition-all duration-300 ${
+                        isActive
+                          ? "h-10 w-16 rounded-2xl bg-slate-600 text-white shadow-md"
+                          : "h-10 w-10 rounded-full text-slate-500"
                       }`}
-                    />
-                  </div>
-                  <span
-                    className={`mt-1 text-[11px] font-medium transition-colors duration-300 ${
-                      isActive ? "text-slate-900" : "text-slate-500"
-                    }`}
-                  >
-                    {tab.label}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
+                    >
+                      <Icon
+                        className={`h-5 w-5 transition-transform duration-300 ${
+                          isActive ? "scale-105" : "scale-100"
+                        }`}
+                      />
+                    </div>
+                    <span
+                      className={`mt-1 text-[11px] font-medium transition-colors duration-300 ${
+                        isActive ? "text-slate-900" : "text-slate-500"
+                      }`}
+                    >
+                      {tab.label}
+                    </span>
+                  </>
+                )}
+              </NavLink>
+            );
+          })}
         </div>
-      </nav>
+      </div>
+    </nav>
+  );
+}
+
+function MobileShell() {
+  const { pathname } = useLocation();
+  const { headerOptionsByPath } = useMobileHeaderContext();
+  const isHome = isHomePath(pathname);
+  const title = getPageTitle(pathname);
+  const headerOptions =
+    headerOptionsByPath[pathname] ?? DEFAULT_MOBILE_HEADER_OPTIONS;
+
+  return (
+    <div className="min-h-screen bg-slate-50 md:hidden">
+      <div className="mx-auto min-h-screen w-full max-w-md bg-white shadow-sm">
+        <MobileTopHeader
+          isHome={isHome}
+          title={title}
+          headerOptions={headerOptions}
+        />
+
+        <main className="pb-[104px]">
+          {isHome ? (
+            <>
+              <MobileWalletCard headerOptions={headerOptions} />
+              <div className="mt-4 px-4">
+                <Outlet />
+              </div>
+            </>
+          ) : (
+            <div className="px-4 py-4">
+              <Outlet />
+            </div>
+          )}
+        </main>
+
+        <MobileBottomBar />
+      </div>
+    </div>
+  );
+}
+
+function DesktopShell() {
+  const { pathname } = useLocation();
+
+  return (
+    <div className="hidden h-screen bg-white md:flex">
+      <aside className="flex w-64 flex-col border-r bg-white">
+        <div className="flex h-16 items-center border-b px-4 font-semibold">
+          MyWallet
+        </div>
+        <nav className="flex-1 space-y-2 px-4 py-4 text-sm">
+          <NavLink
+            to="/home"
+            className={({ isActive }) =>
+              `flex w-full items-center gap-2 text-left ${
+                isActive ? "font-medium text-primary" : "text-muted-foreground"
+              }`
+            }
+          >
+            <Home className="h-4 w-4" />
+            Dashboard
+          </NavLink>
+          <button className="flex w-full items-center gap-2 text-left text-muted-foreground">
+            <Wallet className="h-4 w-4" />
+            Transactions
+          </button>
+          <button className="flex w-full items-center gap-2 text-left text-muted-foreground">
+            <Bell className="h-4 w-4" />
+            Notifications
+          </button>
+          <button className="flex w-full items-center gap-2 text-left text-muted-foreground">
+            <Settings className="h-4 w-4" />
+            Settings
+          </button>
+        </nav>
+        <div className="border-t p-4 text-xs text-muted-foreground">
+          © 2026 MyWallet
+        </div>
+      </aside>
+
+      <div className="flex flex-1 flex-col">
+        <header className="flex h-16 items-center justify-between border-b bg-white px-6">
+          <div>
+            <p className="text-xs text-muted-foreground">Welcome back</p>
+            <p className="text-sm font-semibold">Hello, Alexandre!</p>
+          </div>
+          <Avatar className="h-9 w-9">
+            <AvatarImage src="" alt="Alexandre" />
+            <AvatarFallback>AX</AvatarFallback>
+          </Avatar>
+        </header>
+
+        <main className="flex-1 overflow-y-auto p-6">
+          {pathname === "/home" ? (
+            <>
+              <div className="max-w-md">
+                <MobileWalletCard />
+              </div>
+              <div className="mt-6">
+                <Outlet />
+              </div>
+            </>
+          ) : (
+            <Outlet />
+          )}
+        </main>
+      </div>
     </div>
   );
 }
 
 export default function HomeLayout() {
+  const [headerOptionsByPath, setHeaderOptionsByPath] = useState({});
+
+  const setHeaderOptionsForPath = useCallback((pathname, options) => {
+    setHeaderOptionsByPath((prev) => ({
+      ...prev,
+      [pathname]: {
+        ...DEFAULT_MOBILE_HEADER_OPTIONS,
+        ...prev[pathname],
+        ...options,
+      },
+    }));
+  }, []);
+
+  const resetHeaderOptionsForPath = useCallback((pathname) => {
+    setHeaderOptionsByPath((prev) => {
+      if (!prev[pathname]) return prev;
+
+      const next = { ...prev };
+      delete next[pathname];
+      return next;
+    });
+  }, []);
+
+  const mobileHeaderContextValue = useMemo(
+    () => ({
+      headerOptionsByPath,
+      setHeaderOptionsForPath,
+      resetHeaderOptionsForPath,
+    }),
+    [headerOptionsByPath, resetHeaderOptionsForPath, setHeaderOptionsForPath],
+  );
+
   return (
-    <>
+    <MobileHeaderContext.Provider value={mobileHeaderContextValue}>
       <DesktopShell />
       <MobileShell />
-    </>
+    </MobileHeaderContext.Provider>
   );
 }
