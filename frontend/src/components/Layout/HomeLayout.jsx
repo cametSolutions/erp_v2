@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import { Outlet, NavLink, useLocation, useNavigate } from "react-router-dom";
+import { useSelector } from "react-redux";
 import {
   Home,
   Wallet,
@@ -58,6 +59,17 @@ const DEFAULT_MOBILE_HEADER_OPTIONS = {
 };
 
 const MobileHeaderContext = createContext(null);
+
+function getUserDisplayName(user) {
+  return user?.userName || user?.name || user?.email || "User";
+}
+
+function getInitials(name) {
+  const text = String(name || "").trim();
+  if (!text) return "U";
+  const parts = text.split(/\s+/).slice(0, 2);
+  return parts.map((part) => part.charAt(0).toUpperCase()).join("");
+}
 
 function useMobileHeaderContext() {
   const context = useContext(MobileHeaderContext);
@@ -171,6 +183,9 @@ function MobileHeaderActions({ options, tone = "light" }) {
 
 function MobileWalletCard({ headerOptions }) {
   const navigate = useNavigate();
+  const user = useSelector((state) => state.auth.user);
+  const displayName = getUserDisplayName(user);
+  const initials = getInitials(displayName);
 
   return (
     <div className="bg-linear-to-b from-blue-800 to-indigo-600 text-white">
@@ -201,14 +216,14 @@ function MobileWalletCard({ headerOptions }) {
           <div className="mb-6 flex items-center justify-between">
             <div className="flex items-center gap-3">
               <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-blue-300 to-indigo-400 ring-2 ring-white/20 shadow-lg">
-                <span className="text-sm font-bold text-white">A</span>
+                <span className="text-sm font-bold text-white">{initials}</span>
               </div>
               <div>
                 <p className="text-[11px] leading-tight text-blue-200">
                   Welcome back
                 </p>
                 <p className="text-sm font-semibold leading-tight">
-                  Hello, Alexandre!
+                  Hello, {displayName}!
                 </p>
               </div>
             </div>
@@ -497,6 +512,9 @@ function MobileShell() {
 
 function DesktopShell() {
   const { pathname } = useLocation();
+  const user = useSelector((state) => state.auth.user);
+  const displayName = getUserDisplayName(user);
+  const initials = getInitials(displayName);
 
   return (
     <div className="hidden h-screen bg-white md:flex">
@@ -538,11 +556,11 @@ function DesktopShell() {
         <header className="flex h-16 items-center justify-between border-b bg-white px-6">
           <div>
             <p className="text-xs text-muted-foreground">Welcome back</p>
-            <p className="text-sm font-semibold">Hello, Alexandre!</p>
+            <p className="text-sm font-semibold">Hello, {displayName}!</p>
           </div>
           <Avatar className="h-9 w-9">
-            <AvatarImage src="" alt="Alexandre" />
-            <AvatarFallback>AX</AvatarFallback>
+            <AvatarImage src="" alt={displayName} />
+            <AvatarFallback>{initials}</AvatarFallback>
           </Avatar>
         </header>
 

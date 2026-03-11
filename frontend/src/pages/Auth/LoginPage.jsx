@@ -3,7 +3,6 @@ import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Link, useNavigate } from "react-router-dom";
-import { toast } from "sonner";
 import { PropagateLoader } from "react-spinners";
 import { MdEmail } from "react-icons/md";
 import { FaPhone } from "react-icons/fa6";
@@ -46,14 +45,9 @@ const LoginPage = () => {
         password: values.password,
       };
 
-      const data = await loginUser(payload);
+      await loginUser(payload);
 
-      // cookie is set by backend; you can still store something if needed
-      if (data?.user) {
-        toast.success(data.message || "Login successful");
-      }
-
-      navigate("/dashboard"); // change to your landing route
+      navigate("/home", { replace: true });
     } catch {
       // error toast already shown in hook
     }
