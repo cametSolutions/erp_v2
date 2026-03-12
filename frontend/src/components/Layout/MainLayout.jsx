@@ -1,13 +1,12 @@
 // src/components/Layout/MainLayout.jsx
 import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
-import { FaHome, FaUser } from "react-icons/fa";
+import { FaHome, FaUser, FaBuilding, FaUsers  } from "react-icons/fa";
 
 const MainLayout = () => {
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    // clear any client-side auth data if you store it
     localStorage.removeItem("token");
     localStorage.removeItem("user");
     navigate("/sUsers/login");
@@ -15,8 +14,7 @@ const MainLayout = () => {
 
   const navLinkClass =
     "flex items-center gap-2 px-3 py-2 rounded-md text-sm font-medium cursor-pointer";
-  const baseColor =
-    "text-gray-600 hover:bg-blue-50 hover:text-blue-600";
+  const baseColor = "text-gray-600 hover:bg-blue-50 hover:text-blue-600";
   const activeColor = "bg-blue-100 text-blue-700";
 
   return (
@@ -24,9 +22,7 @@ const MainLayout = () => {
       {/* Sidebar */}
       <aside className="hidden md:flex md:w-64 flex-col bg-white border-r border-gray-200">
         <div className="h-16 flex items-center px-4 border-b border-gray-200">
-          <span className="text-lg font-bold text-blue-600">
-            ERP v2
-          </span>
+          <span className="text-lg font-bold text-blue-600">ERP v2</span>
         </div>
 
         <nav className="flex-1 px-3 py-4 space-y-1">
@@ -47,7 +43,50 @@ const MainLayout = () => {
             }
           >
             <FaUser size={16} />
-            <span>Users</span>
+            <span>User</span>
+          </NavLink>
+
+          <NavLink
+            to="/company/register"
+            className={({ isActive }) =>
+              `${navLinkClass} ${isActive ? activeColor : baseColor}`
+            }
+          >
+            <FaBuilding size={16} />
+            <span>Company</span>
+          </NavLink>
+          <NavLink
+            to="/company/list"
+            className={({ isActive }) =>
+              `${navLinkClass} ${isActive ? activeColor : baseColor}`
+            }
+          >
+            <FaBuilding size={16} />
+            <span>Companies</span>
+          </NavLink>
+
+          
+
+
+ <NavLink
+            to="/party/register"
+            className={({ isActive }) =>
+              `${navLinkClass} ${isActive ? activeColor : baseColor}`
+            }
+          >
+            <FaUsers size={16} />
+            <span>Party</span>
+          </NavLink>
+
+
+<NavLink
+            to="/party/list"
+            className={({ isActive }) =>
+              `${navLinkClass} ${isActive ? activeColor : baseColor}`
+            }
+          >
+            <FaUsers size={16} />
+            <span>Parties</span>
           </NavLink>
 
           {/* add more menu items here later */}

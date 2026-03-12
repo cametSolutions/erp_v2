@@ -4,14 +4,18 @@ import { Suspense, lazy } from "react";
 
 import AuthLayout from "./components/Layout/AuthLayout";
 import MainLayout from "./components/Layout/MainLayout";
-import ProtectedRoute from "./components/Layout/ProtectedRoute";
+// import ProtectedRoute from "./components/Layout/ProtectedRoute";
 import CustomMoonLoader from "./components/Loaders/CustomMoonLoader";
-
+import CompanyRegisterPage from "./pages/Company/CompanyRegisterPage";
+const CompanyListPage = lazy(() => import("./pages/Company/CompanyListPage"));
 const LoginPage = lazy(() => import("./pages/Auth/LoginPage"));
 const RegisterPage = lazy(() => import("./pages/Auth/RegisterPage"));
 const UserCreatePage = lazy(() => import("./pages/users/UserCreatePage"));
-// if you have a dashboard:
-// const HomePage = lazy(() => import("./pages/home/Home")); // or adjust path
+const PartyListPage = lazy(() => import("./pages/party/PartyListPage"));
+const PartyRegisterPage = lazy(() => import("./pages/party/PartyRegisterPage"));
+
+
+// cnst HomePage = lazy(() => import("./pages/home/Home"));
 
 function App() {
   return (
@@ -39,7 +43,51 @@ function App() {
           /> */}
 
           {/* user creation route */}
-         <Route path="/users/create" element={<UserCreatePage />} />
+          <Route
+            path="/users/create"
+            element={
+              // <ProtectedRoute>
+                <UserCreatePage />
+              // </ProtectedRoute>
+            }
+          />
+
+          {/* company registration route */}
+          <Route
+            path="/company/register"
+            element={
+              // <ProtectedRoute>
+                <CompanyRegisterPage />
+              // </ProtectedRoute>
+            }
+          />
+
+
+           <Route
+    path="/party/list"
+    element={
+      // <ProtectedRoute>
+        <PartyListPage />
+      // </ProtectedRoute>
+    }
+  />
+  <Route
+    path="/party/register"
+    element={
+      // <ProtectedRoute>
+        <PartyRegisterPage />
+      // </ProtectedRoute>
+    }
+  />
+
+          <Route
+  path="/company/list"
+  element={
+    // <ProtectedRoute>
+      <CompanyListPage />
+    // </ProtectedRoute>
+  }
+/>
         </Route>
 
         {/* catch-all */}
