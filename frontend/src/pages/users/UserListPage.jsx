@@ -1,35 +1,33 @@
 // src/pages/users/UserListPage.jsx
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { toast } from "sonner";
 import { FaUser, FaEdit, FaTrash } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
-import {
-  fetchUsers,
-  deleteUser,
-} from "../../api/client/userApi";
+import { deleteUser } from "../../api/client/userApi";
 import { confirmDelete } from "../../lib/confirmDelete";
+import { useUserOptionsQuery } from "@/hooks/queries/userQueries";
 
 const UserCard = ({ user, onDeleted }) => {
   const navigate = useNavigate();
 
   const handleEdit = () => {
-    navigate(`/users/create?userId=${user._id}`);
+    navigate(`/users/create?userId=${user.id}`);
   };
 
- const handleDelete = async () => {
-  const ok = await confirmDelete("Delete this user?");
-  if (!ok) return;
+  const handleDelete = async () => {
+    const ok = await confirmDelete("Delete this user?");
+    if (!ok) return;
 
-  try {
-    const res = await deleteUser(user._id);
-    toast.success(res.data.message || "User deleted");
-    onDeleted(user._id);
-  } catch (err) {
-    const msg =
-      err?.response?.data?.message || err.message || "Delete failed";
-    toast.error(msg);
-  }
-};
+    try {
+      const res = await deleteUser(user.id);
+      toast.success(res.data.message || "User deleted");
+      onDeleted(user.id);
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message || err.message || "Delete failed";
+      toast.error(msg);
+    }
+  };
 
   return (
     <div className="bg-white shadow-sm rounded-lg p-4 flex items-center justify-between mb-3 w-full">
@@ -38,9 +36,10 @@ const UserCard = ({ user, onDeleted }) => {
           <FaUser size={18} />
         </div>
         <div>
-          <h3 className="text-sm font-semibold text-gray-900">
+          <h3 className="text-sm font-semibold text-gray-500">
             {user.userName}
           </h3>
+          
           <p className="text-xs text-gray-500">
             {user.email} • {user.mobileNumber}
           </p>
@@ -71,32 +70,16 @@ const UserCard = ({ user, onDeleted }) => {
 };
 
 const UserListPage = () => {
-  const [users, setUsers] = useState([]);
-  const [loading, setLoading] = useState(false);
+  const { data: users = [], isLoading, isError, error } = useUserOptionsQuery();
 
-  const loadUsers = async () => {
-    try {
-      setLoading(true);
-      const res = await fetchUsers();
-      setUsers(res.data || []);
-    } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err.message ||
-        "Failed to load users";
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
+  const handleDeleted = () => {
+    // React Query will refetch or you can use onSuccess invalidate; here
+    // we rely on invalidation from delete mutation if you add it later.
   };
 
-  useEffect(() => {
-    loadUsers();
-  }, []);
-
-  const handleDeleted = (id) => {
-    setUsers((prev) => prev.filter((u) => u._id !== id));
-  };
+  if (isError) {
+    toast.error(error?.message || "Failed to load users");
+  }
 
   return (
     <div className="font-[sans-serif] w-full">
@@ -107,16 +90,16 @@ const UserListPage = () => {
           </h2>
         </div>
 
-        {loading && users.length === 0 && (
+        {isLoading && users.length === 0 && (
           <p className="text-sm text-gray-500">Loading...</p>
         )}
 
-        {!loading && users.length === 0 && (
+        {!isLoading && users.length === 0 && (
           <p className="text-sm text-gray-500">No users found.</p>
         )}
 
         {users.map((u) => (
-          <UserCard key={u._id} user={u} onDeleted={handleDeleted} />
+          <UserCard key={u.id} user={u} onDeleted={handleDeleted} />
         ))}
       </div>
     </div>

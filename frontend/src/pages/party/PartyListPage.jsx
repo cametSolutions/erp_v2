@@ -1,15 +1,13 @@
 // src/pages/party/PartyListPage.jsx
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { toast } from "sonner";
 import { FaUserFriends, FaEdit, FaTrash } from "react-icons/fa";
-import {
-  fetchParties,
-  deleteParty,
-} from "../../api/client/partyApi";
 import { useNavigate } from "react-router-dom";
 import { confirmDelete } from "../../lib/confirmDelete";
+import { partyService } from "@/api/services/party.service";
+import { usePartyListQuery } from "@/hooks/queries/partyQueries";
 
-const PartyCard = ({ party, onDeleted }) => {
+const PartyCard = ({ party }) => {
   const navigate = useNavigate();
 
   const handleEdit = () => {
@@ -17,19 +15,20 @@ const PartyCard = ({ party, onDeleted }) => {
   };
 
   const handleDelete = async () => {
-  const ok = await confirmDelete("Delete this party?");
-  if (!ok) return;
+    const ok = await confirmDelete("Delete this party?");
+    if (!ok) return;
 
-  try {
-    const res = await deleteParty(party._id);
-    toast.success(res.data.message || "Party deleted");
-    onDeleted(party._id);
-  } catch (err) {
-    const msg =
-      err?.response?.data?.message || err.message || "Delete failed";
-    toast.error(msg);
-  }
-};
+    try {
+      const res = await partyService.deleteParty(party._id);
+      toast.success(res.message || "Party deleted");
+      // Ideally: invalidate queries here via a mutation hook
+      window.location.reload(); // quick-and-dirty until you add mutation + invalidate
+    } catch (err) {
+      const msg =
+        err?.response?.data?.message || err.message || "Delete failed";
+      toast.error(msg);
+    }
+  };
 
   return (
     <div className="bg-white shadow-sm rounded-lg p-4 flex items-center justify-between mb-3 w-full">
@@ -68,56 +67,27 @@ const PartyCard = ({ party, onDeleted }) => {
 };
 
 const PartyListPage = () => {
-  const [parties, setParties] = useState([]);
-  const [page, setPage] = useState(1);        // optional if you want load more
-  const [hasMore, setHasMore] = useState(true);
-  const [loading, setLoading] = useState(false);
-
+  const [page, setPage] = useState(1);
   const cmp_id =
-  localStorage.getItem("activeCompanyId") || "69b1055e2a47bb531f77a469";
+    localStorage.getItem("activeCompanyId") || "69b1055e2a47bb531f77a469";
 
-  const loadParties = async (pageToLoad = 1) => {
-    if (!cmp_id) {
-      toast.error("No active company selected");
-      return;
-    }
-    try {
-      setLoading(true);
-      const res = await fetchParties({
-        page: pageToLoad,
-        limit: 20,
-        cmp_id,
-      });
-      const { items, hasMore: newHasMore } = res.data;
+  const {
+    data,
+    isLoading,
+    isError,
+    error,
+  } = usePartyListQuery({ cmp_id, page, limit: 20 });
 
-      setParties((prev) =>
-        pageToLoad === 1 ? items : [...prev, ...items]
-      );
-      setHasMore(newHasMore);
-      setPage(pageToLoad);
-    } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err.message ||
-        "Failed to load parties";
-      toast.error(msg);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const items = data?.items || [];
+  const hasMore = data?.hasMore;
 
-  useEffect(() => {
-    loadParties(1);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  const handleDeleted = (id) => {
-    setParties((prev) => prev.filter((p) => p._id !== id));
-  };
+  if (isError) {
+    toast.error(error?.message || "Failed to load parties");
+  }
 
   const handleLoadMore = () => {
-    if (hasMore && !loading) {
-      loadParties(page + 1);
+    if (hasMore) {
+      setPage((p) => p + 1);
     }
   };
 
@@ -130,33 +100,32 @@ const PartyListPage = () => {
           </h2>
         </div>
 
-        {loading && parties.length === 0 && (
+        {isLoading && items.length === 0 && (
           <p className="text-sm text-gray-500">Loading...</p>
         )}
 
-        {parties.length === 0 && !loading && (
+        {items.length === 0 && !isLoading && (
           <p className="text-sm text-gray-500">No parties found.</p>
         )}
 
-        {parties.map((p) => (
-          <PartyCard key={p._id} party={p} onDeleted={handleDeleted} />
+        {items.map((p) => (
+          <PartyCard key={p._id} party={p} />
         ))}
 
-        {/* Optional: simple Load More button */}
-        {hasMore && parties.length > 0 && (
+        {hasMore && items.length > 0 && (
           <div className="mt-4 flex justify-center">
             <button
               type="button"
               onClick={handleLoadMore}
-              disabled={loading}
+              disabled={isLoading}
               className="px-4 py-1.5 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
             >
-              {loading ? "Loading..." : "Load more"}
+              {isLoading ? "Loading..." : "Load more"}
             </button>
           </div>
         )}
 
-        {!hasMore && parties.length > 0 && (
+        {!hasMore && items.length > 0 && (
           <p className="mt-2 text-center text-xs text-gray-400">
             No more parties
           </p>

@@ -9,7 +9,8 @@ import { FaUser } from "react-icons/fa";
 import { MdEmail } from "react-icons/md";
 import { FaPhone } from "react-icons/fa6";
 import { useSearchParams, useNavigate } from "react-router-dom";
-import { fetchUserById, updateUser } from "../../api/client/userApi";
+import { updateUser } from "../../api/client/userApi";
+import { useUserByIdQuery } from "@/hooks/queries/userQueries";
 
 const schema = z.object({
   userName: z.string().min(1, "Name is required"),
@@ -25,14 +26,13 @@ const schema = z.object({
       /(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])/,
       "Password must contain upper, lower, number & special char"
     )
-    .optional(), // in edit, you may allow empty to keep same password
+    .optional(),
   role: z.enum(["admin", "staff"]).default("staff"),
 });
 
 const UserCreatePage = () => {
   const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [loadingUser, setLoadingUser] = useState(false);
+  const [saving, setSaving] = useState(false);
 
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -51,37 +51,32 @@ const UserCreatePage = () => {
     },
   });
 
-  // Load user data when editing
+  const {
+    data: user,
+    isLoading: loadingUser,
+    isError,
+    error,
+  } = useUserByIdQuery(userId, isEdit);
+
   useEffect(() => {
-    const loadUser = async () => {
-      if (!userId) return;
-      try {
-        setLoadingUser(true);
-        const res = await fetchUserById(userId);
-        const u = res.data;
-        reset({
-          userName: u.userName || "",
-          email: u.email || "",
-          mobileNumber: u.mobileNumber || "",
-          // password left empty intentionally
-          role: u.role || "staff",
-        });
-      } catch (err) {
-        const msg =
-          err?.response?.data?.message ||
-          err.message ||
-          "Failed to load user";
-        toast.error(msg);
-      } finally {
-        setLoadingUser(false);
-      }
-    };
-    loadUser();
-  }, [userId, reset]);
+    if (isError) {
+      toast.error(error?.message || "Failed to load user");
+    }
+  }, [isError, error]);
+
+  useEffect(() => {
+    if (!user) return;
+    reset({
+      userName: user.userName || "",
+      email: user.email || "",
+      mobileNumber: user.mobileNumber || "",
+      role: user.role || "staff",
+    });
+  }, [user, reset]);
 
   const onSubmit = async (values) => {
     try {
-      setLoading(true);
+      setSaving(true);
 
       const payload = {
         userName: values.userName.trim(),
@@ -91,7 +86,6 @@ const UserCreatePage = () => {
       };
 
       if (!isEdit || values.password) {
-        // send password only on create, or when changed in edit
         payload.password = values.password;
       }
 
@@ -110,7 +104,7 @@ const UserCreatePage = () => {
         err?.response?.data?.message || err.message || "User save failed";
       toast.error(msg);
     } finally {
-      setLoading(false);
+      setSaving(false);
     }
   };
 
@@ -133,7 +127,7 @@ const UserCreatePage = () => {
           </div>
         </div>
 
-        {loadingUser ? (
+        {loadingUser && isEdit ? (
           <p className="text-sm text-gray-500">Loading user...</p>
         ) : (
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
@@ -206,7 +200,12 @@ const UserCreatePage = () => {
             {/* Password */}
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password {isEdit && <span className="text-xs text-gray-400">(leave blank to keep same)</span>}
+                Password{" "}
+                {isEdit && (
+                  <span className="text-xs text-gray-400">
+                    (leave blank to keep same)
+                  </span>
+                )}
               </label>
               <div className="relative">
                 <input
@@ -246,10 +245,10 @@ const UserCreatePage = () => {
             <div className="pt-2 flex justify-end">
               <button
                 type="submit"
-                disabled={loading}
+                disabled={saving}
                 className="px-5 py-2 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
               >
-                {loading
+                {saving
                   ? isEdit
                     ? "Updating..."
                     : "Saving..."

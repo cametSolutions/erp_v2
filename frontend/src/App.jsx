@@ -1,4 +1,3 @@
-// src/App.jsx
 import { Routes, Route, Navigate } from "react-router-dom";
 import { Suspense, lazy } from "react";
 
@@ -17,38 +16,48 @@ const PartyRegisterPage = lazy(() => import("./pages/party/PartyRegisterPage"));
 const UserListPage = lazy(() => import("./pages/users/UserListPage"));
 
 // cnst HomePage = lazy(() => import("./pages/home/Home"));
+const HomeLayout = lazy(() => import("./components/Layout/HomeLayout"));
+const HomePage = lazy(() => import("./pages/Home/HomePage"));
+const UserPage = lazy(() => import("./pages/Home/UserPage"));
+const SettingsPage = lazy(() => import("./pages/Home/SettingsPage"));
+const CustomersPage = lazy(() => import("./pages/Home/CustomersPage"));
+const ProductsPage = lazy(() => import("./pages/Home/ProductsPage"));
+const OutstandingPage = lazy(() => import("./pages/Home/OutstandingsPage"));
+const StatementsPage = lazy(() => import("./pages/Home/StatementsPage"));
+const StockRegisterPage = lazy(() => import("./pages/Home/StockRegisterPage"));
+const CashBankPage = lazy(() => import("./pages/Home/CashBankPage"));
+const CreateOrderPage = lazy(() => import("./pages/Home/CreateOrderPage"));
+const CreateReceiptPage = lazy(() => import("./pages/Home/CreateReceiptPage"));
 
 function App() {
   return (
     <Suspense fallback={<CustomMoonLoader />}>
       <Routes>
-        {/* redirect root to login */}
-        <Route path="/" element={<Navigate to="/sUsers/login" replace />} />
-
-        {/* Auth layout: login + register */}
         <Route element={<AuthLayout />}>
           <Route path="/sUsers/login" element={<LoginPage />} />
           <Route path="/sUsers/register" element={<RegisterPage />} />
         </Route>
 
-        {/* Main layout (protected area) */}
-        <Route element={<MainLayout />}>
-          {/* example home route */}
-          {/* <Route
-            path="/home-page"
-            element={
-              <ProtectedRoute>
-                <HomePage />
-              </ProtectedRoute>
-            }
-          /> */}
-
+        <Route element={<HomeLayout />}>
+          <Route path="/" element={<Navigate to="/home" replace />} />
+          <Route path="/home" element={<HomePage />} />
+          <Route path="/company" element={<CompanyListPage />} />
+          <Route path="/user" element={<UserPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/products" element={<ProductsPage />} />
+          <Route path="/outstandings" element={<OutstandingPage />} />
+          <Route path="/statements" element={<StatementsPage />} />
+          <Route path="/stock-register" element={<StockRegisterPage />} />
+          <Route path="/cash-bank" element={<CashBankPage />} />
+          <Route path="/create-order" element={<CreateOrderPage />} />
+          <Route path="/create-receipt" element={<CreateReceiptPage />} />
           {/* user creation route */}
           <Route
             path="/users/create"
             element={
               // <ProtectedRoute>
-                <UserCreatePage />
+              <UserCreatePage />
               // </ProtectedRoute>
             }
           />
@@ -58,51 +67,38 @@ function App() {
             path="/company/register"
             element={
               // <ProtectedRoute>
-                <CompanyRegisterPage />
+              <CompanyRegisterPage />
               // </ProtectedRoute>
             }
           />
 
-
-           <Route
-    path="/party/list"
-    element={
-      // <ProtectedRoute>
-        <PartyListPage />
-      // </ProtectedRoute>
-    }
-  />
-  <Route
-    path="/party/register"
-    element={
-      // <ProtectedRoute>
-        <PartyRegisterPage />
-      // </ProtectedRoute>
-    }
-  />
+          <Route
+            path="/users/list"
+            element={
+              // <ProtectedRoute>
+              <UserListPage />
+              // </ProtectedRoute>
+            }
+          />
 
           <Route
-  path="/company/list"
-  element={
-    // <ProtectedRoute>
-      <CompanyListPage />
-    // </ProtectedRoute>
-  }
-/>
-
-<Route
-  path="/users/list"
-  element={
-    // <ProtectedRoute>
-      <UserListPage />
-    // </ProtectedRoute>
-  }
-/>
-
-
+            path="/party/list"
+            element={
+              // <ProtectedRoute>
+              <PartyListPage />
+              // </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/party/register"
+            element={
+              // <ProtectedRoute>
+              <PartyRegisterPage />
+              // </ProtectedRoute>
+            }
+          />
         </Route>
 
-        {/* catch-all */}
         <Route path="*" element={<Navigate to="/sUsers/login" replace />} />
       </Routes>
     </Suspense>

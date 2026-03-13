@@ -22,6 +22,7 @@ export const registerCompany = async (req, res) => {
     pan,
     financialYear,
     type,
+    industry,
     currency,
     currencyName,
   } = req.body;
@@ -71,6 +72,7 @@ export const registerCompany = async (req, res) => {
           type,
           currency,
           currencyName,
+          industry,
           owner,
         },
       ],

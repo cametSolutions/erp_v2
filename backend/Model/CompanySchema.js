@@ -6,11 +6,7 @@ const nanoId = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 4);
 
 const companySchema = new mongoose.Schema(
   {
-    cmp_id: {
-      type: String,
-      unique: true,
-      index: true,
-    },
+    
 
     name: {
       type: String,
@@ -72,32 +68,14 @@ const companySchema = new mongoose.Schema(
       type: Boolean,
       default: false,
     },
-
-    // numbers for sequences
-    orderNumber: { type: Number, default: 0 },
-    salesNumber: { type: Number, default: 0 },
-    purchaseNumber: { type: Number, default: 0 },
-    salesOrderNumber: { type: Number, default: 0 },
-    vanSalesNumber: { type: Number, default: 0 },
-    stockTransferNumber: { type: Number, default: 0 },
-    receiptNumber: { type: Number, default: 0 },
-    creditNoteNumber: { type: Number, default: 0 },
-    debitNoteNumber: { type: Number, default: 0 },
-    paymentNumber: { type: Number, default: 0 },
-
     batchEnabled: { type: Boolean, default: false },
     gdnEnabled: { type: Boolean, default: false },
-
-    industry: { type: Number, default: 0 },
-
-    // arrays you will fill later
-    brands: [{ type: String }],
-    categories: [{ type: String }],
-    subcategories: [{ type: String }],
-    levelNames: [{ type: String }],
-    locations: [{ type: String }],
+   industry: {
+  type: String,
+  trim: true,
+  default: "",
+},
     configurations: [{ type: mongoose.Schema.Types.Mixed }],
-    additionalCharges: [{ type: mongoose.Schema.Types.Mixed }],
   },
   { timestamps: true }
 );
