@@ -5,6 +5,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
 import { PropagateLoader } from "react-spinners";
 import { Link, useNavigate } from "react-router-dom";
+import { ROUTES } from "@/routes/paths";
 import { FaRegEye } from "react-icons/fa";
 import { IoMdEyeOff } from "react-icons/io";
 import { MdAccountCircle, MdEmail } from "react-icons/md";
@@ -71,7 +72,7 @@ const RegisterPage = () => {
         setLoader(false);
         toast.success(res.data.message || "Registered successfully");
         reset();
-        navigate("/sUsers/login");
+        navigate(ROUTES.login);
       }, 600);
     } catch (error) {
       setTimeout(() => {
@@ -268,7 +269,7 @@ const RegisterPage = () => {
               <p className="text-sm mt-6 text-gray-800">
                 Already have an account?{" "}
                 <Link
-                  to="/sUsers/login"
+                  to={ROUTES.login}
                   className="text-blue-500 font-semibold hover:underline ml-1"
                 >
                   Login here

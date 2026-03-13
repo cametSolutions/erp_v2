@@ -4,11 +4,12 @@ import { toast } from "sonner";
 import { FaUser, FaEdit, FaTrash } from "react-icons/fa";
 import { useNavigate } from "react-router-dom";
 import { deleteUser } from "../../api/client/userApi";
-import { confirmDelete } from "../../lib/confirmDelete";
 import { useUserOptionsQuery } from "@/hooks/queries/userQueries";
+import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
 
 const UserCard = ({ user, onDeleted }) => {
   const navigate = useNavigate();
+  const confirmDelete = useDeleteConfirm();
 
   const handleEdit = () => {
     navigate(`/users/create?userId=${user.id}`);

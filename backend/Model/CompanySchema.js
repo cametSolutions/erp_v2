@@ -48,10 +48,42 @@ const companySchema = new mongoose.Schema(
       default: "integrated",
     },
 
-    financialYear: { type: String, required: true, trim: true },
+    financialYear: {
+      format: {
+        type: String,
+        enum: [
+          "april-march",
+          "january-december",
+          "february-january",
+          "march-february",
+          "may-april",
+          "june-may",
+          "july-june",
+          "august-july",
+          "september-august",
+        ],
+        default: "april-march",
+      },
+      startingYear: {
+        type: Number,
+        min: 1900,
+        max: 2999,
+      },
+      startMonth: {
+        type: Number,
+        min: 1,
+        max: 12,
+      },
+      endMonth: {
+        type: Number,
+        min: 1,
+        max: 12,
+      },
+    },
 
     currency: { type: String, required: true, trim: true },       // e.g. "INR"
     currencyName: { type: String, required: true, trim: true },   // e.g. "Indian Rupee"
+    currencySymbol: { type: String, required: true, trim: true },
 
     owner: {
       type: mongoose.Schema.Types.ObjectId,

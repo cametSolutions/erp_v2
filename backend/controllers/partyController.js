@@ -3,6 +3,23 @@ import mongoose from "mongoose";
 import Party from "../Model/partySchema.js"
 import AccountGroup from "../Model/AccountGroup.js";
 
+const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
+  if (accountGroup && accountGroup !== "") {
+    return accountGroup;
+  }
+
+  const fallbackGroup = await AccountGroup.findOne({
+    accountGroup: "Sundry Debtors",
+    cmp_id,
+  });
+
+  if (!fallbackGroup) {
+    return null;
+  }
+
+  return fallbackGroup._id;
+};
+
 export const addParty = async (req, res) => {
   try {
     let {
@@ -30,17 +47,11 @@ export const addParty = async (req, res) => {
     // use currently selected company (if you store it) or from body:
     // cmp_id = cmp_id || req.companyIdFromHeader;
 
-    if (!accountGroup || accountGroup === "") {
-      const ag = await AccountGroup.findOne({
-        accountGroup: "Sundry Debtors",
-        cmp_id,
-      });
-      if (!ag) {
-        return res
-          .status(400)
-          .json({ success: false, message: "Default account group not found" });
-      }
-      accountGroup = ag._id;
+    accountGroup = await resolveAccountGroupId({ cmp_id, accountGroup });
+    if (!accountGroup) {
+      return res
+        .status(400)
+        .json({ success: false, message: "Default account group not found" });
     }
 
     const generatedId = new mongoose.Types.ObjectId();
@@ -88,7 +99,7 @@ export const addParty = async (req, res) => {
 export const listParties = async (req, res) => {
   try {
     const owner = req.user.id; // logged-in primary user
-    const { cmp_id, page = 1, limit = 20 } = req.query;
+    const { cmp_id, page = 1, limit = 20, search = "" } = req.query;
 
     if (!cmp_id) {
       return res
@@ -105,9 +116,22 @@ export const listParties = async (req, res) => {
       cmp_id,
     };
 
+    const trimmedSearch = String(search || "").trim();
+    if (trimmedSearch) {
+      const safeSearch = trimmedSearch.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      const searchRegex = new RegExp(safeSearch, "i");
+
+      filter.$or = [
+        { partyName: searchRegex },
+        { mobileNumber: searchRegex },
+        { emailID: searchRegex },
+        { gstNo: searchRegex },
+      ];
+    }
+
     const [items, total] = await Promise.all([
       Party.find(filter)
-        .sort({ createdAt: -1 })
+        .sort({ _id: -1 })
         .skip(skip)
         .limit(limitNum),
       Party.countDocuments(filter),
@@ -144,16 +168,35 @@ export const updateParty = async (req, res) => {
   try {
     const owner = req.user.id;
     const { id } = req.params;
+    const existingParty = await Party.findOne({ _id: id, Primary_user_id: owner });
+
+    if (!existingParty) {
+      return res.status(404).json({ message: "Party not found" });
+    }
+
+    const accountGroup = await resolveAccountGroupId({
+      cmp_id: req.body?.cmp_id || existingParty.cmp_id,
+      accountGroup: req.body?.accountGroup,
+    });
+
+    if (!accountGroup) {
+      return res.status(400).json({ message: "Default account group not found" });
+    }
+
+    const updatePayload = {
+      ...req.body,
+      accountGroup,
+      subGroup:
+        req.body?.subGroup === "" || req.body?.subGroup == null
+          ? null
+          : req.body.subGroup,
+    };
 
     const party = await Party.findOneAndUpdate(
       { _id: id, Primary_user_id: owner },
-      req.body,
-      { new: true }
+      updatePayload,
+      { new: true, runValidators: true }
     );
-
-    if (!party) {
-      return res.status(404).json({ message: "Party not found" });
-    }
 
     res.json({ message: "Party updated", party });
   } catch {

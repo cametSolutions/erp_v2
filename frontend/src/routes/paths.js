@@ -1,0 +1,32 @@
+export const ROUTES = {
+  root: "/",
+  login: "/login",
+  register: "/register",
+  home: "/home",
+  user: "/user",
+  settings: "/settings",
+  outstanding: "/outstanding",
+  statements: "/statements",
+  stockRegister: "/stock-register",
+  cashBank: "/cash-bank",
+  createOrder: "/create-order",
+  createReceipt: "/create-receipt",
+  usersCreate: "/users/create",
+  usersList: "/users/list",
+  masters: "/masters",
+  mastersCompany: "/masters/company",
+  mastersCompanyRegister: "/masters/company/register",
+  mastersCustomers: "/masters/customers",
+  mastersProducts: "/masters/products",
+  mastersPartyList: "/masters/party/list",
+  mastersPartyRegister: "/masters/party/register",
+};
+
+export const MASTER_ROUTE_REDIRECTS = {
+  company: ROUTES.mastersCompany,
+  companyRegister: ROUTES.mastersCompanyRegister,
+  customers: ROUTES.mastersCustomers,
+  products: ROUTES.mastersProducts,
+  partyList: ROUTES.mastersPartyList,
+  partyRegister: ROUTES.mastersPartyRegister,
+};

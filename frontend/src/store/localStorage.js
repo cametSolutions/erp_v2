@@ -8,7 +8,13 @@ export const loadAuthFromStorage = () => {
     if (!raw) return null;
 
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : null;
+    if (!parsed || typeof parsed !== "object") return null;
+
+    return {
+      ...parsed,
+      // Re-verify the cookie session on every fresh app load.
+      isInitialized: false,
+    };
   } catch {
     return null;
   }
@@ -33,10 +39,35 @@ export const clearAuthFromStorage = () => {
 export const loadCompanyFromStorage = () => {
   try {
     const raw = localStorage.getItem(COMPANY_STORAGE_KEY);
-    if (!raw) return null;
+    const activeCompanyId = localStorage.getItem(ACTIVE_COMPANY_ID_KEY);
+    if (!raw) {
+      return activeCompanyId
+        ? {
+            selectedCompanyId: activeCompanyId,
+            selectedCompany: null,
+          }
+        : null;
+    }
 
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === "object" ? parsed : null;
+    if (!parsed || typeof parsed !== "object") {
+      return activeCompanyId
+        ? {
+            selectedCompanyId: activeCompanyId,
+            selectedCompany: null,
+          }
+        : null;
+    }
+
+    return {
+      ...parsed,
+      selectedCompanyId:
+        parsed.selectedCompanyId ||
+        parsed.selectedCompany?._id ||
+        parsed.selectedCompany?.id ||
+        activeCompanyId ||
+        null,
+    };
   } catch {
     return null;
   }
