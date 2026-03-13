@@ -7,6 +7,14 @@ export const companyQueryKeys = {
   detail: (companyId) => [...companyQueryKeys.all, "detail", companyId],
 };
 
+export const useCompanyListQuery = (enabled = true) =>
+  useQuery({
+    queryKey: companyQueryKeys.list(),
+    queryFn: companyService.getCompanies,
+    enabled,
+    staleTime: 30 * 1000,
+  });
+
 export const useCompanyOptionsQuery = (enabled = true) =>
   useQuery({
     queryKey: companyQueryKeys.list(),
