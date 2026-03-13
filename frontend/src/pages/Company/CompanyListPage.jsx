@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 
 import { fetchCompanies, deleteCompany } from "../../api/client/companyApi";
+import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
 import { Card, CardContent } from "@/components/ui/card";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import companyIcon from "../../assets/icons/company.png";
@@ -11,6 +12,7 @@ import { ROUTES } from "@/routes/paths";
 
 const CompanyRow = ({ company, onDeleted }) => {
   const navigate = useNavigate();
+  const confirmDelete = useDeleteConfirm();
   const companyName = company?.name || "Untitled Company";
   const location = [company?.place, company?.state].filter(Boolean).join(", ");
 
@@ -20,7 +22,13 @@ const CompanyRow = ({ company, onDeleted }) => {
   };
 
   const handleDelete = async () => {
-    if (!window.confirm("Delete this company?")) return;
+    const ok = await confirmDelete({
+      title: "Delete this company?",
+      description:
+        "This company will be removed permanently. This action cannot be undone.",
+    });
+    if (!ok) return;
+
     try {
       const res = await deleteCompany(company._id);
       toast.success(res.data.message || "Company deleted");

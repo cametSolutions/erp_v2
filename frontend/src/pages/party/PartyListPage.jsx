@@ -7,18 +7,23 @@ import {
   deleteParty,
 } from "../../api/client/partyApi";
 import { useNavigate } from "react-router-dom";
-import { confirmDelete } from "../../lib/confirmDelete";
+import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
 import { ROUTES } from "@/routes/paths";
 
 const PartyCard = ({ party, onDeleted }) => {
   const navigate = useNavigate();
+  const confirmDelete = useDeleteConfirm();
 
   const handleEdit = () => {
     navigate(`${ROUTES.mastersPartyRegister}?partyId=${party._id}`);
   };
 
   const handleDelete = async () => {
-  const ok = await confirmDelete("Delete this party?");
+  const ok = await confirmDelete({
+    title: "Delete this party?",
+    description:
+      "This party will be removed permanently. This action cannot be undone.",
+  });
   if (!ok) return;
 
   try {

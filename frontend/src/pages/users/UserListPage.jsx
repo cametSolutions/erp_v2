@@ -7,18 +7,23 @@ import {
   fetchUsers,
   deleteUser,
 } from "../../api/client/userApi";
-import { confirmDelete } from "../../lib/confirmDelete";
+import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
 import { ROUTES } from "@/routes/paths";
 
 const UserCard = ({ user, onDeleted }) => {
   const navigate = useNavigate();
+  const confirmDelete = useDeleteConfirm();
 
   const handleEdit = () => {
     navigate(`${ROUTES.usersCreate}?userId=${user._id}`);
   };
 
  const handleDelete = async () => {
-  const ok = await confirmDelete("Delete this user?");
+  const ok = await confirmDelete({
+    title: "Delete this user?",
+    description:
+      "This user will be removed permanently. This action cannot be undone.",
+  });
   if (!ok) return;
 
   try {
