@@ -1,8 +1,8 @@
+// models/UserSchema.js
 import mongoose from "mongoose";
 import bcrypt from "bcryptjs";
 import { customAlphabet } from "nanoid";
 
-// 4‑char alphanumeric so "USER" + 4 = total 8
 const nanoId = customAlphabet("ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789", 4);
 
 const userSchema = new mongoose.Schema(
@@ -14,30 +14,50 @@ const userSchema = new mongoose.Schema(
     },
 
     userName: { type: String, required: true, trim: true },
+
     mobileNumber: {
       type: String,
       required: true,
       unique: true,
       trim: true,
     },
+
     email: {
       type: String,
       required: true,
       unique: true,
       lowercase: true,
+      trim: true,
     },
+
     password: { type: String, required: true, minlength: 6 },
+
     role: {
       type: String,
       enum: ["admin", "staff"],
-      default: "admin",
+      default: "admin", // primary register is admin; staff will override
       required: true,
       index: true,
     },
+
     subscription: {
       type: String,
       enum: ["monthly", "yearly"],
       default: "yearly",
+    },
+
+    // 🔹 for staff: which admin owns this user
+    owner: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      default: null, // null for primary admins
+    },
+
+    // optional company, if you link later
+   
+    isBlocked: {
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }
@@ -50,7 +70,7 @@ userSchema.index(
 
 userSchema.pre("save", async function () {
   if (!this.user_id) {
-    this.user_id = `USER${nanoId()}`; // e.g. USERA1B2
+    this.user_id = `USER${nanoId()}`; // total 8 chars
   }
 
   if (!this.isModified("password")) return;

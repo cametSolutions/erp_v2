@@ -1,15 +1,16 @@
-// src/pages/company/CompanyRegisterPage.jsx
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { useForm } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import api from "../../api/client/apiClient";
-import { FaRegBuilding } from "react-icons/fa";
-import { MdEmail } from "react-icons/md";
-import { FaPhone } from "react-icons/fa6";
+import { Building2 } from "lucide-react";
+import { useSearchParams } from "react-router-dom";
 
-// Zod validation based on your fields
+import api from "../../api/client/apiClient";
+import { fetchCompanyById, updateCompany } from "../../api/client/companyApi";
+import companyIcon from "../../assets/icons/company.png";
+
+
 const schema = z.object({
   name: z.string().min(1, "Company name is required"),
   flat: z.string().optional(),
@@ -34,7 +35,17 @@ const schema = z.object({
   financialYear: z.string().min(1, "Financial year is required"),
 });
 
+const inputClass =
+  "h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-slate-300";
+const labelClass = "mb-1 block text-xs font-medium text-slate-600";
+const errorClass = "mt-1 text-xs text-rose-500";
+
 const CompanyRegisterPage = () => {
+  const [searchParams] = useSearchParams();
+  const companyId = searchParams.get("companyId");
+  const isEdit = Boolean(companyId);
+  const [loadingCompany, setLoadingCompany] = useState(false);
+
   const {
     register,
     handleSubmit,
@@ -51,6 +62,47 @@ const CompanyRegisterPage = () => {
       financialYear: "",
     },
   });
+
+  useEffect(() => {
+    const loadCompany = async () => {
+      if (!companyId) return;
+
+      try {
+        setLoadingCompany(true);
+        const res = await fetchCompanyById(companyId);
+        const c = res.data;
+
+        reset({
+          name: c.name || "",
+          flat: c.flat || "",
+          road: c.road || "",
+          place: c.place || "",
+          landmark: c.landmark || "",
+          pin: c.pin || "",
+          country: c.country || "",
+          state: c.state || "",
+          email: c.email || "",
+          mobile: c.mobile || "",
+          gstNum: c.gstNum || "",
+          pan: c.pan || "",
+          website: c.website || "",
+          logo: c.logo || "",
+          type: c.type || "integrated",
+          financialYear: c.financialYear || "",
+          currency: c.currency || "",
+          currencyName: c.currencyName || "",
+        });
+      } catch (err) {
+        const msg =
+          err?.response?.data?.message || err.message || "Failed to load company";
+        toast.error(msg);
+      } finally {
+        setLoadingCompany(false);
+      }
+    };
+
+    loadCompany();
+  }, [companyId, reset]);
 
   const onSubmit = async (values) => {
     try {
@@ -75,330 +127,199 @@ const CompanyRegisterPage = () => {
         currencyName: values.currencyName.trim(),
       };
 
-      const res = await api.post("/company/register", payload);
-      toast.success(res.data.message || "Company registered");
-      reset();
+      if (isEdit) {
+        const res = await updateCompany(companyId, payload);
+        toast.success(res.data.message || "Company updated");
+      } else {
+        const res = await api.post("/company/register", payload);
+        toast.success(res.data.message || "Company registered");
+        reset();
+      }
     } catch (err) {
-      const msg =
-        err?.response?.data?.message || err.message || "Registration failed";
+      const msg = err?.response?.data?.message || err.message || "Save failed";
       toast.error(msg);
     }
   };
 
   return (
-    <div className="font-[sans-serif] bg-[#f5f7fb] min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-4xl">
-        <div className="bg-white shadow-xl rounded-xl px-8 py-10">
-          {/* Header */}
-          <div className="flex items-center gap-3 mb-8">
-            <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center text-white">
-              <FaRegBuilding />
+    <div className="w-full font-[sans-serif]">
+      <div className="mx-auto w-full max-w-4xl">
+        <div className="rounded-sm  bg-white p-5 shadow-sm md:p-6">
+          <div className="mb-5 flex items-start gap-3 border-b border-slate-100 pb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-slate-100 text-slate-700">
+              <img src={companyIcon} alt="Company" />
             </div>
             <div>
-              <h2 className="text-xl font-semibold text-gray-900">
-                Company Registration
+              <h2 className="text-base font-bold text-slate-900 md:text-lg">
+                {isEdit ? "Edit Company" : "Create Company"}
               </h2>
-              <p className="text-sm text-gray-500">
-                Enter your company details to start using the ERP.
+              <p className="text-xs text-slate-500 md:text-sm">
+                {isEdit
+                  ? "Update your company details"
+                  : "Fill the details to register your company"}
               </p>
             </div>
           </div>
 
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-            {/* Row 1: name, type, financial year */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Company Name
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("name")}
-                />
-                {errors.name && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.name.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Type
-                </label>
-                <select
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("type")}
-                >
-                  <option value="integrated">Integrated</option>
-                  <option value="standalone">Standalone</option>
-                </select>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Financial Year
-                </label>
-                <input
-                  type="text"
-                  placeholder="2025-2026"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("financialYear")}
-                />
-                {errors.financialYear && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.financialYear.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Address block */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Flat / Building
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("flat")}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Road
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("road")}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Place / City
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("place")}
-                />
-                {errors.place && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.place.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Landmark
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("landmark")}
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  PIN / ZIP
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("pin")}
-                />
-                {errors.pin && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.pin.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Country
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("country")}
-                />
-                {errors.country && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.country.message}
-                  </p>
-                )}
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  State
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("state")}
-                />
-                {errors.state && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.state.message}
-                  </p>
-                )}
-              </div>
-            </div>
-
-            {/* Contact + tax */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
-                </label>
-                <div className="relative">
-                  <input
-                    type="email"
-                    className="w-full border border-gray-300 rounded-md py-2 pl-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    {...register("email")}
-                  />
-                  <span className="absolute inset-y-0 right-3 flex items-center text-gray-400">
-                    <MdEmail />
-                  </span>
+          {loadingCompany ? (
+            <p className="text-sm text-slate-500">Loading company...</p>
+          ) : (
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-5">
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className={labelClass}>Company Name</label>
+                  <input type="text" className={inputClass} {...register("name")} />
+                  {errors.name && <p className={errorClass}>{errors.name.message}</p>}
                 </div>
-                {errors.email && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.email.message}
-                  </p>
-                )}
-              </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Mobile
-                </label>
-                <div className="relative">
+                {/* <div>
+                  <label className={labelClass}>Type</label>
+                  <select className={inputClass} {...register("type")}>
+                    <option value="integrated">Integrated</option>
+                    <option value="standalone">Standalone</option>
+                  </select>
+                </div> */}
+
+                <div>
+                  <label className={labelClass}>Financial Year</label>
                   <input
                     type="text"
-                    className="w-full border border-gray-300 rounded-md py-2 pl-3 pr-9 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    {...register("mobile")}
+                    placeholder="2025-2026"
+                    className={inputClass}
+                    {...register("financialYear")}
                   />
-                  <span className="absolute inset-y-0 right-3 flex items-center text-gray-400">
-                    <FaPhone />
-                  </span>
+                  {errors.financialYear && (
+                    <p className={errorClass}>{errors.financialYear.message}</p>
+                  )}
                 </div>
-                {errors.mobile && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.mobile.message}
-                  </p>
-                )}
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Website
-                </label>
-                <input
-                  type="text"
-                  placeholder="www.example.com"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("website")}
-                />
-              </div>
-            </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Flat / Building</label>
+                  <input type="text" className={inputClass} {...register("flat")} />
+                </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  GST Number
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("gstNum")}
-                />
-              </div>
+                <div>
+                  <label className={labelClass}>Road</label>
+                  <input type="text" className={inputClass} {...register("road")} />
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  PAN
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("pan")}
-                />
-              </div>
+                <div>
+                  <label className={labelClass}>Place / City</label>
+                  <input type="text" className={inputClass} {...register("place")} />
+                  {errors.place && <p className={errorClass}>{errors.place.message}</p>}
+                </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Logo URL
-                </label>
-                <input
-                  type="text"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("logo")}
-                />
-                {errors.logo && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.logo.message}
-                  </p>
-                )}
-              </div>
-            </div>
+                <div>
+                  <label className={labelClass}>Landmark</label>
+                  <input type="text" className={inputClass} {...register("landmark")} />
+                </div>
 
-            {/* Currency */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Currency Code
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. INR"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("currency")}
-                />
-                {errors.currency && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.currency.message}
-                  </p>
-                )}
+                <div>
+                  <label className={labelClass}>PIN / ZIP</label>
+                  <input type="text" className={inputClass} {...register("pin")} />
+                  {errors.pin && <p className={errorClass}>{errors.pin.message}</p>}
+                </div>
+
+                <div>
+                  <label className={labelClass}>Country</label>
+                  <input type="text" className={inputClass} {...register("country")} />
+                  {errors.country && <p className={errorClass}>{errors.country.message}</p>}
+                </div>
+
+                <div>
+                  <label className={labelClass}>State</label>
+                  <input type="text" className={inputClass} {...register("state")} />
+                  {errors.state && <p className={errorClass}>{errors.state.message}</p>}
+                </div>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Currency Name
-                </label>
-                <input
-                  type="text"
-                  placeholder="e.g. Indian Rupee"
-                  className="w-full border border-gray-300 rounded-md py-2 px-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  {...register("currencyName")}
-                />
-                {errors.currencyName && (
-                  <p className="text-xs text-red-500 mt-1">
-                    {errors.currencyName.message}
-                  </p>
-                )}
-              </div>
-            </div>
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className={labelClass}>Email</label>
+                  <input type="email" className={inputClass} {...register("email")} />
+                  {errors.email && <p className={errorClass}>{errors.email.message}</p>}
+                </div>
 
-            {/* Submit */}
-            <div className="pt-4 flex justify-end">
-              <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-6 py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
-              >
-                {isSubmitting ? "Saving..." : "Register Company"}
-              </button>
-            </div>
-          </form>
+                <div>
+                  <label className={labelClass}>Mobile</label>
+                  <input type="text" className={inputClass} {...register("mobile")} />
+                  {errors.mobile && <p className={errorClass}>{errors.mobile.message}</p>}
+                </div>
+
+                <div>
+                  <label className={labelClass}>Website</label>
+                  <input
+                    type="text"
+                    placeholder="www.example.com"
+                    className={inputClass}
+                    {...register("website")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className={labelClass}>GST Number</label>
+                  <input type="text" className={inputClass} {...register("gstNum")} />
+                </div>
+
+                <div>
+                  <label className={labelClass}>PAN</label>
+                  <input type="text" className={inputClass} {...register("pan")} />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Logo URL</label>
+                  <input type="text" className={inputClass} {...register("logo")} />
+                  {errors.logo && <p className={errorClass}>{errors.logo.message}</p>}
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+                <div>
+                  <label className={labelClass}>Currency Code</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. INR"
+                    className={inputClass}
+                    {...register("currency")}
+                  />
+                  {errors.currency && <p className={errorClass}>{errors.currency.message}</p>}
+                </div>
+
+                <div>
+                  <label className={labelClass}>Currency Name</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Indian Rupee"
+                    className={inputClass}
+                    {...register("currencyName")}
+                  />
+                  {errors.currencyName && (
+                    <p className={errorClass}>{errors.currencyName.message}</p>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end border-t border-slate-100 pt-4">
+                <button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="h-10 w-full rounded-sm bg-slate-900 px-5 text-sm font-medium text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {isSubmitting
+                    ? isEdit
+                      ? "Updating..."
+                      : "Saving..."
+                    : isEdit
+                      ? "Update Company"
+                      : "Create Company"}
+                </button>
+              </div>
+            </form>
+          )}
         </div>
       </div>
     </div>
