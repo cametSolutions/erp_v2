@@ -46,6 +46,8 @@ const partySchema = new mongoose.Schema({
   }, // Unified opening balance field
   openingBalanceType: {
     type: String,
+    enum: ["dr", "cr"],
+    default: "dr",
   },
 
   // All fields available for all party types (Party/Bank/Cash)
