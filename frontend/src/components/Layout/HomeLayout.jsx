@@ -652,7 +652,7 @@ function MobileBottomBar() {
   );
 }
 
-function MobileShell({ selectedCompany, onCompanyClick }) {
+function MobileShell({ selectedCompany, onCompanyClick ,hasCompany, isCheckingCompanies}) {
   const { pathname } = useLocation();
   const { headerOptionsByPath } = useMobileHeaderContext();
   const isHome = isHomePath(pathname);
@@ -669,24 +669,31 @@ function MobileShell({ selectedCompany, onCompanyClick }) {
           headerOptions={headerOptions}
         />
 
-        <main className="pb-[104px]">
-          {isHome ? (
-            <>
-              <MobileWalletCard
-                headerOptions={headerOptions}
-                selectedCompany={selectedCompany}
-                onCompanyClick={onCompanyClick}
-              />
-              <div className="mt-4 px-4">
-                <Outlet />
-              </div>
-            </>
-          ) : (
-            <div className="px-3 py-2">
-              <Outlet />
-            </div>
-          )}
-        </main>
+      <main className="pb-[104px]">
+  {isCheckingCompanies ? (
+    <div className="flex min-h-[calc(100vh-104px)] items-center justify-center">
+      <p className="text-sm text-slate-500">Checking your companies...</p>
+    </div>
+  ) : !hasCompany ? (
+    <NoCompanyScreen />
+  ) : isHome ? (
+    <>
+      <MobileWalletCard
+        headerOptions={headerOptions}
+        selectedCompany={selectedCompany}
+        onCompanyClick={onCompanyClick}
+      />
+      <div className="mt-4 px-4">
+        <Outlet />
+      </div>
+    </>
+  ) : (
+    <div className="px-3 py-2">
+      <Outlet />
+    </div>
+  )}
+</main>
+
 
         <MobileBottomBar />
       </div>
@@ -694,7 +701,7 @@ function MobileShell({ selectedCompany, onCompanyClick }) {
   );
 }
 
-function DesktopShell({ selectedCompany, onCompanyClick }) {
+function DesktopShell({ selectedCompany, onCompanyClick, hasCompany, isCheckingCompanies }) {
   const { pathname } = useLocation();
   const user = useSelector((state) => state.auth.user);
   const displayName = getUserDisplayName(user);
@@ -752,23 +759,58 @@ function DesktopShell({ selectedCompany, onCompanyClick }) {
           </Avatar>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
-          {pathname === "/home" ? (
-            <>
-              <div className="max-w-md">
-                <MobileWalletCard
-                  selectedCompany={selectedCompany}
-                  onCompanyClick={onCompanyClick}
-                />
-              </div>
-              <div className="mt-6">
-                <Outlet />
-              </div>
-            </>
-          ) : (
-            <Outlet />
-          )}
-        </main>
+       <main className="flex-1 overflow-y-auto p-6">
+  {isCheckingCompanies ? (
+    <div className="flex h-full items-center justify-center">
+      <p className="text-sm text-slate-500">
+        Checking your companies...
+      </p>
+    </div>
+  ) : !hasCompany ? (
+    <NoCompanyScreen />
+  ) : pathname === "/home" ? (
+    <>
+      <div className="max-w-md">
+        <MobileWalletCard
+          selectedCompany={selectedCompany}
+          onCompanyClick={onCompanyClick}
+        />
+      </div>
+      <div className="mt-6">
+        <Outlet />
+      </div>
+    </>
+  ) : (
+    <Outlet />
+  )}
+</main>
+
+      </div>
+    </div>
+  );
+}
+
+
+
+function NoCompanyScreen() {
+  const navigate = useNavigate();
+    console.log("NoCompanyScreen rendered");
+  return (
+    <div className="flex min-h-[calc(100vh-104px)] items-center justify-center bg-white px-4">
+      <div className="max-w-xs text-center">
+        <p className="text-sm font-semibold text-slate-900">
+          You don&apos;t have any company yet
+        </p>
+        <p className="mt-2 text-xs text-slate-500">
+          Please create a company to start using the app.
+        </p>
+        <button
+          type="button"
+          onClick={() => navigate("/company/register")}
+          className="mt-4 inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
+        >
+          Create company
+        </button>
       </div>
     </div>
   );
@@ -791,6 +833,11 @@ export default function HomeLayout() {
     data: companies = [],
     isLoading: isCompaniesLoading,
   } = useCompanyOptionsQuery(companiesEnabled);
+
+const hasCompany = companies.length > 0;
+
+console.log("companies", companies);
+console.log("hasCompany", hasCompany);
 
   const effectiveSelectedCompanyId = useMemo(() => {
     if (!companies.length) return null;
@@ -889,10 +936,14 @@ export default function HomeLayout() {
       <DesktopShell
         selectedCompany={selectedCompanyForUi}
         onCompanyClick={openCompanyDrawer}
+          hasCompany={hasCompany}
+      isCheckingCompanies={isCompaniesLoading && companiesEnabled}
       />
       <MobileShell
         selectedCompany={selectedCompanyForUi}
         onCompanyClick={openCompanyDrawer}
+        hasCompany={hasCompany}
+      isCheckingCompanies={isCompaniesLoading && companiesEnabled}
       />
       <CompanyDrawer
         open={isCompanyDrawerOpen}
