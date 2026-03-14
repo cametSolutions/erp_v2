@@ -7,15 +7,24 @@ export const partyService = {
     return res.data;
   },
 
-  getParties: async ({ page, limit, cmp_id }) => {
+  getParties: async ({
+    page,
+    limit,
+    cmp_id,
+    search,
+    signal,
+    skipGlobalLoader = false,
+  }) => {
     const res = await api.get("/party", {
-      params: { page, limit, cmp_id },
+      params: { page, limit, cmp_id, search },
+      signal,
+      skipGlobalLoader,
     });
     return res.data; // expect { items, hasMore, total, page }
   },
 
-  getPartyById: async (id) => {
-    const res = await api.get(`/party/${id}`);
+  getPartyById: async (id, options = {}) => {
+    const res = await api.get(`/party/${id}`, options);
     return res.data;
   },
 

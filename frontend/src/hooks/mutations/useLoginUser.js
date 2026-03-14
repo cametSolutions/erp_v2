@@ -3,6 +3,7 @@ import { useDispatch } from "react-redux";
 import { authService } from "../../api/services/auth.service";
 import { toast } from "sonner";
 import { setUser } from "../../store/slices/authSlice";
+import { capitalizeFirstLetter } from "../../../../shared/utils/string";
 
 export const useLoginUser = () => {
   const [loading, setLoading] = useState(false);
@@ -32,7 +33,9 @@ export const useLoginUser = () => {
         dispatch(setUser(user));
       }
 
-      toast.success(data.message || "Login successful");
+      const displayName =
+        user?.userName || user?.name || user?.email || "User";
+      toast.success(`Welcome back, ${capitalizeFirstLetter(displayName)}`);
       return data;
     } catch (err) {
       const msg =

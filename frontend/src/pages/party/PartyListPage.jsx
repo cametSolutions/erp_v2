@@ -1,138 +1,212 @@
-// src/pages/party/PartyListPage.jsx
-import React, { useState } from "react";
+import { useEffect, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FaUserFriends, FaEdit, FaTrash } from "react-icons/fa";
-import { useNavigate } from "react-router-dom";
-import { confirmDelete } from "../../lib/confirmDelete";
+import { Pencil, Trash2, Users } from "lucide-react";
+import { useLocation, useNavigate } from "react-router-dom";
+
+import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
+import { useMobileHeader } from "@/components/Layout/HomeLayout";
+import { Card, CardContent } from "@/components/ui/card";
 import { partyService } from "@/api/services/party.service";
-import { usePartyListQuery } from "@/hooks/queries/partyQueries";
+import { useDebouncedValue } from "@/hooks/useDebouncedValue";
+import {
+  partyQueryKeys,
+  useInfinitePartyListQuery,
+} from "@/hooks/queries/partyQueries";
+import { ROUTES } from "@/routes/paths";
 
-const PartyCard = ({ party }) => {
+const PAGE_SIZE = 20;
+
+function PartyRow({ party, onEdit, onDelete }) {
+  return (
+    <Card className="rounded border-none bg-slate-50 py-1 shadow-lg ring-0">
+      <CardContent className="flex items-center justify-between gap-3 p-3.5">
+        <div className="min-w-0 flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-amber-100 text-amber-600">
+            <Users className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-slate-900">
+              {party?.partyName || "Untitled Party"}
+            </p>
+            <p className="truncate text-xs text-slate-500">
+              {party?.mobileNumber || party?.emailID || "No contact details"}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => onEdit(party)}
+            className="rounded-md p-2 text-slate-600 transition-colors hover:bg-slate-100"
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onDelete(party)}
+            className="rounded-md p-2 text-rose-600 transition-colors hover:bg-rose-50"
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
+export default function PartyListPage() {
+  const [searchText, setSearchText] = useState("");
   const navigate = useNavigate();
+  const location = useLocation();
+  const queryClient = useQueryClient();
+  const confirmDelete = useDeleteConfirm();
+  const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
+  const cmpId = localStorage.getItem("activeCompanyId") || "";
+  const debouncedSearchText = useDebouncedValue(searchText.trim(), 500);
+  const isCustomersRoute = location.pathname === ROUTES.mastersCustomers;
+  const pageLabel = isCustomersRoute ? "Customers" : "Parties";
+  const emptyLabel = isCustomersRoute ? "customers" : "parties";
 
-  const handleEdit = () => {
-    navigate(`/party/register?partyId=${party._id}`);
+  const {
+    data,
+    error,
+    isError,
+    isLoading,
+    isFetchingNextPage,
+    fetchNextPage,
+    hasNextPage,
+  } = useInfinitePartyListQuery({
+    cmp_id: cmpId,
+    limit: PAGE_SIZE,
+    search: debouncedSearchText,
+  });
+
+  useEffect(() => {
+    setHeaderOptions({
+      showMenuDots: true,
+      menuItems: [
+        {
+          label: isCustomersRoute ? "Add Customer" : "Add Party",
+          onSelect: () => navigate(ROUTES.mastersPartyRegister),
+        },
+      ],
+      search: {
+        show: true,
+        value: searchText,
+        placeholder: `Search ${emptyLabel}`,
+        onChange: setSearchText,
+      },
+    });
+
+    return () => resetHeaderOptions();
+  }, [
+    emptyLabel,
+    isCustomersRoute,
+    navigate,
+    resetHeaderOptions,
+    searchText,
+    setHeaderOptions,
+  ]);
+
+  useEffect(() => {
+    if (!isError) return;
+
+    const message =
+      error?.response?.data?.message || error?.message || `Failed to load ${emptyLabel}`;
+    toast.error(message);
+  }, [emptyLabel, error, isError]);
+
+  const parties = data?.pages?.flatMap((page) => page?.items || []) || [];
+
+  const handleEdit = (party) => {
+    navigate(`${ROUTES.mastersPartyRegister}?partyId=${party._id}`);
   };
 
-  const handleDelete = async () => {
-    const ok = await confirmDelete("Delete this party?");
+  const handleDelete = async (party) => {
+    const ok = await confirmDelete({
+      title: `Delete this ${isCustomersRoute ? "customer" : "party"}?`,
+      description:
+        "This record will be removed permanently. This action cannot be undone.",
+      confirmLabel: "Delete",
+    });
     if (!ok) return;
 
     try {
       const res = await partyService.deleteParty(party._id);
-      toast.success(res.message || "Party deleted");
-      // Ideally: invalidate queries here via a mutation hook
-      window.location.reload(); // quick-and-dirty until you add mutation + invalidate
+      toast.success(res?.message || `${pageLabel.slice(0, -1)} deleted`);
+
+      queryClient.removeQueries({
+        queryKey: partyQueryKeys.detail(party._id),
+        exact: true,
+      });
+      queryClient.invalidateQueries({ queryKey: partyQueryKeys.all });
     } catch (err) {
-      const msg =
-        err?.response?.data?.message || err.message || "Delete failed";
-      toast.error(msg);
+      const message =
+        err?.response?.data?.message || err?.message || "Delete failed";
+      toast.error(message);
     }
   };
 
-  return (
-    <div className="bg-white shadow-sm rounded-lg p-4 flex items-center justify-between mb-3 w-full">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 flex-shrink-0">
-          <FaUserFriends size={18} />
-        </div>
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">
-            {party.partyName}
-          </h3>
-          <p className="text-xs text-gray-500">
-            {party.mobileNumber || "No mobile"}
-          </p>
+  if (!cmpId) {
+    return (
+      <div className="w-full font-[sans-serif]">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          Select a company first to view {emptyLabel}.
         </div>
       </div>
-
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleEdit}
-          className="p-2 rounded-full hover:bg-gray-100 text-gray-600"
-          title="Edit"
-        >
-          <FaEdit size={14} />
-        </button>
-        <button
-          onClick={handleDelete}
-          className="p-2 rounded-full hover:bg-red-50 text-red-600"
-          title="Delete"
-        >
-          <FaTrash size={14} />
-        </button>
-      </div>
-    </div>
-  );
-};
-
-const PartyListPage = () => {
-  const [page, setPage] = useState(1);
-  const cmp_id =
-    localStorage.getItem("activeCompanyId") || "69b1055e2a47bb531f77a469";
-
-  const {
-    data,
-    isLoading,
-    isError,
-    error,
-  } = usePartyListQuery({ cmp_id, page, limit: 20 });
-
-  const items = data?.items || [];
-  const hasMore = data?.hasMore;
-
-  if (isError) {
-    toast.error(error?.message || "Failed to load parties");
+    );
   }
 
-  const handleLoadMore = () => {
-    if (hasMore) {
-      setPage((p) => p + 1);
-    }
-  };
-
   return (
-    <div className="font-[sans-serif] w-full">
-      <div className="max-w-4xl mx-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">
-            Parties
-          </h2>
-        </div>
-
-        {isLoading && items.length === 0 && (
-          <p className="text-sm text-gray-500">Loading...</p>
-        )}
-
-        {items.length === 0 && !isLoading && (
-          <p className="text-sm text-gray-500">No parties found.</p>
-        )}
-
-        {items.map((p) => (
-          <PartyCard key={p._id} party={p} />
-        ))}
-
-        {hasMore && items.length > 0 && (
-          <div className="mt-4 flex justify-center">
-            <button
-              type="button"
-              onClick={handleLoadMore}
-              disabled={isLoading}
-              className="px-4 py-1.5 rounded-md border border-gray-300 text-sm text-gray-700 hover:bg-gray-50 disabled:opacity-60"
-            >
-              {isLoading ? "Loading..." : "Load more"}
-            </button>
+    <div className="w-full font-[sans-serif]">
+      <div className="mx-auto w-full max-w-md space-y-3">
+        {isLoading && (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-16 animate-pulse rounded-xl border border-slate-200 bg-white"
+              />
+            ))}
           </div>
         )}
 
-        {!hasMore && items.length > 0 && (
-          <p className="mt-2 text-center text-xs text-gray-400">
-            No more parties
-          </p>
+        {!isLoading && parties.length === 0 && (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+            {debouncedSearchText
+              ? `No matching ${emptyLabel}`
+              : `No ${emptyLabel} found`}
+          </div>
+        )}
+
+        {!isLoading && parties.length > 0 && (
+          <div className="space-y-2">
+            {parties.map((party) => (
+              <PartyRow
+                key={party._id}
+                party={party}
+                onEdit={handleEdit}
+                onDelete={handleDelete}
+              />
+            ))}
+          </div>
+        )}
+
+        {hasNextPage && (
+          <button
+            type="button"
+            onClick={() => fetchNextPage()}
+            disabled={isFetchingNextPage}
+            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {isFetchingNextPage ? "Loading more..." : `Load more ${emptyLabel}`}
+          </button>
         )}
       </div>
     </div>
   );
-};
-
-export default PartyListPage;
+}

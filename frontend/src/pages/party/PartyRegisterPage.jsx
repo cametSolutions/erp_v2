@@ -1,102 +1,101 @@
-// src/pages/party/PartyRegisterPage.jsx
-import React, { useEffect, useState } from "react";
-import { useForm } from "react-hook-form";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { toast } from "sonner";
-import { useSearchParams, useNavigate } from "react-router-dom";
-import { partyService } from "@/api/services/party.service";
-import { usePartyByIdQuery } from "@/hooks/queries/partyQueries";
+import { Users } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 
 import { fetchAccountGroups } from "../../api/client/accountGroupApi";
 import { fetchSubGroups } from "../../api/client/subGroupApi";
+import { partyService } from "@/api/services/party.service";
+import {
+  partyQueryKeys,
+  usePartyByIdQuery,
+} from "@/hooks/queries/partyQueries";
+import { ROUTES } from "@/routes/paths";
+
+const optionalString = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.string().optional(),
+);
+const optionalBalanceType = z.preprocess(
+  (value) => (value === "" ? undefined : value),
+  z.enum(["Dr", "Cr"]).optional(),
+);
 
 const schema = z.object({
   partyName: z.string().min(1, "Party name is required"),
   partyType: z.enum(["party", "bank", "cash"]).optional(),
-  accountGroup: z.string().min(1, "Account group is required"),
-  subGroup: z.string().optional(),
+  accountGroup: optionalString,
+  subGroup: optionalString,
   mobileNumber: z.string().min(1, "Mobile number is required"),
   emailID: z.string().email("Invalid email").optional().or(z.literal("")),
-  gstNo: z.string().optional(),
-  panNo: z.string().optional(),
-  billingAddress: z.string().optional(),
-  shippingAddress: z.string().optional(),
-  creditPeriod: z.string().optional(),
-  creditLimit: z.string().optional(),
-  openingBalanceType: z.enum(["Dr", "Cr"]).optional(),
-  openingBalanceAmount: z.string().optional(),
-  country: z.string().optional(),
-  state: z.string().optional(),
-  pin: z.string().optional(),
+  gstNo: optionalString,
+  panNo: optionalString,
+  billingAddress: optionalString,
+  shippingAddress: optionalString,
+  creditPeriod: optionalString,
+  creditLimit: optionalString,
+  openingBalanceType: optionalBalanceType,
+  openingBalanceAmount: optionalString,
+  country: optionalString,
+  state: optionalString,
+  pin: optionalString,
 });
 
-const PartyRegisterPage = () => {
+const inputClass =
+  "h-10 w-full rounded-sm border border-slate-200 bg-white px-3 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-slate-300";
+const textAreaClass =
+  "min-h-24 w-full rounded-sm border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 outline-none transition-colors placeholder:text-slate-400 focus:border-slate-300";
+const labelClass = "mb-1 block text-xs font-medium text-slate-600";
+const errorClass = "mt-1 text-xs text-rose-500";
+
+export default function PartyRegisterPage() {
   const [searchParams] = useSearchParams();
   const partyId = searchParams.get("partyId");
   const isEdit = Boolean(partyId);
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const [accountGroups, setAccountGroups] = useState([]);
   const [subGroups, setSubGroups] = useState([]);
-  const navigate = useNavigate();
-
-  const cmp_id =
-    localStorage.getItem("activeCompanyId") || "69b1055e2a47bb531f77a469";
+  const cmpId = localStorage.getItem("activeCompanyId") || "";
 
   const {
     register,
     handleSubmit,
     formState: { errors, isSubmitting },
     reset,
-    watch,
+    control,
   } = useForm({
     resolver: zodResolver(schema),
     defaultValues: {
+      partyName: "",
       partyType: "party",
+      accountGroup: "",
+      subGroup: "",
+      mobileNumber: "",
+      emailID: "",
+      gstNo: "",
+      panNo: "",
+      billingAddress: "",
+      shippingAddress: "",
+      creditPeriod: "",
+      creditLimit: "",
+      openingBalanceType: "",
+      openingBalanceAmount: "",
+      country: "",
+      state: "",
+      pin: "",
     },
   });
 
-  const watchedAccountGroup = watch("accountGroup");
+  const watchedAccountGroup = useWatch({
+    control,
+    name: "accountGroup",
+  });
 
-  // Load account groups
-  useEffect(() => {
-    const loadAccountGroups = async () => {
-      if (!cmp_id) return;
-      try {
-        const res = await fetchAccountGroups(cmp_id);
-        setAccountGroups(res.data || []);
-      } catch (err) {
-        const msg =
-          err?.response?.data?.message ||
-          err.message ||
-          "Failed to load account groups";
-        toast.error(msg);
-      }
-    };
-    loadAccountGroups();
-  }, [cmp_id]);
-
-  // Load subgroups when accountGroup changes
-  useEffect(() => {
-    const loadSubGroups = async () => {
-      if (!cmp_id || !watchedAccountGroup) {
-        setSubGroups([]);
-        return;
-      }
-      try {
-        const res = await fetchSubGroups(cmp_id, watchedAccountGroup);
-        setSubGroups(res.data || []);
-      } catch (err) {
-        const msg =
-          err?.response?.data?.message ||
-          err.message ||
-          "Failed to load subgroups";
-        toast.error(msg);
-      }
-    };
-    loadSubGroups();
-  }, [cmp_id, watchedAccountGroup]);
-
-  // Load party for edit mode via query
   const {
     data: party,
     isLoading: loadingParty,
@@ -105,18 +104,75 @@ const PartyRegisterPage = () => {
   } = usePartyByIdQuery(partyId, isEdit);
 
   useEffect(() => {
-    if (isError) {
-      toast.error(error?.message || "Failed to load party");
-    }
-  }, [isError, error]);
+    if (!cmpId) return;
+
+    const loadAccountGroups = async () => {
+      try {
+        const res = await fetchAccountGroups(cmpId);
+        setAccountGroups(res.data || []);
+      } catch (err) {
+        const message =
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load account groups";
+        toast.error(message);
+      }
+    };
+
+    loadAccountGroups();
+  }, [cmpId]);
+
+  useEffect(() => {
+    let isActive = true;
+
+    const loadSubGroups = async () => {
+      if (!cmpId || !watchedAccountGroup) {
+        if (isActive) {
+          setSubGroups([]);
+        }
+        return;
+      }
+
+      try {
+        const res = await fetchSubGroups(cmpId, watchedAccountGroup);
+        if (isActive) {
+          setSubGroups(res.data || []);
+        }
+      } catch (err) {
+        if (!isActive) return;
+
+        const message =
+          err?.response?.data?.message ||
+          err?.message ||
+          "Failed to load sub groups";
+        toast.error(message);
+      }
+    };
+
+    loadSubGroups();
+
+    return () => {
+      isActive = false;
+    };
+  }, [cmpId, watchedAccountGroup]);
+
+  useEffect(() => {
+    if (!isError) return;
+
+    const message =
+      error?.response?.data?.message || error?.message || "Failed to load party";
+    toast.error(message);
+  }, [error, isError]);
 
   useEffect(() => {
     if (!party) return;
+
     reset({
       partyName: party.partyName || "",
       partyType: party.partyType || "party",
-      accountGroup: party.accountGroup || "",
-      subGroup: party.subGroup || "",
+      accountGroup:
+        party.accountGroup?._id || party.accountGroup?.id || party.accountGroup || "",
+      subGroup: party.subGroup?._id || party.subGroup?.id || party.subGroup || "",
       mobileNumber: party.mobileNumber || "",
       emailID: party.emailID || "",
       gstNo: party.gstNo || "",
@@ -136,11 +192,35 @@ const PartyRegisterPage = () => {
     });
   }, [party, reset]);
 
+  const selectedAccountGroupLabel = useMemo(() => {
+    return (
+      accountGroups.find((item) => item._id === watchedAccountGroup)?.accountGroup ||
+      ""
+    );
+  }, [accountGroups, watchedAccountGroup]);
+
   const onSubmit = async (values) => {
+    if (!cmpId) {
+      toast.error("Select a company first");
+      return;
+    }
+
     try {
       const payload = {
         ...values,
-        cmp_id,
+        cmp_id: cmpId,
+        partyName: values.partyName.trim(),
+        mobileNumber: values.mobileNumber.trim(),
+        emailID: values.emailID?.trim() || "",
+        gstNo: values.gstNo?.trim() || "",
+        panNo: values.panNo?.trim() || "",
+        billingAddress: values.billingAddress?.trim() || "",
+        shippingAddress: values.shippingAddress?.trim() || "",
+        creditPeriod: values.creditPeriod?.trim() || "",
+        creditLimit: values.creditLimit?.trim() || "",
+        country: values.country?.trim() || "",
+        state: values.state?.trim() || "",
+        pin: values.pin?.trim() || "",
         openingBalanceAmount: values.openingBalanceAmount
           ? Number(values.openingBalanceAmount)
           : 0,
@@ -149,356 +229,293 @@ const PartyRegisterPage = () => {
 
       if (isEdit) {
         const res = await partyService.updateParty(partyId, payload);
-        toast.success(res.message || "Party updated");
+        toast.success(res?.message || "Party updated");
       } else {
         const res = await partyService.createParty(payload);
-        toast.success(res.message || "Party added");
-        reset({ partyType: "party" });
+        toast.success(res?.message || "Party added");
       }
 
-      navigate("/party/list");
+      await queryClient.invalidateQueries({ queryKey: partyQueryKeys.all });
+      if (partyId) {
+        queryClient.removeQueries({
+          queryKey: partyQueryKeys.detail(partyId),
+          exact: true,
+        });
+      }
+
+      navigate(ROUTES.mastersPartyList);
     } catch (err) {
-      const msg = err?.response?.data?.message || err.message || "Save failed";
-      toast.error(msg);
+      const message =
+        err?.response?.data?.message || err?.message || "Save failed";
+      toast.error(message);
     }
   };
 
   return (
-    <div className="font-[sans-serif] bg-[#f5f7fb] min-h-screen flex items-center justify-center p-4">
-      <div className="w-full max-w-3xl">
-        <div className="bg-white shadow-xl rounded-xl px-8 py-8">
-          <div className="mb-6">
-            <h2 className="text-xl font-semibold text-gray-900">
-              {isEdit ? "Edit Party" : "Party Registration"}
-            </h2>
-            <p className="text-sm text-gray-500">
-              {isEdit
-                ? "Update party details."
-                : "Add a new party (customer / supplier)."}
-            </p>
+    <div className="w-full font-[sans-serif]">
+      <div className="mx-auto w-full max-w-4xl">
+        <div className="rounded-sm bg-white p-5 shadow-sm md:p-6">
+          <div className="mb-5 flex items-start gap-3 border-b border-slate-100 pb-4">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-100 text-amber-700">
+              <Users className="h-5 w-5" />
+            </div>
+            <div>
+              <h2 className="text-base font-bold text-slate-900 md:text-lg">
+                {isEdit ? "Edit Party" : "Create Party"}
+              </h2>
+              <p className="text-xs text-slate-500 md:text-sm">
+                {isEdit
+                  ? "Update your customer or party details"
+                  : "Fill the details to create a new customer or party"}
+              </p>
+            </div>
           </div>
 
-          {loadingParty && isEdit ? (
-            <p className="text-sm text-gray-500">Loading party...</p>
+          {!cmpId ? (
+            <div className="rounded-sm border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
+              Select a company first to create a party.
+            </div>
+          ) : loadingParty && isEdit ? (
+            <p className="text-sm text-slate-500">Loading party...</p>
           ) : (
-            <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-              {/* Party name + type */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <form
+              onSubmit={handleSubmit(onSubmit, () => {
+                toast.error("Please fix the highlighted fields");
+              })}
+              className="space-y-5"
+            >
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Party Name <span className="text-red-500">*</span>
-                  </label>
+                  <label className={labelClass}>Party Name</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter party name"
                     {...register("partyName")}
                   />
-                  {" "}
                   {errors.partyName && (
-                    <p className="text-xs text-red-500 mt-1">
-                       {errors.partyName.message}
-                      {" "}
-                    </p>
+                    <p className={errorClass}>{errors.partyName.message}</p>
                   )}
-                  {" "}
                 </div>
-                {" "}
+
                 <div>
-                  {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-               Party Type{" "}
-                  </label>
-                  {" "}
-                  <select
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    {...register("partyType")}
-                  >
-               <option value="party">Party</option>
-               <option value="bank">Bank</option>
-          <option value="cash">Cash</option>
-                    {" "}
+                  <label className={labelClass}>Party Type</label>
+                  <select className={inputClass} {...register("partyType")}>
+                    <option value="party">Party</option>
+                    <option value="bank">Bank</option>
+                    <option value="cash">Cash</option>
                   </select>
-                  {" "}
                 </div>
-                {" "}
-              </div>
-             {/* Account group + subgroup */}{" "}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {" "}
+
                 <div>
-                  
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                     Account Group <span className="text-red-500">*</span>
-                  </label>
-                  {" "}
-                  <select
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    {...register("accountGroup")}
-                  >
-                    {" "}
-                    <option value="">(Sundry Debtors)</option>
-                    {" "}
-                    {accountGroups.map((ag) => (
-                      <option key={ag._id} value={ag._id}>
-                         {ag.accountGroup}
-                        {" "}
-                      </option>
-                    ))}
-                    {" "}
-                  </select>
-                  {" "}
-                </div>
-                {" "}
-                <div>
-                  {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                    Sub Group {" "}
-                  </label>
-                  {" "}
-                  <select
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    {...register("subGroup")}
-                  >
-                     <option value="">None</option>
-                    {" "}
-                    {subGroups.map((sg) => (
-                      <option key={sg._id} value={sg._id}>
-                        {sg.subGroup}
-                        {" "}
-                      </option>
-                    ))}
-                    {" "}
-                  </select>
-                  {" "}
-                </div>
-                {" "}
-              </div>
-               {/* Mobile / Email */}{" "}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {" "}
-                <div>
-                  {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                     Mobile <span className="text-red-500">*</span>
-                  </label>
-                  {" "}
+                  <label className={labelClass}>Mobile Number</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter mobile number"
                     {...register("mobileNumber")}
                   />
-                  {" "}
+                  {errors.mobileNumber && (
+                    <p className={errorClass}>{errors.mobileNumber.message}</p>
+                  )}
                 </div>
-              {" "}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                     Email {" "}
-                  </label>
-                  {" "}
-                  <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    {...register("emailID")}
-                  />
-                  {" "}
-                  {errors.emailID && (
-                    <p className="text-xs text-red-500 mt-1">
-                      {errors.emailID.message}
-                      {" "}
+                  <label className={labelClass}>Account Group</label>
+                  <select className={inputClass} {...register("accountGroup")}>
+                    <option value="">Use default account group</option>
+                    {accountGroups.map((group) => (
+                      <option key={group._id} value={group._id}>
+                        {group.accountGroup}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div>
+                  <label className={labelClass}>Sub Group</label>
+                  <select className={inputClass} {...register("subGroup")}>
+                    <option value="">
+                      {watchedAccountGroup ? "Select sub group" : "Choose account group first"}
+                    </option>
+                    {subGroups.map((group) => (
+                      <option key={group._id} value={group._id}>
+                        {group.subGroup}
+                      </option>
+                    ))}
+                  </select>
+                  {selectedAccountGroupLabel && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Selected account group: {selectedAccountGroupLabel}
                     </p>
                   )}
-                  {" "}
                 </div>
-              {" "}
               </div>
-              {/* GST / PAN */}{" "}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {" "}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                     GST No {" "}
-                  </label>
-                  {" "}
+                  <label className={labelClass}>Email</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="email"
+                    className={inputClass}
+                    placeholder="name@example.com"
+                    {...register("emailID")}
+                  />
+                  {errors.emailID && (
+                    <p className={errorClass}>{errors.emailID.message}</p>
+                  )}
+                </div>
+
+                <div>
+                  <label className={labelClass}>GST Number</label>
+                  <input
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter GST number"
                     {...register("gstNo")}
                   />
-                   {" "}
                 </div>
-                               {" "}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                                   {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        PAN No                  {" "}
-                  </label>
-                                   {" "}
+                  <label className={labelClass}>PAN Number</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter PAN number"
                     {...register("panNo")}
                   />
-                                 {" "}
                 </div>
-                             {" "}
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  <div>
+                    <label className={labelClass}>Opening Balance Type</label>
+                    <select className={inputClass} {...register("openingBalanceType")}>
+                      <option value="">Select type</option>
+                      <option value="Dr">Debit</option>
+                      <option value="Cr">Credit</option>
+                    </select>
+                    {errors.openingBalanceType && (
+                      <p className={errorClass}>{errors.openingBalanceType.message}</p>
+                    )}
+                  </div>
+
+                  <div>
+                    <label className={labelClass}>Opening Balance</label>
+                    <input
+                      type="number"
+                      step="0.01"
+                      className={inputClass}
+                      placeholder="0.00"
+                      {...register("openingBalanceAmount")}
+                    />
+                  </div>
+                </div>
               </div>
-                            {/* Addresses */}             {" "}
-              <div>
-                               {" "}
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Billing Address                {" "}
-                </label>
-                               {" "}
-                <textarea
-                  rows={2}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  {...register("billingAddress")}
-                />
-                             {" "}
-              </div>
-                           {" "}
-              <div>
-                               {" "}
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Shipping Address                {" "}
-                </label>
-                               {" "}
-                <textarea
-                  rows={2}
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  {...register("shippingAddress")}
-                />
-                             {" "}
-              </div>
-                            {/* Credit + opening balance */}             {" "}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                               {" "}
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                                   {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Credit Period                  {" "}
-                  </label>
-                                   {" "}
+                  <label className={labelClass}>Billing Address</label>
+                  <textarea
+                    className={textAreaClass}
+                    placeholder="Enter billing address"
+                    {...register("billingAddress")}
+                  />
+                </div>
+
+                <div>
+                  <label className={labelClass}>Shipping Address</label>
+                  <textarea
+                    className={textAreaClass}
+                    placeholder="Enter shipping address"
+                    {...register("shippingAddress")}
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+                <div>
+                  <label className={labelClass}>Credit Period</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter credit period"
                     {...register("creditPeriod")}
                   />
-                                 {" "}
                 </div>
-                               {" "}
+
                 <div>
-                                   {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Credit Limit                  {" "}
-                  </label>
-                                   {" "}
+                  <label className={labelClass}>Credit Limit</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter credit limit"
                     {...register("creditLimit")}
                   />
-                                 {" "}
                 </div>
-                               {" "}
+
                 <div>
-                                   {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Opening Bal Type                  {" "}
-                  </label>
-                                   {" "}
-                  <select
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    {...register("openingBalanceType")}
-                  >
-                                        <option value="">Select</option>       
-                                <option value="Dr">Debit</option>               
-                        <option value="Cr">Credit</option>                 {" "}
-                  </select>
-                                 {" "}
-                </div>
-                             {" "}
-              </div>
-                           {" "}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                               {" "}
-                <div>
-                                   {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Opening Balance                  {" "}
-                  </label>
-                                   {" "}
+                  <label className={labelClass}>PIN</label>
                   <input
-                    type="number"
-                    step="0.01"
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                    {...register("openingBalanceAmount")}
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter PIN"
+                    {...register("pin")}
                   />
-                                 {" "}
                 </div>
-                               {" "}
+              </div>
+
+              <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                                   {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        Country                  {" "}
-                  </label>
-                                   {" "}
+                  <label className={labelClass}>Country</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter country"
                     {...register("country")}
                   />
-                                 {" "}
                 </div>
-                               {" "}
+
                 <div>
-                                   {" "}
-                  <label className="block text-sm font-medium text-gray-700 mb-1">
-                                        State                  {" "}
-                  </label>
-                                   {" "}
+                  <label className={labelClass}>State</label>
                   <input
-                    className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
+                    type="text"
+                    className={inputClass}
+                    placeholder="Enter state"
                     {...register("state")}
                   />
-                                 {" "}
                 </div>
-                             {" "}
               </div>
-                           {" "}
-              <div>
-                               {" "}
-                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    PIN                {" "}
-                </label>
-                               {" "}
-                <input
-                  className="w-full border border-gray-300 rounded-md px-3 py-2 text-sm"
-                  {...register("pin")}
-                />
-                             {" "}
-              </div>
-                           {" "}
-              <div className="pt-4 flex justify-end">
-                               {" "}
+
+              <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
+                <button
+                  type="button"
+                  onClick={() => navigate(ROUTES.mastersPartyList)}
+                  className="rounded-sm border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
                 <button
                   type="submit"
                   disabled={isSubmitting}
-                  className="px-6 py-2.5 rounded-md bg-blue-600 hover:bg-blue-700 text-white text-sm font-semibold disabled:opacity-70 disabled:cursor-not-allowed"
+                  className="rounded-sm bg-slate-900 px-5 py-2 text-sm font-semibold text-white transition-colors hover:bg-slate-800 disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                                   {" "}
                   {isSubmitting
                     ? isEdit
                       ? "Updating..."
                       : "Saving..."
                     : isEdit
                       ? "Update Party"
-                      : "Add Party"}
-                                 {" "}
+                      : "Create Party"}
                 </button>
-                             {" "}
               </div>
-                         {" "}
             </form>
           )}
         </div>
       </div>
     </div>
   );
-};
-
-export default PartyRegisterPage;
+}

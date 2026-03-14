@@ -1,52 +1,95 @@
-// src/hooks/queries/partyQueries.js
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+
 import { partyService } from "@/api/services/party.service";
 
 export const partyQueryKeys = {
   all: ["parties"],
-  list: (cmp_id, page = 1, limit = 20) => [
+  infiniteList: (cmpId, limit = 20, search = "") => [
+    ...partyQueryKeys.all,
+    "infinite-list",
+    { cmpId, limit, search },
+  ],
+  list: (cmpId, page = 1, limit = 20, search = "") => [
     ...partyQueryKeys.all,
     "list",
-    { cmp_id, page, limit },
+    { cmpId, page, limit, search },
   ],
   detail: (partyId) => [...partyQueryKeys.all, "detail", partyId],
 };
 
-// Paginated list for PartyListPage
+export const useInfinitePartyListQuery = ({
+  cmp_id,
+  limit = 20,
+  search = "",
+  enabled = true,
+}) =>
+  useInfiniteQuery({
+    queryKey: partyQueryKeys.infiniteList(cmp_id || "", limit, search),
+    queryFn: ({ pageParam = 1, signal }) =>
+      partyService.getParties({
+        page: pageParam,
+        limit,
+        cmp_id,
+        search,
+        signal,
+        skipGlobalLoader: true,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) =>
+      lastPage?.hasMore ? (lastPage?.page || 1) + 1 : undefined,
+    enabled: Boolean(cmp_id) && enabled,
+    staleTime: 30_000,
+  });
+
 export const usePartyListQuery = ({
   cmp_id,
   page = 1,
   limit = 20,
+  search = "",
   enabled = true,
 }) =>
   useQuery({
-    queryKey: partyQueryKeys.list(cmp_id || "", page, limit),
-    queryFn: () => partyService.getParties({ page, limit, cmp_id }),
+    queryKey: partyQueryKeys.list(cmp_id || "", page, limit, search),
+    queryFn: ({ signal }) =>
+      partyService.getParties({
+        page,
+        limit,
+        cmp_id,
+        search,
+        signal,
+        skipGlobalLoader: true,
+      }),
     enabled: Boolean(cmp_id) && enabled,
     staleTime: 30_000,
-    keepPreviousData: true,
   });
 
-// Flat options for dropdowns (if you ever need)
 export const usePartyOptionsQuery = (cmp_id, enabled = true) =>
   useQuery({
-    queryKey: partyQueryKeys.list(cmp_id || "", 1, 1000),
-    queryFn: () => partyService.getParties({ page: 1, limit: 1000, cmp_id }),
+    queryKey: partyQueryKeys.list(cmp_id || "", 1, 1000, ""),
+    queryFn: ({ signal }) =>
+      partyService.getParties({
+        page: 1,
+        limit: 1000,
+        cmp_id,
+        search: "",
+        signal,
+        skipGlobalLoader: true,
+      }),
     enabled: Boolean(cmp_id) && enabled,
     select: (data) =>
-      (data?.items || []).map((p) => ({
-        id: p?._id || p?.id,
-        name: p?.partyName || "Untitled Party",
-        mobile: p?.mobileNumber || "",
+      (data?.items || []).map((party) => ({
+        id: party?._id || party?.id,
+        name: party?.partyName || "Untitled Party",
+        mobile: party?.mobileNumber || "",
       })),
     staleTime: 30_000,
   });
 
-// Single party for edit form
 export const usePartyByIdQuery = (partyId, enabled = true) =>
   useQuery({
     queryKey: partyQueryKeys.detail(partyId || ""),
-    queryFn: () => partyService.getPartyById(partyId),
+    queryFn: ({ signal }) =>
+      partyService.getPartyById(partyId, { signal, skipGlobalLoader: true }),
     enabled: Boolean(partyId) && enabled,
     staleTime: 30_000,
   });

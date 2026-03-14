@@ -11,6 +11,7 @@ import { FaPhone } from "react-icons/fa6";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { updateUser } from "../../api/client/userApi";
 import { useUserByIdQuery } from "@/hooks/queries/userQueries";
+import { ROUTES } from "@/routes/paths";
 
 const schema = z.object({
   userName: z.string().min(1, "Name is required"),
@@ -98,7 +99,7 @@ const UserCreatePage = () => {
         reset({ role: "staff" });
       }
 
-      navigate("/users/list");
+      navigate(ROUTES.usersList);
     } catch (err) {
       const msg =
         err?.response?.data?.message || err.message || "User save failed";

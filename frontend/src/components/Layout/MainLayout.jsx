@@ -2,14 +2,19 @@
 import React from "react";
 import { Outlet, NavLink, useNavigate } from "react-router-dom";
 import { FaHome, FaUser, FaBuilding, FaUsers  } from "react-icons/fa";
+import { useLogoutUser } from "@/hooks/mutations/useLogoutUser";
+import { ROUTES } from "@/routes/paths";
 
 const MainLayout = () => {
   const navigate = useNavigate();
+  const { logoutUser } = useLogoutUser();
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    localStorage.removeItem("user");
-    navigate("/sUsers/login");
+    logoutUser()
+      .then(() => {
+        navigate(ROUTES.login, { replace: true });
+      })
+      .catch(() => {});
   };
 
   const navLinkClass =

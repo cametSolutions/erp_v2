@@ -27,13 +27,12 @@ import {
   ChevronDown,
   Check,
 } from "lucide-react";
-import { capitalizeFirstLetter } from "../../../../shared/utils/string.js"
+import { capitalizeFirstLetter } from "../../../../shared/utils/string.js";
 
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import userAvatar from "@/assets/icons/user.png";
-import { logout } from "@/store/slices/authSlice";
 import {
   clearSelectedCompany,
   setSelectedCompany,
@@ -44,28 +43,37 @@ import {
   useCompanyByIdQuery,
   useCompanyOptionsQuery,
 } from "@/hooks/queries/companyQueries";
+import { useLogoutUser } from "@/hooks/mutations/useLogoutUser";
+import { ROUTES } from "@/routes/paths";
 
 const mobileTabs = [
-  { id: "home", label: "Home", icon: Home, to: "/home" },
-  { id: "company", label: "Company", icon: Building2, to: "/company" },
-  { id: "user", label: "User", icon: CircleUserRound, to: "/user" },
-  { id: "settings", label: "Settings", icon: Settings, to: "/settings" },
-
+  { id: "home", label: "Home", icon: Home, to: ROUTES.home },
+  {
+    id: "company",
+    label: "Company",
+    icon: Building2,
+    to: ROUTES.mastersCompany,
+  },
+  { id: "user", label: "User", icon: CircleUserRound, to: ROUTES.user },
+  { id: "settings", label: "Settings", icon: Settings, to: ROUTES.settings },
 ];
 
 const routeTitleMap = {
-  "/home": "Home",
-  "/company": "Company",
-  "/user": "User",
-  "/settings": "Settings",
-  "/customers": "Customers",
-  "/products": "Products",
-  "/outstandings": "Outstandings",
-  "/statements": "Statements",
-  "/stock-register": "Stock Register",
-  "/cash-bank": "Cash / Bank",
-  "/create-order": "Create Order",
-  "/create-receipt": "Create Receipt",
+  [ROUTES.home]: "Home",
+  [ROUTES.mastersCompany]: "Company",
+  [ROUTES.mastersCompanyRegister]: "Company",
+  [ROUTES.user]: "User",
+  [ROUTES.settings]: "Settings",
+  [ROUTES.mastersCustomers]: "Customers",
+  [ROUTES.mastersProducts]: "Products",
+  [ROUTES.mastersPartyList]: "Parties",
+  [ROUTES.mastersPartyRegister]: "Party",
+  [ROUTES.outstandings]: "Outstandings",
+  [ROUTES.statements]: "Statements",
+  [ROUTES.stockRegister]: "Stock Register",
+  [ROUTES.cashBank]: "Cash / Bank",
+  [ROUTES.createOrder]: "Create Order",
+  [ROUTES.createReceipt]: "Create Receipt",
 };
 
 const DEFAULT_MOBILE_HEADER_OPTIONS = {
@@ -222,6 +230,49 @@ function CompanyDrawer({
   );
 }
 
+function CompanySwitchOverlay({ open, companyName }) {
+  if (!open) return null;
+
+  return (
+    <div className="fixed inset-0 z-[120] flex flex-col items-center justify-center bg-slate-950/60 backdrop-blur-sm px-4">
+      <div className="flex justify-center">
+        <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-slate-900/80 border border-white/10 shadow-inner">
+          <div className="relative h-8 w-8 rounded-lg bg-slate-800 overflow-hidden">
+            {/* moon */}
+            <div className="absolute left-1 top-1 h-5 w-5 rounded-full bg-slate-500/70" />
+            {/* moving shadow to create moon-phase effect */}
+            <div className="absolute -left-4 top-1 h-5 w-5 rounded-full bg-slate-900/90 animate-[moon-slide_1.2s_linear_infinite]" />
+          </div>
+        </div>
+      </div>
+
+      {/* text under loader */}
+      <div className="mt-4 text-center text-sm text-slate-100">
+        <p className="font-medium">Switching company…</p>
+        <p className="mt-1 text-xs text-slate-300">
+          Preparing workspace for{" "}
+          <span className="font-semibold text-white">
+            {companyName || "the selected company"}
+          </span>
+          .
+        </p>
+      </div>
+
+      {/* custom keyframes for moon loader */}
+      <style>
+        {`
+          @keyframes moon-slide {
+            0% { transform: translateX(0); }
+            50% { transform: translateX(12px); }
+            100% { transform: translateX(0); }
+          }
+        `}
+      </style>
+    </div>
+  );
+}
+
+
 function useMobileHeaderContext() {
   const context = useContext(MobileHeaderContext);
 
@@ -260,7 +311,7 @@ function getPageTitle(pathname) {
 }
 
 function isHomePath(pathname) {
-  return pathname === "/home";
+  return pathname === ROUTES.home;
 }
 
 function MobileHeaderActions({ options, tone = "light" }) {
@@ -334,15 +385,18 @@ function MobileHeaderActions({ options, tone = "light" }) {
 
 function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
   const navigate = useNavigate();
-  const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
   const displayName = getUserDisplayName(user);
   const initials = getInitials(displayName);
+  const { logoutUser } = useLogoutUser();
 
   const onLogout = useCallback(() => {
-    dispatch(logout());
-    navigate("/sUsers/login", { replace: true });
-  }, [dispatch, navigate]);
+    logoutUser()
+      .then(() => {
+        navigate(ROUTES.login, { replace: true });
+      })
+      .catch(() => {});
+  }, [logoutUser, navigate]);
 
   const walletHeaderOptions = useMemo(
     () => ({
@@ -421,14 +475,14 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
           <div className="flex gap-3">
             <Button
               type="button"
-              onClick={() => navigate("/create-order")}
+              onClick={() => navigate(ROUTES.createOrder)}
               className="flex-1 rounded-xl border border-sky-400/30 bg-sky-500/90 py-5 text-[13px] font-semibold text-white shadow-md shadow-sky-900/30 transition-all hover:-translate-y-0.5 hover:bg-sky-500"
             >
               Create Order
             </Button>
             <Button
               type="button"
-              onClick={() => navigate("/create-receipt")}
+              onClick={() => navigate(ROUTES.createReceipt)}
               className="flex-1 rounded-xl border border-rose-400/30 bg-rose-500/90 py-5 text-[13px] font-semibold text-white shadow-md shadow-rose-900/30 transition-all hover:-translate-y-0.5 hover:bg-rose-500"
             >
               Create Receipt
@@ -449,7 +503,7 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
           <div className="grid grid-cols-2 gap-3 text-xs">
             <button
               type="button"
-              onClick={() => navigate("/customers")}
+              onClick={() => navigate(ROUTES.mastersCustomers)}
               className="group relative rounded-3xl border border-amber-100 bg-gradient-to-br from-amber-50 to-white p-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-amber-100 text-amber-600">
@@ -466,7 +520,7 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
 
             <button
               type="button"
-              onClick={() => navigate("/products")}
+              onClick={() => navigate(ROUTES.mastersProducts)}
               className="group relative rounded-3xl border border-pink-100 bg-gradient-to-br from-pink-50 to-white p-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="mb-4 flex h-10 w-10 items-center justify-center rounded-2xl bg-pink-100 text-pink-600">
@@ -483,7 +537,7 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
 
             <button
               type="button"
-              onClick={() => navigate("/outstandings")}
+              onClick={() => navigate(ROUTES.outstandings)}
               className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex items-center gap-3">
@@ -504,7 +558,7 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
 
             <button
               type="button"
-              onClick={() => navigate("/statements")}
+              onClick={() => navigate(ROUTES.statements)}
               className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-100 text-indigo-500">
@@ -519,7 +573,7 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
 
             <button
               type="button"
-              onClick={() => navigate("/stock-register")}
+              onClick={() => navigate(ROUTES.stockRegister)}
               className="group flex items-center gap-3 rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-green-100 text-green-500">
@@ -534,7 +588,7 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
 
             <button
               type="button"
-              onClick={() => navigate("/cash-bank")}
+              onClick={() => navigate(ROUTES.cashBank)}
               className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-gradient-to-r from-teal-50/80 to-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex items-center gap-3">
@@ -571,17 +625,13 @@ function MobileTopHeader({ isHome, title, headerOptions }) {
       navigate(-1);
       return;
     }
-    navigate("/home", { replace: true });
+    navigate(ROUTES.home, { replace: true });
   };
 
   return (
     <header className="sticky top-0 z-20 bg-white px-4 pt-4 text-slate-900">
       <div className="relative flex w-full  items-center justify-between">
-        <button
-          type="button"
-          onClick={onBack}
-          aria-label="Go back"
-        >
+        <button type="button" onClick={onBack} aria-label="Go back">
           <ChevronLeft className="h-4 w-4 text-blue-600 font-extrabold" />
         </button>
         <h1 className="pointer-events-none absolute left-1/2 -translate-x-1/2 text-sm font-bold text-slate-900">
@@ -617,7 +667,9 @@ function MobileBottomBar() {
                 key={tab.id}
                 to={tab.to}
                 end
-                className={() => "relative z-10 flex flex-col items-center justify-center"}
+                className={() =>
+                  "relative z-10 flex flex-col items-center justify-center"
+                }
               >
                 {({ isActive }) => (
                   <>
@@ -652,7 +704,7 @@ function MobileBottomBar() {
   );
 }
 
-function MobileShell({ selectedCompany, onCompanyClick ,hasCompany, isCheckingCompanies}) {
+function MobileShell({ selectedCompany, onCompanyClick }) {
   const { pathname } = useLocation();
   const { headerOptionsByPath } = useMobileHeaderContext();
   const isHome = isHomePath(pathname);
@@ -669,31 +721,24 @@ function MobileShell({ selectedCompany, onCompanyClick ,hasCompany, isCheckingCo
           headerOptions={headerOptions}
         />
 
-      <main className="pb-[104px]">
-  {isCheckingCompanies ? (
-    <div className="flex min-h-[calc(100vh-104px)] items-center justify-center">
-      <p className="text-sm text-slate-500">Checking your companies...</p>
-    </div>
-  ) : !hasCompany ? (
-    <NoCompanyScreen />
-  ) : isHome ? (
-    <>
-      <MobileWalletCard
-        headerOptions={headerOptions}
-        selectedCompany={selectedCompany}
-        onCompanyClick={onCompanyClick}
-      />
-      <div className="mt-4 px-4">
-        <Outlet />
-      </div>
-    </>
-  ) : (
-    <div className="px-3 py-2">
-      <Outlet />
-    </div>
-  )}
-</main>
-
+        <main className="pb-[104px]">
+          {isHome ? (
+            <>
+              <MobileWalletCard
+                headerOptions={headerOptions}
+                selectedCompany={selectedCompany}
+                onCompanyClick={onCompanyClick}
+              />
+              <div className="mt-4 px-4">
+                <Outlet />
+              </div>
+            </>
+          ) : (
+            <div className="px-3 py-2">
+              <Outlet />
+            </div>
+          )}
+        </main>
 
         <MobileBottomBar />
       </div>
@@ -701,7 +746,7 @@ function MobileShell({ selectedCompany, onCompanyClick ,hasCompany, isCheckingCo
   );
 }
 
-function DesktopShell({ selectedCompany, onCompanyClick, hasCompany, isCheckingCompanies }) {
+function DesktopShell({ selectedCompany, onCompanyClick }) {
   const { pathname } = useLocation();
   const user = useSelector((state) => state.auth.user);
   const displayName = getUserDisplayName(user);
@@ -715,7 +760,7 @@ function DesktopShell({ selectedCompany, onCompanyClick, hasCompany, isCheckingC
         </div>
         <nav className="flex-1 space-y-2 px-4 py-4 text-sm">
           <NavLink
-            to="/home"
+            to={ROUTES.home}
             className={({ isActive }) =>
               `flex w-full items-center gap-2 text-left ${
                 isActive ? "font-medium text-primary" : "text-muted-foreground"
@@ -759,58 +804,23 @@ function DesktopShell({ selectedCompany, onCompanyClick, hasCompany, isCheckingC
           </Avatar>
         </header>
 
-       <main className="flex-1 overflow-y-auto p-6">
-  {isCheckingCompanies ? (
-    <div className="flex h-full items-center justify-center">
-      <p className="text-sm text-slate-500">
-        Checking your companies...
-      </p>
-    </div>
-  ) : !hasCompany ? (
-    <NoCompanyScreen />
-  ) : pathname === "/home" ? (
-    <>
-      <div className="max-w-md">
-        <MobileWalletCard
-          selectedCompany={selectedCompany}
-          onCompanyClick={onCompanyClick}
-        />
-      </div>
-      <div className="mt-6">
-        <Outlet />
-      </div>
-    </>
-  ) : (
-    <Outlet />
-  )}
-</main>
-
-      </div>
-    </div>
-  );
-}
-
-
-
-function NoCompanyScreen() {
-  const navigate = useNavigate();
-    console.log("NoCompanyScreen rendered");
-  return (
-    <div className="flex min-h-[calc(100vh-104px)] items-center justify-center bg-white px-4">
-      <div className="max-w-xs text-center">
-        <p className="text-sm font-semibold text-slate-900">
-          You don&apos;t have any company yet
-        </p>
-        <p className="mt-2 text-xs text-slate-500">
-          Please create a company to start using the app.
-        </p>
-        <button
-          type="button"
-          onClick={() => navigate("/company/register")}
-          className="mt-4 inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
-        >
-          Create company
-        </button>
+        <main className="flex-1 overflow-y-auto p-6">
+          {pathname === ROUTES.home ? (
+            <>
+              <div className="max-w-md">
+                <MobileWalletCard
+                  selectedCompany={selectedCompany}
+                  onCompanyClick={onCompanyClick}
+                />
+              </div>
+              <div className="mt-6">
+                <Outlet />
+              </div>
+            </>
+          ) : (
+            <Outlet />
+          )}
+        </main>
       </div>
     </div>
   );
@@ -820,39 +830,38 @@ export default function HomeLayout() {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
   const isLoggedIn = useSelector((state) => state.auth.isLoggedIn);
-  const selectedCompanyId = useSelector((state) => state.company.selectedCompanyId);
+  const selectedCompanyId = useSelector(
+    (state) => state.company.selectedCompanyId,
+  );
   const selectedCompany = useSelector((state) => state.company.selectedCompany);
   const [headerOptionsByPath, setHeaderOptionsByPath] = useState({});
   const [isCompanyDrawerOpen, setIsCompanyDrawerOpen] = useState(false);
+  const [switchingCompanyId, setSwitchingCompanyId] = useState(null);
+  const [switchingCompanyName, setSwitchingCompanyName] = useState("");
   const companiesEnabled = Boolean(isLoggedIn && user);
 
-  console.log(selectedCompany);
-  
-
-  const {
-    data: companies = [],
-    isLoading: isCompaniesLoading,
-  } = useCompanyOptionsQuery(companiesEnabled);
-
-const hasCompany = companies.length > 0;
-
-console.log("companies", companies);
-console.log("hasCompany", hasCompany);
+  const { data: companies = [], isLoading: isCompaniesLoading } =
+    useCompanyOptionsQuery(companiesEnabled);
 
   const effectiveSelectedCompanyId = useMemo(() => {
     if (!companies.length) return null;
-    if (selectedCompanyId && companies.some((company) => company.id === selectedCompanyId)) {
+    if (
+      selectedCompanyId &&
+      companies.some((company) => company.id === selectedCompanyId)
+    ) {
       return selectedCompanyId;
     }
     return companies[0].id;
   }, [companies, selectedCompanyId]);
 
-  const {
-    data: selectedCompanyDetails,
-  } = useCompanyByIdQuery(effectiveSelectedCompanyId, companiesEnabled);
+  const { data: selectedCompanyDetails } = useCompanyByIdQuery(
+    effectiveSelectedCompanyId,
+    companiesEnabled,
+  );
 
   useEffect(() => {
     if (!companiesEnabled) return;
+    if (isCompaniesLoading) return;
 
     if (!effectiveSelectedCompanyId) {
       if (selectedCompanyId || selectedCompany) {
@@ -868,6 +877,7 @@ console.log("hasCompany", hasCompany);
     companiesEnabled,
     dispatch,
     effectiveSelectedCompanyId,
+    isCompaniesLoading,
     selectedCompany,
     selectedCompanyId,
   ]);
@@ -876,6 +886,25 @@ console.log("hasCompany", hasCompany);
     if (!selectedCompanyDetails) return;
     dispatch(setSelectedCompany(selectedCompanyDetails));
   }, [dispatch, selectedCompanyDetails]);
+
+  useEffect(() => {
+    if (!switchingCompanyId) return;
+    if (!selectedCompanyDetails) return;
+
+    const resolvedCompanyId =
+      selectedCompanyDetails?._id || selectedCompanyDetails?.id || null;
+
+    if (resolvedCompanyId !== switchingCompanyId) return;
+
+    const timeoutId = window.setTimeout(() => {
+      setSwitchingCompanyId(null);
+      setSwitchingCompanyName("");
+    }, 1000);
+
+    return () => {
+      window.clearTimeout(timeoutId);
+    };
+  }, [selectedCompanyDetails, switchingCompanyId]);
 
   const selectedCompanyForUi = useMemo(() => {
     const selectedId = effectiveSelectedCompanyId;
@@ -917,10 +946,21 @@ console.log("hasCompany", hasCompany);
     setIsCompanyDrawerOpen(false);
   }, []);
 
-  const handleSelectCompany = useCallback((company) => {
-    dispatch(setSelectedCompanyId(company?.id || null));
-    setIsCompanyDrawerOpen(false);
-  }, [dispatch]);
+  const handleSelectCompany = useCallback(
+    (company) => {
+      const nextCompanyId = company?.id || null;
+      if (!nextCompanyId || nextCompanyId === effectiveSelectedCompanyId) {
+        setIsCompanyDrawerOpen(false);
+        return;
+      }
+
+      setSwitchingCompanyId(nextCompanyId);
+      setSwitchingCompanyName(company?.name || "");
+      dispatch(setSelectedCompanyId(nextCompanyId));
+      setIsCompanyDrawerOpen(false);
+    },
+    [dispatch, effectiveSelectedCompanyId],
+  );
 
   const mobileHeaderContextValue = useMemo(
     () => ({
@@ -936,14 +976,10 @@ console.log("hasCompany", hasCompany);
       <DesktopShell
         selectedCompany={selectedCompanyForUi}
         onCompanyClick={openCompanyDrawer}
-          hasCompany={hasCompany}
-      isCheckingCompanies={isCompaniesLoading && companiesEnabled}
       />
       <MobileShell
         selectedCompany={selectedCompanyForUi}
         onCompanyClick={openCompanyDrawer}
-        hasCompany={hasCompany}
-      isCheckingCompanies={isCompaniesLoading && companiesEnabled}
       />
       <CompanyDrawer
         open={isCompanyDrawerOpen}
@@ -952,6 +988,10 @@ console.log("hasCompany", hasCompany);
         loading={isCompaniesLoading}
         onClose={closeCompanyDrawer}
         onSelectCompany={handleSelectCompany}
+      />
+      <CompanySwitchOverlay
+        open={Boolean(switchingCompanyId)}
+        companyName={switchingCompanyName}
       />
     </MobileHeaderContext.Provider>
   );

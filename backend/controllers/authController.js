@@ -108,3 +108,21 @@ export const Login = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+export const getCurrentUser = async (req, res) => {
+  return res.status(200).json({
+    user: req.user,
+  });
+};
+
+export const logoutUser = async (req, res) => {
+  res.clearCookie("erp_v2", {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    sameSite: process.env.NODE_ENV === "production" ? "Strict" : "Lax",
+  });
+
+  return res.status(200).json({
+    message: "Logout successful",
+  });
+};
