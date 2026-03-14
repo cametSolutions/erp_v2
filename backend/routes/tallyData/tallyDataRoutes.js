@@ -1,6 +1,6 @@
 // routes/tallyDataRoute.js
 import express from "express";
-import { addAccountGroups } from "../../controllers/tallyDataController.js/accountGroupController.js";
+import { addAccountGroups, addSubGroups } from "../../controllers/tallyDataController.js/accountGroupController.js";
 
 
 const router = express.Router();
@@ -20,5 +20,6 @@ const router = express.Router();
 
 // Import / sync account groups from Tally
 router.post("/account-groups", addAccountGroups);
+router.post("/sub-groups", addSubGroups);
 
 export default router;
