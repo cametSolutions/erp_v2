@@ -1,9 +1,13 @@
 // routes/tallyDataRoute.js
 import express from "express";
-import { addAccountGroups, addSubGroups } from "../../controllers/tallyDataController.js/tallyAccountGroupController.js";
+import {
+  addAccountGroups,
+  addSubGroups,
+} from "../../controllers/tallyDataController.js/tallyAccountGroupController.js";
 import { addPriceLevels } from "../../controllers/tallyDataController.js/tallyPriceLevelController.js";
 import { addParties } from "../../controllers/tallyDataController.js/tallyPartyController.js";
-
+import { addSubDetails } from "../../controllers/tallyDataController.js/tallyItemSubdetailsController.js";
+import { addGodowns } from "../../controllers/tallyDataController.js/tallyGodownController.js";
 
 const router = express.Router();
 
@@ -25,8 +29,11 @@ router.post("/account-groups", addAccountGroups);
 router.post("/sub-groups", addSubGroups);
 router.post("/party", addParties);
 
-
 /// item routes
 router.post("/price-levels", addPriceLevels);
+router.post("/brands", addSubDetails);
+router.post("/categories", addSubDetails);
+router.post("/subcategories", addSubDetails);
+router.post("/godowns", addGodowns);
 
 export default router;
