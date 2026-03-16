@@ -18,7 +18,7 @@ export const protect = async (req, res, next) => {
       return res.status(401).json({ message: "Not authorized, no token" });
     }
 
-    const decoded = jwt.verify(token, process.env.JWT_SECRET); // 🔹 same key
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
     const user = await User.findById(decoded.id).select("-password");
     if (!user) {
@@ -30,6 +30,7 @@ export const protect = async (req, res, next) => {
       role: user.role,
       email: user.email,
       userName: user.userName,
+      owner: user.owner ? user.owner.toString() : null, // <-- add this
     };
 
     next();

@@ -25,15 +25,37 @@ export const masterRoutes = (
       </ProtectedRoute>
     }
   >
-     <Route path={ROUTES.mastersUsers} element={<UserListPage />} />
+    <Route
+      path={ROUTES.mastersUsers}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <UserListPage />
+        </ProtectedRoute>
+      }
+    />
       <Route
       path={ROUTES.mastersUserRegister}
-      element={<UserCreatePage />}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <UserCreatePage />
+        </ProtectedRoute>
+      }
     />
-    <Route path={ROUTES.mastersCompany} element={<CompanyListPage />} />
-    <Route
+   <Route
       path={ROUTES.mastersCompanyRegister}
-      element={<CompanyRegisterPage />}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <CompanyRegisterPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path={ROUTES.mastersCompany}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <CompanyListPage />
+        </ProtectedRoute>
+      }
     />
     <Route path={ROUTES.mastersCustomers} element={<CustomersPage />} />
     <Route path={ROUTES.mastersProducts} element={<ProductsPage />} />

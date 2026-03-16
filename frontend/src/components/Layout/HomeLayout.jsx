@@ -710,7 +710,8 @@ function MobileBottomBar() {
 }
 
 function MobileShell({ selectedCompany, onCompanyClick, hasCompany,
-  isCheckingCompanies, }) {
+  isCheckingCompanies, role,
+  canCreateCompany, }) {
   const { pathname } = useLocation();
   const { headerOptionsByPath } = useMobileHeaderContext();
   const isHome = isHomePath(pathname);
@@ -732,7 +733,7 @@ function MobileShell({ selectedCompany, onCompanyClick, hasCompany,
               <p className="text-sm text-slate-500">Checking your companies...</p>
             </div>
           ) : !hasCompany && !isCompanyRegister ? (
-            <NoCompanyScreen />
+            <NoCompanyScreen role={role} canCreate={canCreateCompany} />
           ) : isHome ? (
             <>
               <MobileWalletCard
@@ -762,7 +763,8 @@ function MobileShell({ selectedCompany, onCompanyClick, hasCompany,
 function DesktopShell({  selectedCompany,
   onCompanyClick,
   hasCompany,
-  isCheckingCompanies,  }) {
+  isCheckingCompanies,  role,
+  canCreateCompany, }) {
   const { pathname } = useLocation();
   const user = useSelector((state) => state.auth.user);
   const displayName = getUserDisplayName(user);
@@ -826,7 +828,7 @@ function DesktopShell({  selectedCompany,
               <p className="text-sm text-slate-500">Checking your companies...</p>
             </div>
           ) : !hasCompany && !isCompanyRegister ? (
-            <NoCompanyScreen />
+              <NoCompanyScreen role={role} canCreate={canCreateCompany} />
           ) : pathname === ROUTES.home ? (
             <>
               <div className="max-w-md">
@@ -848,25 +850,33 @@ function DesktopShell({  selectedCompany,
     </div>
   );
 }
-function NoCompanyScreen() {
+function NoCompanyScreen({ role, canCreate }) {
   const navigate = useNavigate();
+  const isPrimary = role === "admin";
 
   return (
     <div className="flex min-h-[calc(100vh-104px)] items-center justify-center bg-white px-4">
       <div className="max-w-xs text-center">
         <p className="text-sm font-semibold text-slate-900">
-          You don&apos;t have any company yet
+          {isPrimary
+            ? "You don\u2019t have any company yet"
+            : "Your admin has not created any company yet"}
         </p>
         <p className="mt-2 text-xs text-slate-500">
-          Please create a company to start using the dashboard.
+          {isPrimary
+            ? "Please create a company to start using the dashboard."
+            : "Please contact your admin to create a company before you can use the dashboard."}
         </p>
-        <button
-          type="button"
-          onClick={() => navigate(ROUTES.mastersCompanyRegister)}
-          className="mt-4 inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
-        >
-          Create company
-        </button>
+
+        {canCreate && (
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.mastersCompanyRegister)}
+            className="mt-4 inline-flex items-center justify-center rounded-md bg-blue-600 px-4 py-2 text-xs font-semibold text-white"
+          >
+            Create company
+          </button>
+        )}
       </div>
     </div>
   );
@@ -876,9 +886,12 @@ function NoCompanyScreen() {
 
 
 
+
 export default function HomeLayout() {
   const dispatch = useDispatch();
   const user = useSelector((state) => state.auth.user);
+   const role = user?.role || "staff"; // default staff
+  const canCreateCompany = role === "admin";
   const isLoggedIn = useSelector((state) => state.auth.isLoggedIn);
   const selectedCompanyId = useSelector(
     (state) => state.company.selectedCompanyId,
@@ -1031,12 +1044,16 @@ export default function HomeLayout() {
       onCompanyClick={openCompanyDrawer}
       hasCompany={hasCompany}
       isCheckingCompanies={isCompaniesLoading && companiesEnabled}
+       role={role}
+  canCreateCompany={canCreateCompany}
     />
     <MobileShell
       selectedCompany={selectedCompanyForUi}
       onCompanyClick={openCompanyDrawer}
       hasCompany={hasCompany}
       isCheckingCompanies={isCompaniesLoading && companiesEnabled}
+       role={role}
+  canCreateCompany={canCreateCompany}
     />
     <CompanyDrawer
       open={isCompanyDrawerOpen}

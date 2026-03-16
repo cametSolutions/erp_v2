@@ -151,18 +151,32 @@ export const registerCompany = async (req, res) => {
   }
 };
 
-// @desc get Primary user organization list
-// route GET/api/pUsers/getOrganizations
 
 export const getCompanies = async (req, res) => {
   try {
-    const owner = req.user?.id;
-    const companies = await Company.find({ owner }).sort({ createdAt: -1 });
-    res.json(companies);
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const adminId = user.role === "admin" ? user.id : user.owner;
+
+    if (!adminId) {
+      return res.json([]);
+    }
+
+    const companies = await Company.find({ owner: adminId }).sort({
+      createdAt: -1,
+    });
+
+    return res.json(companies);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch companies" });
+    console.error("getCompanies error:", err);
+    return res.status(500).json({ message: "Failed to fetch companies" });
   }
 };
+
+
 
 export const updateCompany = async (req, res) => {
   try {
