@@ -620,12 +620,33 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
   );
 }
 
-function MobileTopHeader({ isHome, title, headerOptions }) {
+function MobileTopHeader({ isHome, title, headerOptions, forceShowOnHome = false }) {
   const navigate = useNavigate();
+  const { logoutUser } = useLogoutUser();
   const searchOptions = headerOptions?.search;
   const showSearch = Boolean(searchOptions?.show ?? searchOptions);
+  const effectiveHeaderOptions =
+    isHome && forceShowOnHome
+      ? {
+          ...headerOptions,
+          showMenuDots: true,
+          menuItems: [
+            ...(headerOptions?.menuItems || []),
+            {
+              label: "Logout",
+              onSelect: () => {
+                logoutUser()
+                  .then(() => {
+                    navigate(ROUTES.login, { replace: true });
+                  })
+                  .catch(() => {});
+              },
+            },
+          ],
+        }
+      : headerOptions;
 
-  if (isHome) return null;
+  if (isHome && !forceShowOnHome) return null;
 
   const onBack = () => {
     if (window.history.length > 1) {
@@ -645,7 +666,7 @@ function MobileTopHeader({ isHome, title, headerOptions }) {
           {title}
         </h1>
         <div className="flex justify-end">
-          <MobileHeaderActions options={headerOptions} tone="light" />
+          <MobileHeaderActions options={effectiveHeaderOptions} tone="light" />
         </div>
       </div>
       {showSearch && (
@@ -742,7 +763,8 @@ function MobileShell({ selectedCompany, onCompanyClick, hasCompany,
   const title = getPageTitle(pathname);
   const headerOptions =
     headerOptionsByPath[pathname] ?? DEFAULT_MOBILE_HEADER_OPTIONS;
- const isCompanyRegister = pathname === ROUTES.mastersCompanyRegister;
+  const isCompanyRegister = pathname === ROUTES.mastersCompanyRegister;
+  const showNoCompanyScreen = !isCheckingCompanies && !hasCompany && !isCompanyRegister;
   return (
     <div className="min-h-screen bg-slate-50 md:hidden">
       <div className="mx-auto min-h-screen w-full max-w-md bg-white shadow-sm">
@@ -750,13 +772,14 @@ function MobileShell({ selectedCompany, onCompanyClick, hasCompany,
           isHome={isHome}
           title={title}
           headerOptions={headerOptions}
+          forceShowOnHome={isHome && showNoCompanyScreen}
         />
- <main className="pb-[104px]">
+  <main className="pb-[104px]">
           {isCheckingCompanies ? (
             <div className="flex min-h-[calc(100vh-104px)] items-center justify-center">
               <p className="text-sm text-slate-500">Checking your companies...</p>
             </div>
-          ) : !hasCompany && !isCompanyRegister ? (
+          ) : showNoCompanyScreen ? (
             <NoCompanyScreen role={role} canCreate={canCreateCompany} />
           ) : isHome ? (
             <>
