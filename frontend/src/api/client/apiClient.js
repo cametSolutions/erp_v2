@@ -6,7 +6,7 @@ import {
 } from "../../store/slices/uiSlice";
 
 const api = axios.create({
-  baseURL: "/api",
+  baseURL: "http://localhost:4000/api", // Set your backend URL here
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });

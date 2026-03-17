@@ -13,8 +13,10 @@ import authRoute from "./routes/auth/authRoute.js";
 import userRoute from "./routes/user/userRoute.js";
 import companyRoute from "./routes/company/companyRoute.js";
 import partyRoute from "./routes/party/partyRoute.js";
+import productRoute from "./routes/product/productRoute.js";
 import accountGroupRoute from "./routes/accountGroup/accountGroupRoute.js";
 import subGroupRoute from "./routes/subGroup/subGroupRoute.js";
+import tallyDataRoute from "./routes/tallyData/tallyDataRoutes.js";
 // ----------------- App Init -----------------
 dotenv.config();
 const app = express();
@@ -71,8 +73,10 @@ app.use("/api/auth", authRoute);
 app.use("/api/users", userRoute);
 app.use("/api/company", companyRoute);
 app.use("/api/party", partyRoute);
+app.use("/api/product", productRoute);
 app.use("/api/account-group", accountGroupRoute);
 app.use("/api/subgroup", subGroupRoute);
+app.use("/api/tally", tallyDataRoute);
 // ----------------- Production Build Serving -----------------
 if (process.env.NODE_ENV === "production") {
   const __dirname = path.resolve();

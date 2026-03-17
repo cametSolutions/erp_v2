@@ -4,6 +4,8 @@ import { Route } from "react-router-dom";
 import ProtectedRoute from "@/components/Layout/ProtectedRoute";
 import { MASTER_ROUTE_REDIRECTS, ROUTES } from "@/routes/paths";
 import LegacyRedirect from "@/routes/LegacyRedirect";
+import UserListPage from "@/pages/users/UserListPage";
+import UserCreatePage from "@/pages/users/UserCreatePage";
 
 const HomeLayout = lazy(() => import("@/components/Layout/HomeLayout"));
 const CompanyListPage = lazy(() => import("@/pages/Company/CompanyListPage"));
@@ -23,10 +25,37 @@ export const masterRoutes = (
       </ProtectedRoute>
     }
   >
-    <Route path={ROUTES.mastersCompany} element={<CompanyListPage />} />
     <Route
+      path={ROUTES.mastersUsers}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <UserListPage />
+        </ProtectedRoute>
+      }
+    />
+      <Route
+      path={ROUTES.mastersUserRegister}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <UserCreatePage />
+        </ProtectedRoute>
+      }
+    />
+   <Route
       path={ROUTES.mastersCompanyRegister}
-      element={<CompanyRegisterPage />}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <CompanyRegisterPage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path={ROUTES.mastersCompany}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <CompanyListPage />
+        </ProtectedRoute>
+      }
     />
     <Route path={ROUTES.mastersCustomers} element={<CustomersPage />} />
     <Route path={ROUTES.mastersProducts} element={<ProductsPage />} />

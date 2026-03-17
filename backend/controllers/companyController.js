@@ -1,9 +1,10 @@
 // controllers/companyController.js
 import mongoose from "mongoose";
 import Company from "../Model/CompanySchema.js";
-import { createDefaultVoucherSeries } from "../Helper/createDefaultVoucherSeries.js";
+import { createDefaultVoucherSeries } from "../helpers/createDefaultVoucherSeries.js";
 
-const escapeRegex = (value) => String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+const escapeRegex = (value) =>
+  String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 
 const findCompanyWithSameName = async ({ owner, name, excludeId }) => {
   if (!owner || !name) return null;
@@ -63,9 +64,7 @@ export const registerCompany = async (req, res) => {
     !currencyName ||
     !currencySymbol
   ) {
-    return res
-      .status(400)
-      .json({ message: "Required fields are missing" });
+    return res.status(400).json({ message: "Required fields are missing" });
   }
 
   const session = await mongoose.startSession();
@@ -107,7 +106,7 @@ export const registerCompany = async (req, res) => {
           owner,
         },
       ],
-      { session }
+      { session },
     );
 
     const company = companies[0];
@@ -115,13 +114,11 @@ export const registerCompany = async (req, res) => {
     if (!company) {
       await session.abortTransaction();
       session.endSession();
-      return res
-        .status(400)
-        .json({ message: "Company creation failed" });
+      return res.status(400).json({ message: "Company creation failed" });
     }
 
     const voucherOk = await createDefaultVoucherSeries({
-      companyId: company._id,  // or company.cmp_id if you prefer
+      companyId: company._id, // or company.cmp_id if you prefer
       ownerId: owner,
       session,
     });
@@ -151,16 +148,27 @@ export const registerCompany = async (req, res) => {
   }
 };
 
-// @desc get Primary user organization list
-// route GET/api/pUsers/getOrganizations
-
 export const getCompanies = async (req, res) => {
   try {
-    const owner = req.user?.id;
-    const companies = await Company.find({ owner }).sort({ createdAt: -1 });
-    res.json(companies);
+    const user = req.user;
+    if (!user) {
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    const adminId = user.role === "admin" ? user.id : user.owner;
+
+    if (!adminId) {
+      return res.json([]);
+    }
+
+    const companies = await Company.find({ owner: adminId }).sort({
+      createdAt: -1,
+    });
+
+    return res.json(companies);
   } catch (err) {
-    res.status(500).json({ message: "Failed to fetch companies" });
+    console.error("getCompanies error:", err);
+    return res.status(500).json({ message: "Failed to fetch companies" });
   }
 };
 
@@ -184,11 +192,10 @@ export const updateCompany = async (req, res) => {
       }
     }
 
-    const company = await Company.findOneAndUpdate(
-      { _id: id, owner },
-      body,
-      { new: true, runValidators: true }
-    );
+    const company = await Company.findOneAndUpdate({ _id: id, owner }, body, {
+      new: true,
+      runValidators: true,
+    });
 
     if (!company) {
       return res.status(404).json({ message: "Company not found" });
@@ -219,10 +226,13 @@ export const deleteCompany = async (req, res) => {
 
 export const getCompanyById = async (req, res) => {
   try {
-    const owner = req.user?.id;
+    // const owner = req.user?.id;
+    const user = req.user;
+    const adminId = user.role === "admin" ? user.id : user.owner;
+
     const { id } = req.params;
 
-    const company = await Company.findOne({ _id: id, owner });
+    const company = await Company.findOne({ _id: id, owner: adminId });
 
     if (!company) {
       return res.status(404).json({ message: "Company not found" });

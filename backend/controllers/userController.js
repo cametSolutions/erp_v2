@@ -3,11 +3,8 @@ import User from "../Model/UserSchema.js";
 
 export const createStaffUser = async (req, res) => {
   try {
-    // req.user is the logged-in admin (set by auth middleware)
     const ownerId = req.user.id;
-
-    const { userName, email, mobileNumber, password, role, companyId } =
-      req.body;
+    const { userName, email, mobileNumber, password, companyId } = req.body;
 
     if (!userName || !email || !mobileNumber || !password) {
       return res
@@ -15,7 +12,6 @@ export const createStaffUser = async (req, res) => {
         .json({ message: "All required fields must be provided" });
     }
 
-    // ensure only admins can create staff
     if (req.user.role !== "admin") {
       return res.status(403).json({ message: "Only admin can create users" });
     }
@@ -35,8 +31,8 @@ export const createStaffUser = async (req, res) => {
       email: email.trim(),
       mobileNumber: mobileNumber.trim(),
       password,
-      role: role || "staff", // use "staff" by default
-      owner: ownerId,
+      role: "staff",        // always staff
+      owner: ownerId,       // primary admin is owner
       company: companyId || null,
     });
 
@@ -52,6 +48,8 @@ export const createStaffUser = async (req, res) => {
     return res.status(500).json({ message: "Internal server error" });
   }
 };
+
+
 
 
 
@@ -100,23 +98,42 @@ export const updateStaffUser = async (req, res) => {
   try {
     const adminId = req.user.id;
     const { id } = req.params;
-    const { userName, email, mobileNumber, role } = req.body;
+    const { userName, email, mobileNumber, role, password } = req.body;
 
-    const user = await User.findOneAndUpdate(
-      { _id: id, owner: adminId, role: "staff" },
-      { userName, email, mobileNumber, role },
-      { new: true }
-    ).select("-password");
+    // Find staff belonging to this admin
+    const user = await User.findOne({
+      _id: id,
+      owner: adminId,
+      role: "staff",
+    });
 
     if (!user) {
       return res.status(404).json({ message: "User not found" });
     }
 
-    res.json({ message: "User updated", user });
+    if (userName) user.userName = userName.trim();
+    if (email) user.email = email.trim();
+    if (mobileNumber) user.mobileNumber = mobileNumber.trim();
+    if (role) user.role = role; // or drop this line if role must stay 'staff'
+
+    // Only update password when a new one is provided;
+    // pre('save') will hash it
+    if (password && password.trim().length > 0) {
+      user.password = password;
+    }
+
+    await user.save(); // triggers pre('save') and hashes password if modified
+
+    const userObj = user.toObject();
+    delete userObj.password;
+
+    return res.json({ message: "User updated", user: userObj });
   } catch (err) {
-    res.status(500).json({ message: "Failed to update user" });
+    console.error("updateStaffUser error:", err);
+    return res.status(500).json({ message: "Failed to update user" });
   }
 };
+
 
 export const deleteStaffUser = async (req, res) => {
   try {

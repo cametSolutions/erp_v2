@@ -112,7 +112,7 @@ export const listParties = async (req, res) => {
     const skip = (pageNum - 1) * limitNum;
 
     const filter = {
-      Primary_user_id: owner,
+      // Primary_user_id: owner,
       cmp_id,
     };
 
