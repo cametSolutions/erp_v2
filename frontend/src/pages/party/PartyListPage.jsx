@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Trash2, Users } from "lucide-react";
@@ -60,6 +60,7 @@ function PartyRow({ party, onEdit, onDelete }) {
 
 export default function PartyListPage() {
   const [searchText, setSearchText] = useState("");
+  const loadMoreRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -119,6 +120,26 @@ export default function PartyListPage() {
       error?.response?.data?.message || error?.message || `Failed to load ${emptyLabel}`;
     toast.error(message);
   }, [emptyLabel, error, isError]);
+
+  useEffect(() => {
+    const target = loadMoreRef.current;
+
+    if (!target || !hasNextPage) return undefined;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const [entry] = entries;
+        if (entry?.isIntersecting && !isFetchingNextPage) {
+          fetchNextPage();
+        }
+      },
+      { rootMargin: "200px 0px" },
+    );
+
+    observer.observe(target);
+
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage, data]);
 
   const parties = data?.pages?.flatMap((page) => page?.items || []) || [];
 
@@ -196,15 +217,12 @@ export default function PartyListPage() {
           </div>
         )}
 
-        {hasNextPage && (
-          <button
-            type="button"
-            onClick={() => fetchNextPage()}
-            disabled={isFetchingNextPage}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isFetchingNextPage ? "Loading more..." : `Load more ${emptyLabel}`}
-          </button>
+        {hasNextPage && <div ref={loadMoreRef} className="h-4 w-full" />}
+
+        {isFetchingNextPage && (
+          <div className="rounded-xl border border-slate-200 bg-white px-4 py-3 text-center text-sm font-medium text-slate-700">
+            Loading more {emptyLabel}...
+          </div>
         )}
       </div>
     </div>
