@@ -7,9 +7,7 @@ export const listAccountGroups = async (req, res) => {
     const { cmp_id } = req.query;
 
     if (!cmp_id) {
-      return res
-        .status(400)
-        .json({ message: "cmp_id (company) is required" });
+      return res.status(400).json({ message: "cmp_id (company) is required" });
     }
 
     const groups = await AccountGroup.find({
