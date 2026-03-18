@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import Party from "../Model/partySchema.js"
 import AccountGroup from "../Model/AccountGroup.js";
+import Outstanding from "../Model/oustandingShcema.js";
 
 const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
   if (accountGroup && accountGroup !== "") {
@@ -107,13 +108,16 @@ export const listParties = async (req, res) => {
         .json({ message: "cmp_id (company) is required" });
     }
 
-    const pageNum = parseInt(page) || 1;
-    const limitNum = parseInt(limit) || 20;
+    // cmp_id is ObjectId in both Party and Outstanding
+    const cmpObjectId = new mongoose.Types.ObjectId(cmp_id);
+
+    const pageNum = parseInt(page, 10) || 1;
+    const limitNum = parseInt(limit, 10) || 20;
     const skip = (pageNum - 1) * limitNum;
 
     const filter = {
       Primary_user_id: owner,
-      cmp_id,
+      cmp_id: cmpObjectId,
     };
 
     const trimmedSearch = String(search || "").trim();
@@ -129,15 +133,103 @@ export const listParties = async (req, res) => {
       ];
     }
 
-    const [items, total] = await Promise.all([
+    // 1) Fetch paginated parties
+    const [parties, total] = await Promise.all([
       Party.find(filter)
         .sort({ _id: -1 })
         .skip(skip)
-        .limit(limitNum),
+        .limit(limitNum)
+        .lean(), // plain objects
       Party.countDocuments(filter),
     ]);
 
-    const hasMore = skip + items.length < total;
+    const hasMore = skip + parties.length < total;
+
+    if (parties.length === 0) {
+      console.log("DEBUG parties: [] for cmp_id", cmp_id, "owner", owner);
+      return res.json({
+        items: [],
+        total,
+        page: pageNum,
+        hasMore,
+      });
+    }
+
+    // 2) Prepare party ids as ObjectIds for aggregation
+    const partyIds = parties.map((p) => p._id); // ObjectId[]
+
+    console.log("DEBUG partyIds:", partyIds);
+    console.log("DEBUG cmpObjectId:", cmpObjectId.toString());
+    console.log("DEBUG owner:", owner);
+
+    // 3) Aggregate outstanding totals from Outstanding collection
+    const totals = await Outstanding.aggregate([
+      {
+        $match: {
+          Primary_user_id: new mongoose.Types.ObjectId(owner),
+          cmp_id: cmpObjectId,
+          party_id: { $in: partyIds },
+          isCancelled: false,
+        },
+      },
+      {
+        $group: {
+          _id: "$party_id",
+          totalDr: {
+            $sum: {
+              $cond: [
+                { $eq: ["$classification", "Dr"] },
+                "$bill_pending_amt",
+                0,
+              ],
+            },
+          },
+          totalCr: {
+            $sum: {
+              $cond: [
+                { $eq: ["$classification", "Cr"] },
+                "$bill_pending_amt",
+                0,
+              ],
+            },
+          },
+        },
+      },
+    ]);
+
+    console.log("DEBUG totals from Outstanding.aggregate:", totals);
+
+    // 4) Build lookup map: partyId -> totals
+    const totalsMap = totals.reduce((acc, t) => {
+      const key = String(t._id); // t._id is ObjectId
+      acc[key] = {
+        totalDr: t.totalDr || 0,
+        totalCr: t.totalCr || 0,
+      };
+      return acc;
+    }, {});
+
+    console.log("DEBUG totalsMap:", totalsMap);
+
+    // 5) Attach totalOutstanding + classification to each party
+    const items = parties.map((p) => {
+      const key = String(p._id);
+      const t = totalsMap[key] || { totalDr: 0, totalCr: 0 };
+      const balance = t.totalDr - t.totalCr;
+
+      return {
+        ...p,
+        totalOutstanding: balance,
+        classification: balance >= 0 ? "Dr" : "Cr",
+      };
+    });
+
+    console.log(
+      "DEBUG first party with totals:",
+      items[0]?._id?.toString(),
+      items[0]?.totalOutstanding,
+      items[0]?.classification,
+    );
 
     return res.json({
       items,
@@ -150,6 +242,7 @@ export const listParties = async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch parties" });
   }
 };
+
 export const getPartyById = async (req, res) => {
   try {
     const owner = req.user.id;

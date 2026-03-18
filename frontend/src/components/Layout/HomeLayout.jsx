@@ -73,7 +73,8 @@ const routeTitleMap = {
   [ROUTES.mastersProducts]: "Products",
   [ROUTES.mastersPartyList]: "Parties",
   [ROUTES.mastersPartyRegister]: "Party",
-  [ROUTES.outstandings]: "Outstandings",
+ [ROUTES.outstanding]: "Outstandings",
+
   [ROUTES.statements]: "Statements",
   [ROUTES.stockRegister]: "Stock Register",
   [ROUTES.cashBank]: "Cash / Bank",
@@ -542,7 +543,8 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
 
             <button
               type="button"
-              onClick={() => navigate(ROUTES.outstandings)}
+           onClick={() => navigate(ROUTES.outstanding)}
+s
               className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex items-center gap-3">

@@ -8,7 +8,7 @@ const HomeLayout = lazy(() => import("@/components/Layout/HomeLayout"));
 const HomePage = lazy(() => import("@/pages/Home/HomePage"));
 const UserPage = lazy(() => import("@/pages/Home/UserPage"));
 const SettingsPage = lazy(() => import("@/pages/Home/SettingsPage"));
-const OutstandingsPage = lazy(() => import("@/pages/Home/OutstandingsPage"));
+const OutstandingsPage = lazy(() => import("@/pages/oustanding/OutstandingPartyListPage"));
 const StatementsPage = lazy(() => import("@/pages/Home/StatementsPage"));
 const StockRegisterPage = lazy(() => import("@/pages/Home/StockRegisterPage"));
 const CashBankPage = lazy(() => import("@/pages/Home/CashBankPage"));
@@ -30,7 +30,8 @@ export const appRoutes = (
     <Route path={ROUTES.home} element={<HomePage />} />
     <Route path={ROUTES.user} element={<UserPage />} />
     <Route path={ROUTES.settings} element={<SettingsPage />} />
-    <Route path={ROUTES.outstandings} element={<OutstandingsPage />} />
+  <Route path={ROUTES.outstanding} element={<OutstandingsPage />} />
+
     <Route path={ROUTES.statements} element={<StatementsPage />} />
     <Route path={ROUTES.stockRegister} element={<StockRegisterPage />} />
     <Route path={ROUTES.cashBank} element={<CashBankPage />} />
