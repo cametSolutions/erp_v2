@@ -46,6 +46,7 @@ import {
 import { useLogoutUser } from "@/hooks/mutations/useLogoutUser";
 import { ROUTES } from "@/routes/paths";
 
+
 const mobileTabs = [
   { id: "home", label: "Home", icon: Home, to: ROUTES.home },
   {
@@ -53,6 +54,7 @@ const mobileTabs = [
     label: "Company",
     icon: Building2,
     to: ROUTES.mastersCompany,
+    
   },
   { id: "users",
     label: "Users",
@@ -618,18 +620,58 @@ function MobileWalletCard({ headerOptions, selectedCompany, onCompanyClick }) {
   );
 }
 
-function MobileTopHeader({ isHome, title, headerOptions }) {
+function MobileTopHeader({ isHome, title, headerOptions, forceShowOnHome = false }) {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { logoutUser } = useLogoutUser();
   const searchOptions = headerOptions?.search;
   const showSearch = Boolean(searchOptions?.show ?? searchOptions);
+  const effectiveHeaderOptions =
+    isHome && forceShowOnHome
+      ? {
+          ...headerOptions,
+          showMenuDots: true,
+          menuItems: [
+            ...(headerOptions?.menuItems || []),
+            {
+              label: "Logout",
+              onSelect: () => {
+                logoutUser()
+                  .then(() => {
+                    navigate(ROUTES.login, { replace: true });
+                  })
+                  .catch(() => {});
+              },
+            },
+          ],
+        }
+      : headerOptions;
 
-  if (isHome) return null;
+  if (isHome && !forceShowOnHome) return null;
 
   const onBack = () => {
+    const backRouteMap = {
+      [ROUTES.mastersCompany]: ROUTES.home,
+      [ROUTES.mastersUsers]: ROUTES.home,
+      [ROUTES.mastersCustomers]: ROUTES.home,
+      [ROUTES.mastersProducts]: ROUTES.home,
+      [ROUTES.mastersPartyList]: ROUTES.home,
+      [ROUTES.mastersCompanyRegister]: ROUTES.mastersCompany,
+      [ROUTES.mastersUserRegister]: ROUTES.mastersUsers,
+      [ROUTES.mastersPartyRegister]: ROUTES.mastersPartyList,
+    };
+
+    const targetRoute = backRouteMap[location.pathname];
+    if (targetRoute) {
+      navigate(targetRoute, { replace: true });
+      return;
+    }
+
     if (window.history.length > 1) {
       navigate(-1);
       return;
     }
+
     navigate(ROUTES.home, { replace: true });
   };
 
@@ -643,7 +685,7 @@ function MobileTopHeader({ isHome, title, headerOptions }) {
           {title}
         </h1>
         <div className="flex justify-end">
-          <MobileHeaderActions options={headerOptions} tone="light" />
+          <MobileHeaderActions options={effectiveHeaderOptions} tone="light" />
         </div>
       </div>
       {showSearch && (
@@ -660,47 +702,69 @@ function MobileTopHeader({ isHome, title, headerOptions }) {
 }
 
 function MobileBottomBar() {
+  const user = useSelector((state) => state.auth.user);
+  const isStaffUser = user?.role === "staff";
+
   return (
     <nav className="fixed bottom-3 left-0 right-0 z-30 px-4 md:hidden">
       <div className="mx-auto h-[76px] max-w-md rounded-3xl border border-slate-200/80 bg-white/90 px-2 shadow-[0_8px_30px_rgba(15,23,42,0.12)] backdrop-blur-md">
         <div className="grid h-full grid-cols-4 items-center text-xs">
           {mobileTabs.map((tab) => {
             const Icon = tab.icon;
+            const isDisabled =
+              isStaffUser &&
+              (tab.to === ROUTES.mastersCompany || tab.to === ROUTES.mastersUsers);
 
             return (
-              <NavLink
+              <div
                 key={tab.id}
-                to={tab.to}
-                end
-                className={() =>
-                  "relative z-10 flex flex-col items-center justify-center"
-                }
+                className={`relative z-10 flex flex-col items-center justify-center ${
+                  isDisabled ? "cursor-not-allowed opacity-45" : ""
+                }`}
+                aria-disabled={isDisabled}
               >
-                {({ isActive }) => (
+                {isDisabled ? (
                   <>
-                    <div
-                      className={`flex items-center justify-center transition-all duration-300 ${
-                        isActive
-                          ? "h-10 w-16 rounded-2xl bg-slate-600 text-white shadow-md"
-                          : "h-10 w-10 rounded-full text-slate-500"
-                      }`}
-                    >
-                      <Icon
-                        className={`h-5 w-5 transition-transform duration-300 ${
-                          isActive ? "scale-105" : "scale-100"
-                        }`}
-                      />
+                    <div className="flex h-10 w-10 items-center justify-center rounded-full text-slate-400">
+                      <Icon className="h-5 w-5" />
                     </div>
-                    <span
-                      className={`mt-1 text-[11px] font-medium transition-colors duration-300 ${
-                        isActive ? "text-slate-900" : "text-slate-500"
-                      }`}
-                    >
+                    <span className="mt-1 text-[11px] font-medium text-slate-400">
                       {tab.label}
                     </span>
                   </>
+                ) : (
+                  <NavLink
+                    to={tab.to}
+                    end
+                    className="flex flex-col items-center justify-center"
+                  >
+                    {({ isActive }) => (
+                      <>
+                        <div
+                          className={`flex items-center justify-center transition-all duration-300 ${
+                            isActive
+                              ? "h-10 w-16 rounded-2xl bg-slate-600 text-white shadow-md"
+                              : "h-10 w-10 rounded-full text-slate-500"
+                          }`}
+                        >
+                          <Icon
+                            className={`h-5 w-5 transition-transform duration-300 ${
+                              isActive ? "scale-105" : "scale-100"
+                            }`}
+                          />
+                        </div>
+                        <span
+                          className={`mt-1 text-[11px] font-medium transition-colors duration-300 ${
+                            isActive ? "text-slate-900" : "text-slate-500"
+                          }`}
+                        >
+                          {tab.label}
+                        </span>
+                      </>
+                    )}
+                  </NavLink>
                 )}
-              </NavLink>
+              </div>
             );
           })}
         </div>
@@ -718,7 +782,8 @@ function MobileShell({ selectedCompany, onCompanyClick, hasCompany,
   const title = getPageTitle(pathname);
   const headerOptions =
     headerOptionsByPath[pathname] ?? DEFAULT_MOBILE_HEADER_OPTIONS;
- const isCompanyRegister = pathname === ROUTES.mastersCompanyRegister;
+  const isCompanyRegister = pathname === ROUTES.mastersCompanyRegister;
+  const showNoCompanyScreen = !isCheckingCompanies && !hasCompany && !isCompanyRegister;
   return (
     <div className="min-h-screen bg-slate-50 md:hidden">
       <div className="mx-auto min-h-screen w-full max-w-md bg-white shadow-sm">
@@ -726,13 +791,14 @@ function MobileShell({ selectedCompany, onCompanyClick, hasCompany,
           isHome={isHome}
           title={title}
           headerOptions={headerOptions}
+          forceShowOnHome={isHome && showNoCompanyScreen}
         />
- <main className="pb-[104px]">
+  <main className="pb-[104px]">
           {isCheckingCompanies ? (
             <div className="flex min-h-[calc(100vh-104px)] items-center justify-center">
               <p className="text-sm text-slate-500">Checking your companies...</p>
             </div>
-          ) : !hasCompany && !isCompanyRegister ? (
+          ) : showNoCompanyScreen ? (
             <NoCompanyScreen role={role} canCreate={canCreateCompany} />
           ) : isHome ? (
             <>

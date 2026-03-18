@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -8,9 +8,10 @@ import { Users } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 
-import { fetchAccountGroups } from "../../api/client/accountGroupApi";
-import { fetchSubGroups } from "../../api/client/subGroupApi";
+import { countries, INDIA_STATES } from "../../constants/countries";
 import { partyService } from "@/api/services/party.service";
+import { useAccountGroupListQuery } from "@/hooks/queries/accountGroupQueries";
+import { useSubGroupListQuery } from "@/hooks/queries/subGroupQueries";
 import {
   partyQueryKeys,
   usePartyByIdQuery,
@@ -61,9 +62,7 @@ export default function PartyRegisterPage() {
   const isEdit = Boolean(partyId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [accountGroups, setAccountGroups] = useState([]);
-  const [subGroups, setSubGroups] = useState([]);
-const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
 
 
   const {
@@ -89,8 +88,8 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
       creditLimit: "",
       openingBalanceType: "",
       openingBalanceAmount: "",
-      country: "",
-      state: "",
+      country: "India",
+      state: "Kerala",
       pin: "",
     },
   });
@@ -99,6 +98,21 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
     control,
     name: "accountGroup",
   });
+  const selectedCountry = useWatch({
+    control,
+    name: "country",
+  });
+
+  const {
+    data: accountGroups = [],
+    isError: isAccountGroupsError,
+    error: accountGroupsError,
+  } = useAccountGroupListQuery(cmpId, Boolean(cmpId));
+  const {
+    data: subGroups = [],
+    isError: isSubGroupsError,
+    error: subGroupsError,
+  } = useSubGroupListQuery(cmpId, watchedAccountGroup, Boolean(cmpId));
 
   const {
     data: party,
@@ -107,58 +121,27 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
     error,
   } = usePartyByIdQuery(partyId, isEdit);
 
-  useEffect(() => {
-    if (!cmpId) return;
-
-    const loadAccountGroups = async () => {
-      try {
-        const res = await fetchAccountGroups(cmpId);
-        setAccountGroups(res.data || []);
-      } catch (err) {
-        const message =
-          err?.response?.data?.message ||
-          err?.message ||
-          "Failed to load account groups";
-        toast.error(message);
-      }
-    };
-
-    loadAccountGroups();
-  }, [cmpId]);
+  const isIndia = selectedCountry === "India";
 
   useEffect(() => {
-    let isActive = true;
+    if (!isAccountGroupsError) return;
 
-    const loadSubGroups = async () => {
-      if (!cmpId || !watchedAccountGroup) {
-        if (isActive) {
-          setSubGroups([]);
-        }
-        return;
-      }
+    const message =
+      accountGroupsError?.response?.data?.message ||
+      accountGroupsError?.message ||
+      "Failed to load account groups";
+    toast.error(message);
+  }, [accountGroupsError, isAccountGroupsError]);
 
-      try {
-        const res = await fetchSubGroups(cmpId, watchedAccountGroup);
-        if (isActive) {
-          setSubGroups(res.data || []);
-        }
-      } catch (err) {
-        if (!isActive) return;
+  useEffect(() => {
+    if (!isSubGroupsError) return;
 
-        const message =
-          err?.response?.data?.message ||
-          err?.message ||
-          "Failed to load sub groups";
-        toast.error(message);
-      }
-    };
-
-    loadSubGroups();
-
-    return () => {
-      isActive = false;
-    };
-  }, [cmpId, watchedAccountGroup]);
+    const message =
+      subGroupsError?.response?.data?.message ||
+      subGroupsError?.message ||
+      "Failed to load sub groups";
+    toast.error(message);
+  }, [isSubGroupsError, subGroupsError]);
 
   useEffect(() => {
     if (!isError) return;
@@ -249,7 +232,7 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
         });
       }
 
-      navigate(ROUTES.mastersPartyList);
+      navigate(ROUTES.mastersPartyList, { replace: true });
     } catch (err) {
       const message =
         err?.response?.data?.message || err?.message || "Save failed";
@@ -481,29 +464,47 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className={labelClass}>Country</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    placeholder="Enter country"
-                    {...register("country")}
-                  />
+                  <select className={inputClass} {...register("country")}>
+                    <option value="">Select country</option>
+                    {countries.map((country) => (
+                      <option
+                        key={country.countryName}
+                        value={country.countryName}
+                      >
+                        {country.countryName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className={labelClass}>State</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    placeholder="Enter state"
-                    {...register("state")}
-                  />
+                  {isIndia ? (
+                    <select className={inputClass} {...register("state")}>
+                      <option value="">Select state</option>
+                      {INDIA_STATES.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="Enter state"
+                      {...register("state")}
+                    />
+                  )}
                 </div>
               </div>
 
               <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
                 <button
                   type="button"
-                  onClick={() => navigate(ROUTES.mastersPartyList)}
+                  onClick={() =>
+                    navigate(ROUTES.mastersPartyList, { replace: true })
+                  }
                   className="rounded-sm border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
                 >
                   Cancel

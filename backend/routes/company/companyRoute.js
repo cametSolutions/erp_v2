@@ -2,7 +2,7 @@
 import express from "express";
 
 import { protect } from "../../middleware/authMiddleware.js";
-import { registerCompany,getCompanies,updateCompany,deleteCompany,getCompanyById } from "../../controllers/OrgaizationController.js";
+import { registerCompany,getCompanies,updateCompany,deleteCompany,getCompanyById } from "../../controllers/companyController.js";
 
 const router = express.Router();
 
