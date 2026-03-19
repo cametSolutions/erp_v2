@@ -429,69 +429,60 @@ function ProductRow({
   return (
     <div className="border-b border-slate-200 bg-white  py-3 ">
       <div className="flex items-stretch gap-3">
-        {/* LEFT: full-height product icon — indigo tint */}
         <div className="flex w-16 shrink-0 items-center justify-center rounded-sm bg-indigo-50 px-3">
           <div className="flex items-center justify-center">
             <Package className="h-5 w-5 text-indigo-400" />
           </div>
         </div>
 
-        {/* RIGHT */}
         <div className="min-w-0 flex-1">
-          {/* Top: title + qty controls */}
-          <div className="flex flex-wrap items-start justify-between gap-2">
-            <div className="min-w-0 max-w-[65%]">
-              <p className="truncate text-sm font-medium text-slate-900">
-                {product?.product_name || "Untitled Product"}
+          <div className="min-w-0">
+            <p className="truncate text-sm font-medium text-slate-900">
+              {product?.product_name || "Untitled Product"}
+            </p>
+            {subtitle && (
+              <p className="mt-0.5 truncate text-xs text-slate-500">
+                {subtitle}
               </p>
-              {subtitle && (
-                <p className="mt-0.5 truncate text-xs text-slate-500">
-                  {subtitle}
-                </p>
-              )}
-            </div>
-
-            {/* Qty: red −, count, green + */}
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                className="
-                  flex h-7 w-7 items-center justify-center rounded
-                  border border-rose-200 bg-rose-50
-                  text-sm text-rose-500
-                  hover:bg-rose-100 hover:border-rose-300
-                  disabled:opacity-40
-                "
-                disabled={loading || quantity <= 0}
-                onClick={() => onDecrement(product)}
-              >
-                −
-              </button>
-
-              <span className="min-w-[1.75rem] text-center text-xs font-semibold text-slate-900">
-                {quantity}
-              </span>
-
-              <button
-                type="button"
-                className="
-                  flex h-7 w-7 items-center justify-center rounded
-                  border border-emerald-200 bg-emerald-50
-                  text-sm text-emerald-600
-                  hover:bg-emerald-100 hover:border-emerald-300
-                  disabled:opacity-40
-                "
-                disabled={loading}
-                onClick={() =>
-                  quantity > 0 ? onIncrement(product) : onAdd(product)
-                }
-              >
-                +
-              </button>
-            </div>
+            )}
           </div>
 
-          {/* Bottom: price + edit */}
+          <div className="mt-2 flex items-center gap-1.5">
+            <button
+              type="button"
+              className="
+                flex h-7 w-7 items-center justify-center rounded
+                border border-rose-200 bg-rose-50
+                text-sm text-rose-500
+                hover:bg-rose-100 hover:border-rose-300
+                disabled:opacity-40
+              "
+              disabled={loading || quantity <= 0}
+              onClick={() => onDecrement(product)}
+            >
+              −
+            </button>
+
+            <span className="min-w-[1.75rem] text-center text-xs font-semibold text-slate-900">
+              {quantity}
+            </span>
+
+            <button
+              type="button"
+              className="
+                flex h-7 w-7 items-center justify-center rounded
+                border border-emerald-200 bg-emerald-50
+                text-sm text-emerald-600
+                hover:bg-emerald-100 hover:border-emerald-300
+                disabled:opacity-40
+              "
+              disabled={loading}
+              onClick={() => (quantity > 0 ? onIncrement(product) : onAdd(product))}
+            >
+              +
+            </button>
+          </div>
+
           <div className="mt-1.5 flex flex-wrap items-center justify-between gap-2">
             <div>
               <p className="text-sm font-semibold text-slate-900">
