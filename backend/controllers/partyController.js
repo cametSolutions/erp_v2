@@ -4,6 +4,13 @@ import Party from "../Model/partySchema.js"
 import AccountGroup from "../Model/AccountGroup.js";
 import Outstanding from "../Model/oustandingShcema.js";
 
+const PARTY_LIST_PROJECTION = {
+  partyName: 1,
+  mobileNumber: 1,
+  emailID: 1,
+  gstNo: 1,
+};
+
 const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
   if (accountGroup && accountGroup !== "") {
     return accountGroup;
@@ -19,6 +26,65 @@ const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
   }
 
   return fallbackGroup._id;
+};
+
+const getOutstandingTotalsMap = async ({ owner, cmpObjectId, partyIds }) => {
+  if (!partyIds?.length) {
+    return {};
+  }
+
+  const totals = await Outstanding.aggregate([
+    {
+      $match: {
+        Primary_user_id: new mongoose.Types.ObjectId(owner),
+        cmp_id: cmpObjectId,
+        party_id: { $in: partyIds },
+        isCancelled: false,
+      },
+    },
+    {
+      $group: {
+        _id: "$party_id",
+        totalDr: {
+          $sum: {
+            $cond: [
+              { $eq: ["$classification", "Dr"] },
+              "$bill_pending_amt",
+              0,
+            ],
+          },
+        },
+        totalCr: {
+          $sum: {
+            $cond: [
+              { $eq: ["$classification", "Cr"] },
+              "$bill_pending_amt",
+              0,
+            ],
+          },
+        },
+      },
+    },
+  ]);
+
+  return totals.reduce((acc, total) => {
+    acc[String(total._id)] = {
+      totalDr: total.totalDr || 0,
+      totalCr: total.totalCr || 0,
+    };
+    return acc;
+  }, {});
+};
+
+const withOutstandingSummary = (party, totalsMap) => {
+  const totals = totalsMap[String(party._id)] || { totalDr: 0, totalCr: 0 };
+  const balance = totals.totalDr - totals.totalCr;
+
+  return {
+    ...party,
+    totalOutstanding: balance,
+    classification: balance >= 0 ? "Dr" : "Cr",
+  };
 };
 
 export const addParty = async (req, res) => {
@@ -136,6 +202,7 @@ export const listParties = async (req, res) => {
     // 1) Fetch paginated parties
     const [parties, total] = await Promise.all([
       Party.find(filter)
+        .select(PARTY_LIST_PROJECTION)
         .sort({ _id: -1 })
         .skip(skip)
         .limit(limitNum)
@@ -146,7 +213,6 @@ export const listParties = async (req, res) => {
     const hasMore = skip + parties.length < total;
 
     if (parties.length === 0) {
-      console.log("DEBUG parties: [] for cmp_id", cmp_id, "owner", owner);
       return res.json({
         items: [],
         total,
@@ -155,81 +221,13 @@ export const listParties = async (req, res) => {
       });
     }
 
-    // 2) Prepare party ids as ObjectIds for aggregation
-    const partyIds = parties.map((p) => p._id); // ObjectId[]
-
-    console.log("DEBUG partyIds:", partyIds);
-    console.log("DEBUG cmpObjectId:", cmpObjectId.toString());
-    console.log("DEBUG owner:", owner);
-
-    // 3) Aggregate outstanding totals from Outstanding collection
-    const totals = await Outstanding.aggregate([
-      {
-        $match: {
-          Primary_user_id: new mongoose.Types.ObjectId(owner),
-          cmp_id: cmpObjectId,
-          party_id: { $in: partyIds },
-          isCancelled: false,
-        },
-      },
-      {
-        $group: {
-          _id: "$party_id",
-          totalDr: {
-            $sum: {
-              $cond: [
-                { $eq: ["$classification", "Dr"] },
-                "$bill_pending_amt",
-                0,
-              ],
-            },
-          },
-          totalCr: {
-            $sum: {
-              $cond: [
-                { $eq: ["$classification", "Cr"] },
-                "$bill_pending_amt",
-                0,
-              ],
-            },
-          },
-        },
-      },
-    ]);
-
-    console.log("DEBUG totals from Outstanding.aggregate:", totals);
-
-    // 4) Build lookup map: partyId -> totals
-    const totalsMap = totals.reduce((acc, t) => {
-      const key = String(t._id); // t._id is ObjectId
-      acc[key] = {
-        totalDr: t.totalDr || 0,
-        totalCr: t.totalCr || 0,
-      };
-      return acc;
-    }, {});
-
-    console.log("DEBUG totalsMap:", totalsMap);
-
-    // 5) Attach totalOutstanding + classification to each party
-    const items = parties.map((p) => {
-      const key = String(p._id);
-      const t = totalsMap[key] || { totalDr: 0, totalCr: 0 };
-      const balance = t.totalDr - t.totalCr;
-
-      return {
-        ...p,
-        totalOutstanding: balance,
-        classification: balance >= 0 ? "Dr" : "Cr",
-      };
+    const partyIds = parties.map((party) => party._id);
+    const totalsMap = await getOutstandingTotalsMap({
+      owner,
+      cmpObjectId,
+      partyIds,
     });
-
-    console.log(
-      "DEBUG first party with totals:",
-      items[0]?._id?.toString(),
-      items[0]?.totalOutstanding,
-      items[0]?.classification,
-    );
+    const items = parties.map((party) => withOutstandingSummary(party, totalsMap));
 
     return res.json({
       items,
@@ -247,11 +245,19 @@ export const getPartyById = async (req, res) => {
   try {
     const owner = req.user.id;
     const { id } = req.params;
-    const party = await Party.findOne({ _id: id, Primary_user_id: owner });
+    const party = await Party.findOne({ _id: id, Primary_user_id: owner }).lean();
     if (!party) {
       return res.status(404).json({ message: "Party not found" });
     }
-    res.json(party);
+
+    const cmpObjectId = new mongoose.Types.ObjectId(party.cmp_id);
+    const totalsMap = await getOutstandingTotalsMap({
+      owner,
+      cmpObjectId,
+      partyIds: [party._id],
+    });
+
+    res.json(withOutstandingSummary(party, totalsMap));
   } catch {
     res.status(500).json({ message: "Failed to fetch party" });
   }
