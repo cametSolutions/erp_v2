@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+// src/components/PartyList.jsx
+import { useEffect, useState, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Trash2, Users } from "lucide-react";
@@ -55,6 +56,8 @@ function PartyRow({ party, rightContent, onClick }) {
  */
 export function PartyList({ mode = "master" }) {
   const [searchText, setSearchText] = useState("");
+  const [ledgerType, setLedgerType] = useState("ledger"); // ledger | receivable | payable
+
   const navigate = useNavigate();
   const location = useLocation();
   const queryClient = useQueryClient();
@@ -80,6 +83,7 @@ export function PartyList({ mode = "master" }) {
     cmp_id: cmpId,
     limit: PAGE_SIZE,
     search: debouncedSearchText,
+    ledgerType: mode === "outstanding" ? ledgerType : undefined,
   });
 
   useEffect(() => {
@@ -123,7 +127,8 @@ export function PartyList({ mode = "master" }) {
     toast.error(message);
   }, [emptyLabel, error, isError]);
 
-  const parties = data?.pages?.flatMap((page) => page?.items || []) || [];
+  const parties =
+    data?.pages?.flatMap((page) => page?.items || []) || [];
 
   const handleEdit = (party) => {
     navigate(`${ROUTES.mastersPartyRegister}?partyId=${party._id}`);
@@ -188,7 +193,9 @@ export function PartyList({ mode = "master" }) {
   const renderRightOutstanding = (party) => (
     <div className="text-right">
       <div className="text-sm font-semibold text-red-600">
-        {party.totalOutstanding?.toFixed(2) ?? "0.00"}
+        {party.totalOutstanding != null
+          ? party.totalOutstanding.toFixed(2)
+          : "0.00"}
       </div>
       <div className="text-xs text-slate-500">
         {party.classification || "Dr"}
@@ -196,9 +203,50 @@ export function PartyList({ mode = "master" }) {
     </div>
   );
 
+  // header total based on current filter & current page parties
+  const { headerBalance, headerClassification } = useMemo(() => {
+    const sum = parties.reduce((acc, p) => {
+      const val = p.totalOutstanding || 0;
+      if (ledgerType === "receivable" && val <= 0) return acc;
+      if (ledgerType === "payable" && val >= 0) return acc;
+      return acc + val;
+    }, 0);
+    return {
+      headerBalance: sum,
+      headerClassification: sum >= 0 ? "Dr" : "Cr",
+    };
+  }, [parties, ledgerType]);
+
   return (
     <div className="w-full font-[sans-serif]">
       <div className="mx-auto w-full max-w-md space-y-3">
+        {mode === "outstanding" && (
+          <div className="mb-1 rounded-xl bg-sky-700 px-4 py-3 text-white">
+            <div className="mb-2 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+              
+                <select
+                  className="rounded-md bg-sky-600 px-2 py-1 text-xs outline-none"
+                  value={ledgerType}
+                  onChange={(e) => setLedgerType(e.target.value)}
+                >
+                  <option value="ledger">Ledger</option>
+                  <option value="payable">Payables</option>
+                  <option value="receivable">Receivables</option>
+                </select>
+              </div>
+            </div>
+            <div className="text-right">
+              <div className="text-2xl font-bold">
+                {Math.abs(headerBalance).toFixed(2)}{" "}
+                <span className="text-sm font-semibold">
+                  {headerClassification}
+                </span>
+              </div>
+            </div>
+          </div>
+        )}
+
         {isLoading && (
           <div className="space-y-2">
             {Array.from({ length: 5 }).map((_, index) => (
@@ -220,22 +268,25 @@ export function PartyList({ mode = "master" }) {
 
         {!isLoading && parties.length > 0 && (
           <div className="space-y-2">
-            {parties.map((party) => (
-              <PartyRow
-                key={party._id}
-                party={party}
-                rightContent={
-                  mode === "master"
-                    ? renderRightMaster(party)
-                    : renderRightOutstanding(party)
-                }
-                onClick={
-                  mode === "master"
-                    ? undefined
-                    : () => navigate(`/outstanding/${party._id}`)
-                }
-              />
-            ))}
+          {parties.map((party) => (
+  <PartyRow
+    key={party._id}
+    party={party}
+    rightContent={
+      mode === "master"
+        ? renderRightMaster(party)
+        : renderRightOutstanding(party)
+    }
+    onClick={
+      mode === "master"
+        ? undefined
+        : () =>
+            navigate(
+              ROUTES.outstandingPartyDetail.replace(":partyId", party._id)
+            )
+    }
+  />
+))}
           </div>
         )}
 

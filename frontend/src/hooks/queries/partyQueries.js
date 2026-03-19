@@ -4,15 +4,15 @@ import { partyService } from "@/api/services/party.service";
 
 export const partyQueryKeys = {
   all: ["parties"],
-  infiniteList: (cmpId, limit = 20, search = "") => [
+  infiniteList: (cmpId, limit = 20, search = "", ledgerType = "all") => [
     ...partyQueryKeys.all,
     "infinite-list",
-    { cmpId, limit, search },
+    { cmpId, limit, search, ledgerType },
   ],
-  list: (cmpId, page = 1, limit = 20, search = "") => [
+  list: (cmpId, page = 1, limit = 20, search = "", ledgerType = "all") => [
     ...partyQueryKeys.all,
     "list",
-    { cmpId, page, limit, search },
+    { cmpId, page, limit, search, ledgerType },
   ],
   detail: (partyId) => [...partyQueryKeys.all, "detail", partyId],
 };
@@ -21,16 +21,23 @@ export const useInfinitePartyListQuery = ({
   cmp_id,
   limit = 20,
   search = "",
+  ledgerType = "all",
   enabled = true,
 }) =>
   useInfiniteQuery({
-    queryKey: partyQueryKeys.infiniteList(cmp_id || "", limit, search),
+    queryKey: partyQueryKeys.infiniteList(
+      cmp_id || "",
+      limit,
+      search,
+      ledgerType,
+    ),
     queryFn: ({ pageParam = 1, signal }) =>
       partyService.getParties({
         page: pageParam,
         limit,
         cmp_id,
         search,
+        ledgerType,
         signal,
         skipGlobalLoader: true,
       }),
@@ -40,6 +47,7 @@ export const useInfinitePartyListQuery = ({
     enabled: Boolean(cmp_id) && enabled,
     staleTime: 30_000,
   });
+
 
 export const usePartyListQuery = ({
   cmp_id,

@@ -12,11 +12,12 @@ export const partyService = {
     limit,
     cmp_id,
     search,
+    ledgerType,
     signal,
     skipGlobalLoader = false,
   }) => {
     const res = await api.get("/party", {
-      params: { page, limit, cmp_id, search },
+      params: { page, limit, cmp_id, search,ledgerType },
       signal,
       skipGlobalLoader,
     });

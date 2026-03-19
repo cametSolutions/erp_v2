@@ -16,7 +16,9 @@ const CreateOrderPage = lazy(() => import("@/pages/sales/SalesCreatePage"));
 const CreateReceiptPage = lazy(() => import("@/pages/Home/CreateReceiptPage"));
 const UserCreatePage = lazy(() => import("@/pages/users/UserCreatePage"));
 const UserListPage = lazy(() => import("@/pages/users/UserListPage"));
-
+const OutstandingPartyDetailPage = lazy(
+  () => import("@/pages/oustanding/OutstandingPartyDetailPage")
+);
 
 export const appRoutes = (
   <Route
@@ -31,7 +33,10 @@ export const appRoutes = (
     <Route path={ROUTES.user} element={<UserPage />} />
     <Route path={ROUTES.settings} element={<SettingsPage />} />
   <Route path={ROUTES.outstanding} element={<OutstandingsPage />} />
-
+ <Route
+      path={ROUTES.outstandingPartyDetail}
+      element={<OutstandingPartyDetailPage />}
+    />
     <Route path={ROUTES.statements} element={<StatementsPage />} />
     <Route path={ROUTES.stockRegister} element={<StockRegisterPage />} />
     <Route path={ROUTES.cashBank} element={<CashBankPage />} />

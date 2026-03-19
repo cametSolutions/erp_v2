@@ -6,6 +6,7 @@ export const ROUTES = {
   user: "/user",
   settings: "/settings",
   outstanding: "/outstanding",
+    outstandingPartyDetail: "/outstanding/party/:partyId",
   statements: "/statements",
   stockRegister: "/stock-register",
   cashBank: "/cash-bank",

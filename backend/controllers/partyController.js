@@ -100,7 +100,13 @@ export const addParty = async (req, res) => {
 export const listParties = async (req, res) => {
   try {
     const owner = req.user.id; // logged-in primary user
-    const { cmp_id, page = 1, limit = 20, search = "" } = req.query;
+    const {
+      cmp_id,
+      page = 1,
+      limit = 20,
+      search = "",
+      ledgerType = "all", // all | receivable | payable
+    } = req.query;
 
     if (!cmp_id) {
       return res
@@ -108,7 +114,6 @@ export const listParties = async (req, res) => {
         .json({ message: "cmp_id (company) is required" });
     }
 
-    // cmp_id is ObjectId in both Party and Outstanding
     const cmpObjectId = new mongoose.Types.ObjectId(cmp_id);
 
     const pageNum = parseInt(page, 10) || 1;
@@ -139,30 +144,25 @@ export const listParties = async (req, res) => {
         .sort({ _id: -1 })
         .skip(skip)
         .limit(limitNum)
-        .lean(), // plain objects
+        .lean(),
       Party.countDocuments(filter),
     ]);
 
     const hasMore = skip + parties.length < total;
 
     if (parties.length === 0) {
-      console.log("DEBUG parties: [] for cmp_id", cmp_id, "owner", owner);
       return res.json({
         items: [],
-        total,
+        total: 0,
         page: pageNum,
-        hasMore,
+        hasMore: false,
       });
     }
 
-    // 2) Prepare party ids as ObjectIds for aggregation
-    const partyIds = parties.map((p) => p._id); // ObjectId[]
+    // 2) Prepare ObjectId list for aggregation
+    const partyIds = parties.map((p) => p._id);
 
-    console.log("DEBUG partyIds:", partyIds);
-    console.log("DEBUG cmpObjectId:", cmpObjectId.toString());
-    console.log("DEBUG owner:", owner);
-
-    // 3) Aggregate outstanding totals from Outstanding collection
+    // 3) Aggregate Dr/Cr from Outstanding
     const totals = await Outstanding.aggregate([
       {
         $match: {
@@ -197,11 +197,8 @@ export const listParties = async (req, res) => {
       },
     ]);
 
-    console.log("DEBUG totals from Outstanding.aggregate:", totals);
-
-    // 4) Build lookup map: partyId -> totals
     const totalsMap = totals.reduce((acc, t) => {
-      const key = String(t._id); // t._id is ObjectId
+      const key = String(t._id);
       acc[key] = {
         totalDr: t.totalDr || 0,
         totalCr: t.totalCr || 0,
@@ -209,13 +206,11 @@ export const listParties = async (req, res) => {
       return acc;
     }, {});
 
-    console.log("DEBUG totalsMap:", totalsMap);
-
-    // 5) Attach totalOutstanding + classification to each party
-    const items = parties.map((p) => {
+    // 4) Attach totals and classification
+    let items = parties.map((p) => {
       const key = String(p._id);
       const t = totalsMap[key] || { totalDr: 0, totalCr: 0 };
-      const balance = t.totalDr - t.totalCr;
+      const balance = t.totalDr - t.totalCr; // Dr - Cr
 
       return {
         ...p,
@@ -224,16 +219,19 @@ export const listParties = async (req, res) => {
       };
     });
 
-    console.log(
-      "DEBUG first party with totals:",
-      items[0]?._id?.toString(),
-      items[0]?.totalOutstanding,
-      items[0]?.classification,
-    );
+    // 5) Apply ledgerType filter (on per-party balance)
+    if (ledgerType === "receivable") {
+      // receivables: Dr balance > 0
+      items = items.filter((p) => p.totalOutstanding > 0);
+    } else if (ledgerType === "payable") {
+      // payables: Cr balance < 0
+      items = items.filter((p) => p.totalOutstanding < 0);
+    }
 
+    // You can recompute total/hasMore based on filtered items or leave as original.
     return res.json({
       items,
-      total,
+      total: items.length,
       page: pageNum,
       hasMore,
     });
