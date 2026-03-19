@@ -1,0 +1,242 @@
+import { useEffect, useMemo, useState } from "react";
+
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import { recalculateItem } from "@/store/slices/transactionSlice";
+
+function buildDraft(item, form) {
+  return recalculateItem({
+    ...item,
+    rate: Number(form.rate) || 0,
+    taxInclusive: Boolean(form.taxInclusive),
+    actualQty: Number(form.actualQty) || 0,
+    billedQty: Number(form.billedQty) || 0,
+    discountType: form.discountType || "percentage",
+    discountValue: Number(form.discountValue) || 0,
+    description: form.description || "",
+    warrantyCardId: form.warrantyCardId || null,
+  });
+}
+
+export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
+  const [form, setForm] = useState({
+    rate: "",
+    taxInclusive: false,
+    actualQty: "",
+    billedQty: "",
+    discountType: "percentage",
+    discountValue: "",
+    description: "",
+    warrantyCardId: "",
+  });
+
+  useEffect(() => {
+    if (!open || !item) return;
+
+    setForm({
+      rate: item.rate ?? 0,
+      taxInclusive: Boolean(item.taxInclusive),
+      actualQty: item.actualQty ?? 0,
+      billedQty: item.billedQty ?? 0,
+      discountType: item.discountType || "percentage",
+      discountValue: item.discountValue ?? 0,
+      description: item.description || "",
+      warrantyCardId: item.warrantyCardId || "",
+    });
+  }, [item, open]);
+
+  const summary = useMemo(() => {
+    if (!item) return null;
+    return buildDraft(item, form);
+  }, [form, item]);
+
+  const handleChange = (field, value) => {
+    setForm((current) => ({
+      ...current,
+      [field]: value,
+    }));
+  };
+
+  const handleSave = () => {
+    if (!item || !onSave) return;
+
+    onSave({
+      rate: Number(form.rate) || 0,
+      taxInclusive: Boolean(form.taxInclusive),
+      actualQty: Number(form.actualQty) || 0,
+      billedQty: Number(form.billedQty) || 0,
+      discountType: form.discountType || "percentage",
+      discountValue: Number(form.discountValue) || 0,
+      description: form.description || "",
+      warrantyCardId: form.warrantyCardId || null,
+    });
+
+    onOpenChange(false);
+  };
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-3xl">
+        <SheetHeader>
+          <SheetTitle className="text-sm">
+            {item?.name || "Edit Item"}
+          </SheetTitle>
+          <SheetDescription className="text-xs">
+            Update quantity, rate, discounts, and tax settings for this line.
+          </SheetDescription>
+        </SheetHeader>
+
+        <div className="grid gap-3 text-xs md:grid-cols-2">
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">Rate</label>
+            <Input
+              type="number"
+              className="h-8 text-xs"
+              value={form.rate}
+              onChange={(event) => handleChange("rate", event.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">
+              Tax Inclusive
+            </label>
+            <select
+              className="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none"
+              value={form.taxInclusive ? "yes" : "no"}
+              onChange={(event) =>
+                handleChange("taxInclusive", event.target.value === "yes")
+              }
+            >
+              <option value="no">No</option>
+              <option value="yes">Yes</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">
+              Actual Qty
+            </label>
+            <Input
+              type="number"
+              className="h-8 text-xs"
+              value={form.actualQty}
+              onChange={(event) => handleChange("actualQty", event.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">
+              Billed Qty
+            </label>
+            <Input
+              type="number"
+              className="h-8 text-xs"
+              value={form.billedQty}
+              onChange={(event) => handleChange("billedQty", event.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">
+              Discount Type
+            </label>
+            <select
+              className="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none"
+              value={form.discountType}
+              onChange={(event) => handleChange("discountType", event.target.value)}
+            >
+              <option value="percentage">Percentage</option>
+              <option value="amount">Amount</option>
+            </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">
+              Discount Value
+            </label>
+            <Input
+              type="number"
+              className="h-8 text-xs"
+              value={form.discountValue}
+              onChange={(event) =>
+                handleChange("discountValue", event.target.value)
+              }
+            />
+          </div>
+
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-[11px] font-medium text-slate-500">
+              Description
+            </label>
+            <Input
+              className="h-8 text-xs"
+              value={form.description}
+              onChange={(event) => handleChange("description", event.target.value)}
+            />
+          </div>
+
+          <div className="space-y-1 md:col-span-2">
+            <label className="text-[11px] font-medium text-slate-500">
+              Warranty Card Id
+            </label>
+            <Input
+              className="h-8 text-xs"
+              value={form.warrantyCardId}
+              onChange={(event) =>
+                handleChange("warrantyCardId", event.target.value)
+              }
+            />
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
+          <div className="grid gap-1.5 md:grid-cols-2">
+            <div className="flex justify-between gap-4">
+              <span>Base Price</span>
+              <span>{summary?.basePrice?.toFixed(2) || "0.00"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Discount</span>
+              <span>{summary?.discountAmount?.toFixed(2) || "0.00"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Taxable</span>
+              <span>{summary?.taxableAmount?.toFixed(2) || "0.00"}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Tax</span>
+              <span>{summary?.taxAmount?.toFixed(2) || "0.00"}</span>
+            </div>
+            <div className="flex justify-between gap-4 font-semibold text-slate-900 md:col-span-2">
+              <span>Total</span>
+              <span>{summary?.totalAmount?.toFixed(2) || "0.00"}</span>
+            </div>
+          </div>
+        </div>
+
+        <SheetFooter className="border-t border-slate-100 pt-4">
+          <Button
+            variant="outline"
+            size="sm"
+            type="button"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancel
+          </Button>
+          <Button size="sm" type="button" onClick={handleSave}>
+            Save
+          </Button>
+        </SheetFooter>
+      </SheetContent>
+    </Sheet>
+  );
+}

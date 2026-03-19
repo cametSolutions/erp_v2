@@ -13,6 +13,7 @@ const StatementsPage = lazy(() => import("@/pages/Home/StatementsPage"));
 const StockRegisterPage = lazy(() => import("@/pages/Home/StockRegisterPage"));
 const CashBankPage = lazy(() => import("@/pages/Home/CashBankPage"));
 const CreateOrderPage = lazy(() => import("@/pages/sales/SalesCreatePage"));
+const ProductSelectPage = lazy(() => import("@/pages/sales/ProductSelectPage"));
 const CreateReceiptPage = lazy(() => import("@/pages/Home/CreateReceiptPage"));
 const UserCreatePage = lazy(() => import("@/pages/users/UserCreatePage"));
 const UserListPage = lazy(() => import("@/pages/users/UserListPage"));
@@ -36,6 +37,7 @@ export const appRoutes = (
     <Route path={ROUTES.stockRegister} element={<StockRegisterPage />} />
     <Route path={ROUTES.cashBank} element={<CashBankPage />} />
     <Route path={ROUTES.createOrder} element={<CreateOrderPage />} />
+    <Route path={ROUTES.salesSelectItems} element={<ProductSelectPage />} />
     <Route path={ROUTES.createReceipt} element={<CreateReceiptPage />} />
     <Route path={ROUTES.usersCreate} element={<UserCreatePage />} />
     <Route path={ROUTES.usersList} element={<UserListPage />} />
