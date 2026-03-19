@@ -22,29 +22,22 @@ export default function CompanyDrawer({
     return () => document.removeEventListener("keydown", onEscape);
   }, [onClose, open]);
 
+  if (!open) return null;
+
   return (
-    <div
-      className={`fixed inset-0 z-50 transition-all duration-200 ${
-        open ? "pointer-events-auto" : "pointer-events-none"
-      }`}
-      aria-hidden={!open}
-    >
+    <div className="fixed inset-0 z-50 transition-all duration-200" aria-hidden={!open}>
       <button
         type="button"
         aria-label="Close company drawer"
         onClick={onClose}
-        className={`absolute inset-0 bg-black/45 transition-opacity duration-200 ${
-          open ? "opacity-100" : "opacity-0"
-        }`}
+        className="absolute inset-0 bg-black/45 transition-opacity duration-200"
       />
 
       <div
         role="dialog"
         aria-modal="true"
         aria-label="Select Company"
-        className={`absolute inset-x-0 bottom-0 rounded-t-3xl bg-white px-4 pb-7 pt-4 shadow-2xl transition-transform duration-200 ${
-          open ? "translate-y-0" : "translate-y-full"
-        }`}
+        className="absolute inset-x-0 bottom-0 rounded-t-3xl bg-white px-4 pb-7 pt-4 shadow-2xl transition-transform duration-200"
       >
         <div className="mx-auto mb-4 h-1.5 w-14 rounded-full bg-slate-300" />
         <p className="text-base font-semibold text-slate-900">Select Company</p>
