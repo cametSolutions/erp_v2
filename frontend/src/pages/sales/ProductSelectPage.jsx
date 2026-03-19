@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Barcode,
+  ChevronDown,
   ChevronLeft,
   LoaderCircle,
   Package,
@@ -70,6 +71,16 @@ function getMasterOptionLabel(option) {
     option?.subcategory ||
     option?.name ||
     "Unnamed"
+  );
+}
+
+function getSubcategoryCategoryId(subcategory) {
+  return (
+    subcategory?.categoryId ||
+    subcategory?.category_id ||
+    subcategory?.category?._id ||
+    subcategory?.category?.id ||
+    ""
   );
 }
 
@@ -210,47 +221,38 @@ async function resolveInitialRate({
   return { source: "manual", rate: 0 };
 }
 
-function FilterOptionGroup({
-  title,
+function FilterDropdown({
+  label,
+  value,
+  onChange,
   options,
-  selectedValue,
-  onSelect,
-  allLabel,
+  placeholder,
+  disabled = false,
 }) {
   return (
-    <div className="space-y-31">
-      <p className="text-xs font-semibold uppercase tracking-[0.12em] text-slate-500">
-        {title}
-      </p>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="button"
-          onClick={() => onSelect("")}
-          className={`min-h-10 rounded-full border px-3 text-xs font-medium transition ${
-            !selectedValue
-              ? "border-slate-900 bg-slate-900 text-white"
-              : "border-slate-200 bg-white text-slate-600"
-          }`}
+    <div className="space-y-2">
+      <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+        {label}
+      </label>
+      <div className="relative">
+        <select
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          className="h-12 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
-          {allLabel}
-        </button>
-        {options.map((option) => {
-          const value = getMasterOptionId(option);
-          return (
-            <button
-              key={value}
-              type="button"
-              onClick={() => onSelect(value)}
-              className={`min-h-10 rounded-full border px-3 text-xs font-medium transition ${
-                selectedValue === value
-                  ? "border-emerald-600 bg-emerald-600 text-white"
-                  : "border-slate-200 bg-white text-slate-600"
-              }`}
-            >
-              {getMasterOptionLabel(option)}
-            </button>
-          );
-        })}
+          <option value="">{placeholder}</option>
+          {options.map((option) => {
+            const optionValue = getMasterOptionId(option);
+
+            return (
+              <option key={optionValue} value={optionValue}>
+                {getMasterOptionLabel(option)}
+              </option>
+            );
+          })}
+        </select>
+        <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
       </div>
     </div>
   );
@@ -299,8 +301,9 @@ function FilterSheet({
     if (!draftCategoryId) return;
 
     const isVisible = subcategories.some((subcategory) => {
-      if (!subcategory?.categoryId) return true;
-      return subcategory.categoryId === draftCategoryId;
+      const categoryId = getSubcategoryCategoryId(subcategory);
+      if (!categoryId) return false;
+      return categoryId === draftCategoryId;
     });
 
     if (!isVisible) {
@@ -309,10 +312,12 @@ function FilterSheet({
   }, [draftCategoryId, draftSubcategoryId, subcategories]);
 
   const visibleSubcategories = useMemo(() => {
-    if (!draftCategoryId) return subcategories;
+    if (!draftCategoryId) return [];
+
     return subcategories.filter((subcategory) => {
-      if (!subcategory?.categoryId) return true;
-      return subcategory.categoryId === draftCategoryId;
+      const categoryId = getSubcategoryCategoryId(subcategory);
+      if (!categoryId) return false;
+      return categoryId === draftCategoryId;
     });
   }, [draftCategoryId, subcategories]);
 
@@ -327,40 +332,54 @@ function FilterSheet({
         </SheetHeader>
 
         <ScrollArea className="min-h-0 flex-1">
-          <div className="space-y-6 px-4 py-4">
-            <FilterOptionGroup
-              title="Price Level"
+          <div className="space-y-5 px-4 py-4">
+            <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
+              <p className="text-sm font-semibold text-slate-900">
+                Filter products
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                Use the dropdowns below to narrow the product list.
+              </p>
+            </div>
+
+            <FilterDropdown
+              label="Price Level"
+              value={draftPriceLevel}
+              onChange={setDraftPriceLevel}
               options={priceLevelOptions.filter((option) => option.value)}
-              selectedValue={draftPriceLevel}
-              onSelect={setDraftPriceLevel}
-              allLabel="Default"
+              placeholder="Default"
             />
 
-            <FilterOptionGroup
-              title="Brand"
+            <FilterDropdown
+              label="Brand"
+              value={draftBrandId}
+              onChange={setDraftBrandId}
               options={brands}
-              selectedValue={draftBrandId}
-              onSelect={setDraftBrandId}
-              allLabel="All brands"
+              placeholder="All brands"
             />
 
-            <FilterOptionGroup
-              title="Category"
-              options={categories}
-              selectedValue={draftCategoryId}
-              onSelect={(value) => {
+            <FilterDropdown
+              label="Category"
+              value={draftCategoryId}
+              onChange={(value) => {
                 setDraftCategoryId(value);
                 setDraftSubcategoryId("");
               }}
-              allLabel="All categories"
+              options={categories}
+              placeholder="All categories"
             />
 
-            <FilterOptionGroup
-              title="Subcategory"
+            <FilterDropdown
+              label="Subcategory"
+              value={draftSubcategoryId}
+              onChange={setDraftSubcategoryId}
               options={visibleSubcategories}
-              selectedValue={draftSubcategoryId}
-              onSelect={setDraftSubcategoryId}
-              allLabel="All subcategories"
+              placeholder={
+                draftCategoryId
+                  ? "All subcategories"
+                  : "Select category first"
+              }
+              disabled={!draftCategoryId}
             />
           </div>
         </ScrollArea>
