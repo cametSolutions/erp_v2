@@ -3,6 +3,8 @@ import { Navigate, Route } from "react-router-dom";
 
 import ProtectedRoute from "@/components/Layout/ProtectedRoute";
 import { ROUTES } from "@/routes/paths";
+const CashInHandListPage= lazy(() => import("@/pages/party/CashInHandListPage"));
+const BankBalanceListPage= lazy(() => import("@/pages/party/BankBalanceListPage"));
 
 const HomeLayout = lazy(() => import("@/components/Layout/HomeLayout"));
 const HomePage = lazy(() => import("@/pages/Home/HomePage"));
@@ -11,7 +13,7 @@ const SettingsPage = lazy(() => import("@/pages/Home/SettingsPage"));
 const OutstandingsPage = lazy(() => import("@/pages/oustanding/OutstandingPartyListPage"));
 const StatementsPage = lazy(() => import("@/pages/Home/StatementsPage"));
 const StockRegisterPage = lazy(() => import("@/pages/Home/StockRegisterPage"));
-const CashBankPage = lazy(() => import("@/pages/Home/CashBankPage"));
+const CashBankBalancePage = lazy(() => import("@/pages/party/CashBankBalancePage"));
 const CreateOrderPage = lazy(() => import("@/pages/sales/SalesCreatePage"));
 const CreateReceiptPage = lazy(() => import("@/pages/Home/CreateReceiptPage"));
 const UserCreatePage = lazy(() => import("@/pages/users/UserCreatePage"));
@@ -33,17 +35,15 @@ export const appRoutes = (
     <Route path={ROUTES.user} element={<UserPage />} />
     <Route path={ROUTES.settings} element={<SettingsPage />} />
   <Route path={ROUTES.outstanding} element={<OutstandingsPage />} />
- <Route
-      path={ROUTES.outstandingPartyDetail}
-      element={<OutstandingPartyDetailPage />}
-    />
+ <Route  path={ROUTES.outstandingPartyDetail}  element={<OutstandingPartyDetailPage />} />
     <Route path={ROUTES.statements} element={<StatementsPage />} />
     <Route path={ROUTES.stockRegister} element={<StockRegisterPage />} />
-    <Route path={ROUTES.cashBank} element={<CashBankPage />} />
+    <Route path={ROUTES.CashBankBalancePage} element={<CashBankBalancePage />} />
     <Route path={ROUTES.createOrder} element={<CreateOrderPage />} />
     <Route path={ROUTES.createReceipt} element={<CreateReceiptPage />} />
     <Route path={ROUTES.usersCreate} element={<UserCreatePage />} />
     <Route path={ROUTES.usersList} element={<UserListPage />} />
-
+ <Route path={ROUTES.CashInHandListPage} element={<CashInHandListPage />} />
+        <Route path={ROUTES.BankBalanceListPage} element={<BankBalanceListPage />} />
   </Route>
 );

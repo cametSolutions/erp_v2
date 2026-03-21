@@ -9,7 +9,7 @@ export const ROUTES = {
     outstandingPartyDetail: "/outstanding/party/:partyId",
   statements: "/statements",
   stockRegister: "/stock-register",
-  cashBank: "/cash-bank",
+  CashBankBalancePage: "/cash-bank",
   createOrder: "/create-order",
   createReceipt: "/create-receipt",
   mastersUserRegister: "/users/create",
@@ -21,6 +21,8 @@ export const ROUTES = {
   mastersProducts: "/masters/products",
   mastersPartyList: "/masters/party/list",
   mastersPartyRegister: "/masters/party/register",
+  BankBalanceListPage:"/bank-balance",
+  CashInHandListPage:'/cash-in-hand',
 };
 
 export const MASTER_ROUTE_REDIRECTS = {

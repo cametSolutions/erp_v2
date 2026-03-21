@@ -15,3 +15,28 @@ export const fetchPartyById = (id) => api.get(`/party/${id}`);
 export const updateParty = (id, data) => api.put(`/party/${id}`, data);
 
 export const deleteParty = (id) => api.delete(`/party/${id}`);
+export const fetchCashParties = ({ cmp_id, Primary_user_id }) =>
+  api
+    .get("/party", {
+      params: {
+        cmp_id,
+        Primary_user_id,
+        partyType: "cash",
+        page: 1,
+        limit: 1000,
+      },
+    })
+    .then((res) => res.data);
+
+export const fetchBankParties = ({ cmp_id, Primary_user_id }) =>
+  api
+    .get("/party", {
+      params: {
+        cmp_id,
+        Primary_user_id,
+        partyType: "bank",
+        page: 1,
+        limit: 1000,
+      },
+    })
+    .then((res) => res.data);

@@ -314,3 +314,40 @@ export const deleteParty = async (req, res) => {
     res.status(500).json({ message: "Failed to delete party" });
   }
 };
+
+
+export const getParties = async (req, res) => {
+  try {
+    const {
+      page = 1,
+      limit = 20,
+      cmp_id,
+      Primary_user_id,
+      partyType,
+    } = req.query;
+
+    const query = {};
+    if (cmp_id) query.cmp_id = cmp_id;
+    if (Primary_user_id) query.Primary_user_id = Primary_user_id;
+    if (partyType) query.partyType = partyType; // critical
+
+    console.log("getParties query =", query);
+
+    const skip = (Number(page) - 1) * Number(limit);
+
+    const [items, total] = await Promise.all([
+      Party.find(query).skip(skip).limit(Number(limit)),
+      Party.countDocuments(query),
+    ]);
+
+    return res.status(200).json({
+      items,
+      total,
+      page: Number(page),
+      hasMore: skip + items.length < total,
+    });
+  } catch (err) {
+    console.error("getParties error", err);
+    return res.status(500).json({ message: "Server error" });
+  }
+};

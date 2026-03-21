@@ -595,7 +595,7 @@ s
 
             <button
               type="button"
-              onClick={() => navigate(ROUTES.cashBank)}
+              onClick={() => navigate(ROUTES.CashBankBalancePage)}
               className="group col-span-2 flex items-center justify-between rounded-2xl border border-slate-100 bg-gradient-to-r from-teal-50/80 to-white px-3 py-3 shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
             >
               <div className="flex items-center gap-3">
