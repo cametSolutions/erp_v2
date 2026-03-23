@@ -29,20 +29,21 @@ export function recalculateItem(item) {
     effectiveDiscountAmount = discountAmountValue;
   }
 
+  effectiveDiscountAmount = Math.min(
+    Math.max(effectiveDiscountAmount, 0),
+    baseBeforeTax,
+  );
+
   taxableAmount = baseBeforeTax - effectiveDiscountAmount;
   if (taxableAmount < 0) taxableAmount = 0;
 
   taxAmount = (taxableAmount * taxRate) / 100;
-  if (taxInclusive) {
-    totalAmount = lineTotal - discountAmountValue;
-  } else {
-    totalAmount = taxableAmount + taxAmount;
-  }
+  totalAmount = taxableAmount + taxAmount;
 
   item.basePrice = baseBeforeTax;
   item.discountType = discountType;
   item.discountPercentage = discountPercentage;
-  item.discountAmount = discountAmountValue;
+  item.discountAmount = effectiveDiscountAmount;
   item.taxableAmount = taxableAmount;
   item.taxAmount = taxAmount;
   item.totalAmount = totalAmount;

@@ -618,7 +618,6 @@ export default function ProductSelectPage() {
     cmp_id: cmpId,
     limit: PAGE_SIZE,
     search: debouncedSearch,
-    priceLevel: appliedPriceLevel,
     brand: brandId,
     category: categoryId,
     subcategory: subcategoryId,
