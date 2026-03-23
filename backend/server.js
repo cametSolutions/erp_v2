@@ -75,7 +75,7 @@ app.use("/api/party", partyRoute);
 app.use("/api/account-group", accountGroupRoute);
 app.use("/api/subgroup", subGroupRoute);
 app.use("/api/sUsers", voucherRoute);
-app.use("/api", outstandingRoute);
+app.use("/api/outstanding", outstandingRoute);
 // ----------------- Production Build Serving -----------------
 if (process.env.NODE_ENV === "production") {
   const __dirname = path.resolve();

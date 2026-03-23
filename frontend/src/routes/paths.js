@@ -5,6 +5,14 @@ export const ROUTES = {
   home: "/home",
   user: "/user",
   settings: "/settings",
+
+
+ settingsDataEntry: "/settings/data-entry",
+  settingsVoucher: "/settings/data-entry/voucher",
+  settingsVoucherSeries: "/settings/data-entry/voucher/series",
+  settingsVoucherSeriesList: "/settings/data-entry/voucher/series/list",
+ settingsVoucherSeriesCreate: "/settings/data-entry/voucher/series/create",
+
   outstanding: "/outstanding",
     outstandingPartyDetail: "/outstanding/party/:partyId",
   statements: "/statements",

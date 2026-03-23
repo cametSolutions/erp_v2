@@ -6,7 +6,7 @@ import { getOutstandingByParty } from "../../controllers/outstandingController.j
 
 const router = express.Router();
 
-router.get("/outstanding/party/:partyId", protect, getOutstandingByParty);
+router.get("/party/:partyId", protect, getOutstandingByParty);
   // delete
 
 export default router;

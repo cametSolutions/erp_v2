@@ -198,7 +198,7 @@ export function PartyList({ mode = "master" }) {
           : "0.00"}
       </div>
       <div className="text-xs text-slate-500">
-        {party.classification || "Dr"}
+        {party.classification || "dr"}
       </div>
     </div>
   );
@@ -213,7 +213,7 @@ export function PartyList({ mode = "master" }) {
     }, 0);
     return {
       headerBalance: sum,
-      headerClassification: sum >= 0 ? "Dr" : "Cr",
+      headerClassification: sum >= 0 ? "dr" : "cr",
     };
   }, [parties, ledgerType]);
 

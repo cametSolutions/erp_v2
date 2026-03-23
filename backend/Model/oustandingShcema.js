@@ -73,8 +73,8 @@ const outstandingSchema = new Schema(
     },
     classification: {
       type: String,
-      enum: ["Dr", "Cr"],
-      default: "Dr",
+      enum: ["dr", "cr"],
+      default: "dr",
     },
     createdBy: {
       type: String,

@@ -9,7 +9,7 @@ const BankBalanceListPage= lazy(() => import("@/pages/party/BankBalanceListPage"
 const HomeLayout = lazy(() => import("@/components/Layout/HomeLayout"));
 const HomePage = lazy(() => import("@/pages/Home/HomePage"));
 const UserPage = lazy(() => import("@/pages/Home/UserPage"));
-const SettingsPage = lazy(() => import("@/pages/Home/SettingsPage"));
+const SettingsPage = lazy(() => import("@/pages/settings/settings"));
 const OutstandingsPage = lazy(() => import("@/pages/oustanding/OutstandingPartyListPage"));
 const StatementsPage = lazy(() => import("@/pages/Home/StatementsPage"));
 const StockRegisterPage = lazy(() => import("@/pages/Home/StockRegisterPage"));
@@ -22,6 +22,22 @@ const OutstandingPartyDetailPage = lazy(
   () => import("@/pages/oustanding/OutstandingPartyDetailPage")
 );
 
+const DataEntrySettingsPage = lazy(() =>
+  import("@/pages/settings/DataEntrySettings ")
+);
+const VoucherSettingsPage = lazy(() =>
+  import("@/pages/settings/VoucherSettings ")
+);
+const VoucherSeriesSettingsPage = lazy(() =>
+  import("@/pages/settings/VoucherSeriesSettings")
+);
+const VoucherSeriesListPage = lazy(() =>
+  import("@/pages/settings/VoucherSeriesList")
+);
+
+const CreateVoucherSeriesPage = lazy(
+  () => import("@/pages/settings/CreateVoucherSeriesPage")
+);
 export const appRoutes = (
   <Route
     element={
@@ -45,5 +61,19 @@ export const appRoutes = (
     <Route path={ROUTES.usersList} element={<UserListPage />} />
  <Route path={ROUTES.CashInHandListPage} element={<CashInHandListPage />} />
         <Route path={ROUTES.BankBalanceListPage} element={<BankBalanceListPage />} />
+        <Route path={ROUTES.settingsDataEntry} element={<DataEntrySettingsPage />} />
+    <Route path={ROUTES.settingsVoucher} element={<VoucherSettingsPage />} />
+    <Route
+      path={ROUTES.settingsVoucherSeries}
+      element={<VoucherSeriesSettingsPage />}
+    />
+    <Route
+      path={ROUTES.settingsVoucherSeriesList}
+      element={<VoucherSeriesListPage />}
+    />
+    <Route
+      path={ROUTES.settingsVoucherSeriesCreate}
+      element={<CreateVoucherSeriesPage />}
+    />
   </Route>
 );

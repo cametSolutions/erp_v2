@@ -99,7 +99,7 @@ export default function OutstandingPartyDetailPage() {
               </p>
             <p className="mt-1 text-2xl font-bold">
               {total.toFixed(2)}{" "}
-              <span className="text-sm font-semibold">Dr</span>
+              <span className="text-sm font-semibold">dr</span>
             </p>
           </div>
         </div>
@@ -149,7 +149,7 @@ export default function OutstandingPartyDetailPage() {
                       {Number(bill.bill_pending_amt || 0).toFixed(2)}
                     </p>
                     <p className="text-[11px] text-slate-500">
-                      {bill.classification || "Dr"}
+                      {bill.classification || "dr"}
                     </p>
                   </div>
                 </div>

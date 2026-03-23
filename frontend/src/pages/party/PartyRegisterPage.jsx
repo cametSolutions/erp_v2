@@ -23,7 +23,7 @@ const optionalString = z.preprocess(
 );
 const optionalBalanceType = z.preprocess(
   (value) => (value === "" ? undefined : value),
-  z.enum(["Dr", "Cr"]).optional(),
+  z.enum(["dr", "cr"]).optional(),
 );
 
 const schema = z.object({
@@ -405,8 +405,8 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
                     <label className={labelClass}>Opening Balance Type</label>
                     <select className={inputClass} {...register("openingBalanceType")}>
                       <option value="">Select type</option>
-                      <option value="Dr">Debit</option>
-                      <option value="Cr">Credit</option>
+                      <option value="dr">Debit</option>
+                      <option value="cr">Credit</option>
                     </select>
                     {errors.openingBalanceType && (
                       <p className={errorClass}>{errors.openingBalanceType.message}</p>

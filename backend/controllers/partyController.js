@@ -162,7 +162,7 @@ export const listParties = async (req, res) => {
     // 2) Prepare ObjectId list for aggregation
     const partyIds = parties.map((p) => p._id);
 
-    // 3) Aggregate Dr/Cr from Outstanding
+    // 3) Aggregate dr/cr from Outstanding
     const totals = await Outstanding.aggregate([
       {
         $match: {
@@ -178,7 +178,7 @@ export const listParties = async (req, res) => {
           totalDr: {
             $sum: {
               $cond: [
-                { $eq: ["$classification", "Dr"] },
+                { $eq: ["$classification", "dr"] },
                 "$bill_pending_amt",
                 0,
               ],
@@ -187,7 +187,7 @@ export const listParties = async (req, res) => {
           totalCr: {
             $sum: {
               $cond: [
-                { $eq: ["$classification", "Cr"] },
+                { $eq: ["$classification", "cr"] },
                 "$bill_pending_amt",
                 0,
               ],
@@ -210,21 +210,21 @@ export const listParties = async (req, res) => {
     let items = parties.map((p) => {
       const key = String(p._id);
       const t = totalsMap[key] || { totalDr: 0, totalCr: 0 };
-      const balance = t.totalDr - t.totalCr; // Dr - Cr
+      const balance = t.totalDr - t.totalCr; // dr - cr
 
       return {
         ...p,
         totalOutstanding: balance,
-        classification: balance >= 0 ? "Dr" : "Cr",
+        classification: balance >= 0 ? "dr" : "cr",
       };
     });
 
     // 5) Apply ledgerType filter (on per-party balance)
     if (ledgerType === "receivable") {
-      // receivables: Dr balance > 0
+      // receivables: dr balance > 0
       items = items.filter((p) => p.totalOutstanding > 0);
     } else if (ledgerType === "payable") {
-      // payables: Cr balance < 0
+      // payables: cr balance < 0
       items = items.filter((p) => p.totalOutstanding < 0);
     }
 
