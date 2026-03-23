@@ -52,6 +52,7 @@ export default function PartySelectSheet({ open, onOpenChange }) {
       <SheetContent
         side="bottom"
         className="flex h-[80vh] max-h-[80vh] flex-col overflow-hidden rounded-t-3xl px-0 pt-3 pb-2"
+        onOpenAutoFocus={(event) => event.preventDefault()}
       >
         <div className="flex h-full min-h-0 flex-col">
           <SheetHeader className="shrink-0 px-4 pb-2">

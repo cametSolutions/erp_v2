@@ -8,6 +8,8 @@ import {
   getProducts,
 } from "@/api/services/product.service";
 
+const SALE_LOOKUP_STALE_TIME = 5 * 60_000;
+
 export const productQueryKeys = {
   all: ["products"],
   brands: (cmpId, search = "") => [...productQueryKeys.all, "brands", { cmpId, search }],
@@ -74,7 +76,7 @@ export const useInfiniteProductListQuery = ({
     getNextPageParam: (lastPage) =>
       lastPage?.hasMore ? (lastPage?.page || 1) + 1 : undefined,
     enabled: Boolean(cmp_id) && enabled,
-    staleTime: 30_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });
 
 export const useBrandsQuery = ({ cmp_id, search = "", enabled = true }) =>
@@ -87,7 +89,7 @@ export const useBrandsQuery = ({ cmp_id, search = "", enabled = true }) =>
         skipGlobalLoader: true,
       }),
     enabled: Boolean(cmp_id) && enabled,
-    staleTime: 60_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });
 
 export const usePriceLevelsQuery = ({ cmp_id, enabled = true }) =>
@@ -95,7 +97,7 @@ export const usePriceLevelsQuery = ({ cmp_id, enabled = true }) =>
     queryKey: productQueryKeys.priceLevels(cmp_id || ""),
     queryFn: () => fetchPriceLevels(cmp_id, { skipGlobalLoader: true }),
     enabled: Boolean(cmp_id) && enabled,
-    staleTime: 60_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });
 
 export const useCategoriesQuery = ({ cmp_id, search = "", enabled = true }) =>
@@ -108,7 +110,7 @@ export const useCategoriesQuery = ({ cmp_id, search = "", enabled = true }) =>
         skipGlobalLoader: true,
       }),
     enabled: Boolean(cmp_id) && enabled,
-    staleTime: 60_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });
 
 export const useSubcategoriesQuery = ({
@@ -125,5 +127,5 @@ export const useSubcategoriesQuery = ({
         skipGlobalLoader: true,
       }),
     enabled: Boolean(cmp_id) && enabled,
-    staleTime: 60_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });

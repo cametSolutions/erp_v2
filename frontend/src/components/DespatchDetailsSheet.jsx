@@ -42,7 +42,11 @@ export default function DespatchDetailsSheet({ open, onOpenChange }) {
 
   return (
     <Sheet open={open} onOpenChange={handleSheetChange}>
-      <SheetContent side="bottom" className="max-h-[82vh] overflow-y-auto rounded-t-3xl">
+      <SheetContent
+        side="bottom"
+        className="max-h-[82vh] overflow-y-auto rounded-t-3xl"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <SheetHeader>
           <SheetTitle className="text-sm">Despatch Details</SheetTitle>
           <SheetDescription className="text-xs">
@@ -143,13 +147,18 @@ export default function DespatchDetailsSheet({ open, onOpenChange }) {
         <SheetFooter className="border-t border-slate-100 pt-4">
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             type="button"
             onClick={() => handleSheetChange(false)}
           >
             Cancel
           </Button>
-          <Button size="sm" type="button" onClick={handleSave}>
+          <Button
+            size="lg"
+            type="button"
+            onClick={handleSave}
+            className="bg-emerald-600 px-4 text-white hover:bg-emerald-700"
+          >
             Save
           </Button>
         </SheetFooter>

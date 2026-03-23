@@ -2,6 +2,8 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 
 import { partyService } from "@/api/services/party.service";
 
+const SALE_LOOKUP_STALE_TIME = 5 * 60_000;
+
 export const partyQueryKeys = {
   all: ["parties"],
   infiniteList: (cmpId, limit = 20, search = "") => [
@@ -38,7 +40,7 @@ export const useInfinitePartyListQuery = ({
     getNextPageParam: (lastPage) =>
       lastPage?.hasMore ? (lastPage?.page || 1) + 1 : undefined,
     enabled: Boolean(cmp_id) && enabled,
-    staleTime: 30_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });
 
 export const usePartyListQuery = ({
@@ -60,7 +62,7 @@ export const usePartyListQuery = ({
         skipGlobalLoader: true,
       }),
     enabled: Boolean(cmp_id) && enabled,
-    staleTime: 30_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });
 
 export const usePartyOptionsQuery = (cmp_id, enabled = true) =>
@@ -82,7 +84,7 @@ export const usePartyOptionsQuery = (cmp_id, enabled = true) =>
         name: party?.partyName || "Untitled Party",
         mobile: party?.mobileNumber || "",
       })),
-    staleTime: 30_000,
+    staleTime: SALE_LOOKUP_STALE_TIME,
   });
 
 export const usePartyByIdQuery = (partyId, enabled = true) =>

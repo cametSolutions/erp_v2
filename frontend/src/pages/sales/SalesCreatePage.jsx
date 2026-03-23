@@ -16,6 +16,13 @@ import DespatchDetailsSheet from "@/components/DespatchDetailsSheet";
 import PartySelectSheet from "@/components/PartySelectSheet";
 import TransactionHeader from "@/components/TransactionHeader";
 import ItemEditSheet from "@/components/sales/ItemEditSheet";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
 import { ROUTES } from "@/routes/paths";
 import {
   setCompany,
@@ -141,12 +148,14 @@ function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
   const items = useSelector((state) => state.transaction.items);
   const totals = useSelector((state) => state.transaction.totals);
   const [editingItemId, setEditingItemId] = useState(null);
+  const [itemsSheetOpen, setItemsSheetOpen] = useState(false);
   const errorMessage =
     createError?.response?.data?.message ||
     createError?.message ||
     null;
   const editingItem =
     items.find((item) => item.id === editingItemId) || null;
+  const previewItems = items.slice(0, 2);
 
   return (
     <>
@@ -174,7 +183,7 @@ function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
 
           {items.length > 0 && (
             <div className="space-y-2">
-              {items.map((item) => (
+              {previewItems.map((item) => (
                 <div
                   key={item.id}
                   className="rounded-xl border border-slate-200 bg-slate-50 p-3"
@@ -210,6 +219,17 @@ function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
                   </div>
                 </div>
               ))}
+
+              <button
+                type="button"
+                onClick={() => setItemsSheetOpen(true)}
+                className="inline-flex w-full items-center justify-between rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-xs font-medium text-slate-700 transition hover:border-slate-300 hover:bg-slate-50"
+              >
+                <span>View all items</span>
+                <span className="text-[11px] text-slate-500">
+                  {items.length} item{items.length === 1 ? "" : "s"}
+                </span>
+              </button>
             </div>
           )}
 
@@ -277,6 +297,62 @@ function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
           dispatch(updateItem({ id: editingItem.id, changes }));
         }}
       />
+
+      <Sheet open={itemsSheetOpen} onOpenChange={setItemsSheetOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[85vh] overflow-y-auto rounded-t-3xl"
+        >
+          <SheetHeader>
+            <SheetTitle>All Items</SheetTitle>
+            <SheetDescription>
+              Review the full item list and edit individual rows.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-3">
+            {items.map((item) => (
+              <div
+                key={item.id}
+                className="rounded-xl border border-slate-200 bg-slate-50 p-3"
+              >
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {item.name}
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Qty: {item.billedQty || 0} · Rate:{" "}
+                      {(Number(item.rate) || 0).toFixed(2)} · Tax:{" "}
+                      {(Number(item.taxRate) || 0).toFixed(2)}%
+                    </p>
+                    <p className="mt-1 text-[11px] text-slate-500">
+                      Source: {item.initialPriceSource || "manual"}
+                    </p>
+                  </div>
+
+                  <div className="text-right">
+                    <p className="text-sm font-semibold text-slate-900">
+                      {(Number(item.totalAmount) || 0).toFixed(2)}
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setItemsSheetOpen(false);
+                        setEditingItemId(item.id);
+                      }}
+                      className="mt-1 inline-flex items-center gap-1 rounded-md px-2 py-1 text-[11px] font-medium text-violet-700 hover:bg-violet-50"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                      Edit
+                    </button>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </SheetContent>
+      </Sheet>
     </>
   );
 }

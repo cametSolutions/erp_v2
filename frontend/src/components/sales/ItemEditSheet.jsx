@@ -107,7 +107,11 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent side="bottom" className="max-h-[85vh] overflow-y-auto rounded-t-3xl">
+      <SheetContent
+        side="bottom"
+        className="max-h-[85vh] overflow-y-auto rounded-t-3xl"
+        onOpenAutoFocus={(event) => event.preventDefault()}
+      >
         <SheetHeader>
           <SheetTitle className="text-sm">
             {item?.name || "Edit Item"}
@@ -250,13 +254,18 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
         <SheetFooter className="border-t border-slate-100 pt-4">
           <Button
             variant="outline"
-            size="sm"
+            size="lg"
             type="button"
             onClick={() => onOpenChange(false)}
           >
             Cancel
           </Button>
-          <Button size="sm" type="button" onClick={handleSave}>
+          <Button
+            size="lg"
+            type="button"
+            onClick={handleSave}
+            className="bg-emerald-600 px-4 text-white hover:bg-emerald-700"
+          >
             Save
           </Button>
         </SheetFooter>
