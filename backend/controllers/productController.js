@@ -14,6 +14,29 @@ function toObjectId(value) {
   return new mongoose.Types.ObjectId(value);
 }
 
+async function resolveMasterFilterId({
+  value,
+  Model,
+  owner,
+  cmp_id,
+  externalIdField,
+}) {
+  if (!value) return null;
+
+  const mongoId = toObjectId(value);
+  if (mongoId) return mongoId;
+
+  const doc = await Model.findOne({
+    [externalIdField]: value,
+    Primary_user_id: owner,
+    cmp_id,
+  })
+    .select("_id")
+    .lean();
+
+  return doc?._id || null;
+}
+
 async function listProductMasters(Model, fieldName, req, res) {
   try {
     const owner = req.user.id;
@@ -72,9 +95,29 @@ export const listProducts = async (req, res) => {
       cmp_id,
     };
 
-    const brandId = toObjectId(brand);
-    const categoryId = toObjectId(category);
-    const subcategoryId = toObjectId(subcategory);
+    const [brandId, categoryId, subcategoryId] = await Promise.all([
+      resolveMasterFilterId({
+        value: brand,
+        Model: Brand,
+        owner,
+        cmp_id,
+        externalIdField: "brand_id",
+      }),
+      resolveMasterFilterId({
+        value: category,
+        Model: Category,
+        owner,
+        cmp_id,
+        externalIdField: "category_id",
+      }),
+      resolveMasterFilterId({
+        value: subcategory,
+        Model: Subcategory,
+        owner,
+        cmp_id,
+        externalIdField: "subcategory_id",
+      }),
+    ]);
 
     if (brand && brandId) {
       filter.brand = brandId;

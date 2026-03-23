@@ -1,11 +1,12 @@
 // src/features/sales/pages/SalesCreatePage.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import {
   AlertCircle,
   ChevronRight,
   LoaderCircle,
   Package2,
   Pencil,
+  ReceiptText,
   Truck,
   User2,
 } from "lucide-react";
@@ -18,6 +19,7 @@ import DespatchDetailsSheet from "@/components/DespatchDetailsSheet";
 import PartySelectSheet from "@/components/PartySelectSheet";
 import TransactionHeader from "@/components/TransactionHeader";
 import ItemEditSheet from "@/components/sales/ItemEditSheet";
+import { useAdditionalChargesQuery } from "@/hooks/queries/additionalChargeQueries";
 import {
   Sheet,
   SheetContent,
@@ -25,14 +27,50 @@ import {
   SheetHeader,
   SheetTitle,
 } from "@/components/ui/sheet";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { ROUTES } from "@/routes/paths";
 import {
+  setAdditionalCharges,
   setCompany,
   updateItem,
 } from "@/store/slices/transactionSlice";
 
 function formatCurrency(value) {
   return `Rs. ${(Number(value) || 0).toFixed(2)}`;
+}
+
+function calculateAdditionalChargeRow(row) {
+  const value = Number(row?.value) || 0;
+  const taxPercentage = Number(row?.taxPercentage) || 0;
+  const taxAmt = (value * taxPercentage) / 100;
+  const sign = row?.action === "substract" ? -1 : 1;
+  const finalValue = (value + taxAmt) * sign;
+
+  return {
+    ...row,
+    value: row?.value ?? "",
+    taxPercentage,
+    taxAmt,
+    finalValue,
+  };
+}
+
+function buildAdditionalChargeSelection(charge, existingCharge) {
+  if (existingCharge) {
+    return calculateAdditionalChargeRow(existingCharge);
+  }
+
+  return calculateAdditionalChargeRow({
+    _id: charge?._id,
+    option: charge?.name || "Additional Charge",
+    value: "",
+    action: "add",
+    taxPercentage: Number(charge?.taxPercentage) || 0,
+    taxAmt: 0,
+    hsn: charge?.hsn || "",
+    finalValue: 0,
+  });
 }
 
 function SectionCard({
@@ -102,7 +140,6 @@ function PartySection() {
         subtitle="Select the customer for this order"
         icon={User2}
         tone="blue"
-        className="rounded-xs!"
       >
         <div className="flex flex-col gap-2 md:flex-row md:items-center">
           <button
@@ -202,17 +239,257 @@ function DetailsSection() {
   );
 }
 
-function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
+function AdditionalChargesSection() {
+  const dispatch = useDispatch();
+  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const selectedCharges = useSelector((state) => state.transaction.additionalCharges);
+  const totals = useSelector((state) => state.transaction.totals);
+  const [open, setOpen] = useState(false);
+  const [draftCharges, setDraftCharges] = useState(selectedCharges);
+
+  const { data: charges = [], isLoading, isError, error } = useAdditionalChargesQuery({
+    cmp_id: cmpId,
+    enabled: Boolean(cmpId),
+  });
+
+  useEffect(() => {
+    if (!open) return;
+    setDraftCharges(selectedCharges);
+  }, [open, selectedCharges]);
+
+  const previewText = useMemo(() => {
+    const labels = selectedCharges
+      .slice(0, 2)
+      .map((charge) => `${charge.option} ${formatCurrency(charge.finalValue)}`);
+
+    return labels.join(" · ");
+  }, [selectedCharges]);
+
+  const toggleCharge = (charge) => {
+    setDraftCharges((current) => {
+      const exists = current.find((item) => item._id === charge?._id);
+      if (exists) {
+        return current.filter((item) => item._id !== charge?._id);
+      }
+
+      return [...current, buildAdditionalChargeSelection(charge)];
+    });
+  };
+
+  const updateDraftCharge = (chargeId, changes) => {
+    setDraftCharges((current) =>
+      current.map((row) =>
+        row._id === chargeId
+          ? calculateAdditionalChargeRow({
+              ...row,
+              ...changes,
+            })
+          : row,
+      ),
+    );
+  };
+
+  const handleSave = () => {
+    dispatch(setAdditionalCharges(draftCharges));
+    setOpen(false);
+  };
+
+  const getSelectedDraft = (chargeId) =>
+    draftCharges.find((row) => row._id === chargeId) || null;
+
+  return (
+    <>
+      <SectionCard
+        title="Additional charges"
+        subtitle="Apply extra charges or deductions with tax"
+        icon={ReceiptText}
+        tone="teal"
+      >
+        <button
+          type="button"
+          onClick={() => setOpen(true)}
+          className="inline-flex w-full items-center justify-between rounded-xl border border-teal-200 bg-teal-50/40 px-3 py-3 text-left text-xs font-medium text-slate-700 transition hover:border-teal-300 hover:bg-teal-50"
+        >
+          <span className="min-w-0">
+            <span className="block text-sm font-semibold text-slate-900">
+              {selectedCharges.length > 0
+                ? `${selectedCharges.length} charge${selectedCharges.length === 1 ? "" : "s"} selected`
+                : "Add additional charges"}
+            </span>
+            <span className="mt-1 block truncate text-[11px] text-slate-500">
+              {selectedCharges.length > 0
+                ? previewText
+                : "Choose charge heads and set add/subtract values"}
+            </span>
+          </span>
+          <span className="ml-3 inline-flex items-center gap-2 whitespace-nowrap text-[11px] text-teal-700">
+            {formatCurrency(totals?.totalAdditionalCharge)}
+            <ChevronRight className="h-4 w-4 text-teal-500" />
+          </span>
+        </button>
+      </SectionCard>
+
+      <Sheet open={open} onOpenChange={setOpen}>
+        <SheetContent
+          side="bottom"
+          className="max-h-[88vh] overflow-y-auto rounded-t-3xl"
+          onOpenAutoFocus={(event) => event.preventDefault()}
+        >
+          <SheetHeader>
+            <SheetTitle>Additional Charges</SheetTitle>
+            <SheetDescription>
+              Select one or more charges, enter the amount, and choose whether each one adds to or subtracts from the order.
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="space-y-3">
+            {isLoading && (
+              <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+                Loading additional charges...
+              </div>
+            )}
+
+            {isError && (
+              <div className="rounded-xl border border-rose-200 bg-rose-50 px-3 py-4 text-sm text-rose-700">
+                {error?.response?.data?.message ||
+                  error?.message ||
+                  "Failed to load additional charges"}
+              </div>
+            )}
+
+            {!isLoading && !isError && charges.length === 0 && (
+              <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 px-3 py-4 text-sm text-slate-500">
+                No additional charges available for this company.
+              </div>
+            )}
+
+            {charges.map((charge) => {
+              const selected = getSelectedDraft(charge?._id);
+
+              return (
+                <div
+                  key={charge?._id}
+                  className="rounded-xl border border-slate-200 bg-white p-3"
+                >
+                  <button
+                    type="button"
+                    onClick={() => toggleCharge(charge)}
+                    className="flex w-full items-start justify-between gap-3 text-left"
+                  >
+                    <div className="min-w-0">
+                      <p className="text-sm font-semibold text-slate-900">
+                        {charge?.name || "Additional Charge"}
+                      </p>
+                      <p className="mt-1 text-[11px] text-slate-500">
+                        Tax {Number(charge?.taxPercentage || 0).toFixed(2)}%
+                        {charge?.hsn ? ` · HSN ${charge.hsn}` : ""}
+                      </p>
+                    </div>
+                    <span
+                      className={`rounded-full px-2.5 py-1 text-[11px] font-medium ${
+                        selected
+                          ? "bg-teal-100 text-teal-700"
+                          : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {selected ? "Selected" : "Select"}
+                    </span>
+                  </button>
+
+                  {selected && (
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-slate-500">
+                          Amount
+                        </label>
+                        <Input
+                          type="number"
+                          value={selected.value}
+                          onChange={(event) =>
+                            updateDraftCharge(charge._id, {
+                              value: event.target.value,
+                            })
+                          }
+                          className="h-9 text-sm"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="text-[11px] font-medium text-slate-500">
+                          Action
+                        </label>
+                        <select
+                          value={selected.action}
+                          onChange={(event) =>
+                            updateDraftCharge(charge._id, {
+                              action: event.target.value,
+                            })
+                          }
+                          className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none"
+                        >
+                          <option value="add">Add</option>
+                          <option value="substract">Subtract</option>
+                        </select>
+                      </div>
+
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                        Tax amount: {formatCurrency(selected.taxAmt)}
+                      </div>
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                        Final impact: {formatCurrency(selected.finalValue)}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="sticky bottom-0 mt-4 border-t border-slate-100 bg-white pt-4">
+            <div className="mb-3 flex items-center justify-between rounded-xl border border-teal-100 bg-teal-50/50 px-3 py-2 text-sm">
+              <span className="text-slate-600">Net additional charge impact</span>
+              <span className="font-semibold text-slate-900">
+                {formatCurrency(
+                  draftCharges.reduce(
+                    (sum, row) => sum + (Number(row?.finalValue) || 0),
+                    0,
+                  ),
+                )}
+              </span>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="lg"
+                type="button"
+                className="flex-1"
+                onClick={() => setOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button
+                size="lg"
+                type="button"
+                className="flex-1 bg-teal-600 text-white hover:bg-teal-700"
+                onClick={handleSave}
+              >
+                Save Charges
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+    </>
+  );
+}
+
+function ItemsSection() {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const items = useSelector((state) => state.transaction.items);
-  const totals = useSelector((state) => state.transaction.totals);
   const [editingItemId, setEditingItemId] = useState(null);
   const [itemsSheetOpen, setItemsSheetOpen] = useState(false);
-  const errorMessage =
-    createError?.response?.data?.message ||
-    createError?.message ||
-    null;
   const editingItem =
     items.find((item) => item.id === editingItemId) || null;
   const previewItems = items.slice(0, 2);
@@ -244,7 +521,7 @@ function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
               </span>
             </span>
             <span className="inline-flex items-center gap-2 text-[11px] text-white/85">
-           
+               
               <ChevronRight className="h-4 w-4" />
             </span>
           </button>
@@ -305,71 +582,6 @@ function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
           {items.length === 0 && (
             <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-xs text-slate-500">
               No items added yet.
-            </div>
-          )}
-
-          <div className="rounded-xl border border-teal-100 bg-gradient-to-br from-teal-50/70 to-white p-4">
-            <div className="mb-3 flex items-center justify-between">
-              <div>
-                <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
-                  Order Summary
-                </p>
-                <p className="mt-1 text-xs text-slate-500">
-                  {items.length} item{items.length === 1 ? "" : "s"} ready for billing
-                </p>
-              </div>
-              <div className="rounded-xl border border-teal-200 bg-white px-3 py-2 text-right text-slate-900">
-                <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
-                  Net Amount
-                </p>
-                <p className="text-sm font-semibold">
-                  {formatCurrency(totals?.finalAmount)}
-                </p>
-              </div>
-            </div>
-
-            <div className="space-y-1.5 text-[11px] text-slate-500">
-              <div className="flex justify-between gap-6">
-                <span>Sub total</span>
-                <span className="tabular-nums">
-                  {formatCurrency(totals?.subTotal)}
-                </span>
-              </div>
-              <div className="flex justify-between gap-6">
-                <span>Tax</span>
-                <span className="tabular-nums">
-                  {formatCurrency(totals?.totalIgstAmt)}
-                </span>
-              </div>
-              <div className="flex justify-between gap-6 font-semibold text-slate-700">
-                <span>Net amount</span>
-                <span className="tabular-nums">
-                  {formatCurrency(totals?.finalAmount)}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          <button
-            type="button"
-            onClick={onCreate}
-            disabled={createLoading || disableCreate}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {createLoading && <LoaderCircle className="h-4 w-4 animate-spin" />}
-            Create Sales Order
-          </button>
-
-          {disableCreate && !createLoading && (
-            <p className="text-xs text-amber-600">
-              Wait for the transaction header to finish loading before creating the order.
-            </p>
-          )}
-
-          {errorMessage && (
-            <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
-              <span>{errorMessage}</span>
             </div>
           )}
         </div>
@@ -446,8 +658,123 @@ function ItemsSection({ onCreate, createLoading, createError, disableCreate }) {
   );
 }
 
+function SummarySection({ onCreate, createLoading, createError, disableCreate }) {
+  const totals = useSelector((state) => state.transaction.totals);
+  const items = useSelector((state) => state.transaction.items);
+  const errorMessage =
+    createError?.response?.data?.message ||
+    createError?.message ||
+    null;
+
+  return (
+    <SectionCard
+      title="Summary"
+      subtitle="Review totals and confirm before saving"
+      icon={ReceiptText}
+      tone="blue"
+    >
+      <div className="space-y-4">
+        <div className="rounded-xl border border-sky-100 bg-gradient-to-br from-sky-50/70 to-white p-4">
+          <div className="mb-3 flex items-center justify-between">
+            <div>
+              <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
+                Order Review
+              </p>
+              <p className="mt-1 text-xs text-slate-500">
+                {items.length} item{items.length === 1 ? "" : "s"} included in this order
+              </p>
+            </div>
+            <div className="rounded-xl border border-sky-200 bg-white px-3 py-2 text-right text-slate-900">
+              <p className="text-[10px] uppercase tracking-[0.16em] text-slate-500">
+                Final Amount
+              </p>
+              <p className="text-sm font-semibold">
+                {formatCurrency(totals?.finalAmount)}
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-1.5 text-[11px] text-slate-500">
+            <div className="flex justify-between gap-6">
+              <span>Sub total</span>
+              <span className="tabular-nums">
+                {formatCurrency(totals?.subTotal)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-6">
+              <span>Discount</span>
+              <span className="tabular-nums">
+                {formatCurrency(totals?.totalDiscount)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-6">
+              <span>Taxable amount</span>
+              <span className="tabular-nums">
+                {formatCurrency(totals?.taxableAmount)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-6">
+              <span>Tax amount</span>
+              <span className="tabular-nums">
+                {formatCurrency(totals?.totalTaxAmount)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-6">
+              <span>Additional charges</span>
+              <span className="tabular-nums">
+                {formatCurrency(totals?.totalAdditionalCharge)}
+              </span>
+            </div>
+            {/* <div className="flex justify-between gap-6 font-medium text-slate-700">
+              <span>Amount with additional charges</span>
+              <span className="tabular-nums">
+                {formatCurrency(totals?.amountWithAdditionalCharge)}
+              </span>
+            </div> */}
+            <div className="flex justify-between gap-6 font-semibold text-slate-700">
+              <span>Final amount</span>
+              <span className="tabular-nums">
+                {formatCurrency(totals?.finalAmount)}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={onCreate}
+          disabled={createLoading || disableCreate}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
+        >
+          {createLoading && <LoaderCircle className="h-4 w-4 animate-spin" />}
+          Create Sales Order
+        </button>
+
+        {disableCreate && !createLoading && (
+          <p className="text-xs text-amber-600">
+            Wait for the transaction header to finish loading before creating the order.
+          </p>
+        )}
+
+        {errorMessage && (
+          <div className="flex items-start gap-2 rounded-lg border border-rose-200 bg-rose-50 px-3 py-2 text-xs text-rose-700">
+            <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" />
+            <span>{errorMessage}</span>
+          </div>
+        )}
+      </div>
+    </SectionCard>
+  );
+}
+
 export default function SalesCreatePage() {
   const cmpId = useSelector((state) => state.company.selectedCompanyId);
+  const party = useSelector((state) => state.transaction.party);
+  const items = useSelector((state) => state.transaction.items);
+  const despatchDetails = useSelector((state) => state.transaction.despatchDetails);
+  const additionalCharges = useSelector((state) => state.transaction.additionalCharges);
+  const totals = useSelector((state) => state.transaction.totals);
+  const selectedPriceLevel = useSelector((state) => state.transaction.priceLevelObject);
   const dispatch = useDispatch();
   const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
 
@@ -462,9 +789,48 @@ export default function SalesCreatePage() {
       const headerPayload = buildHeaderPayload ? buildHeaderPayload() : {};
       const payload = {
         ...headerPayload,
+        cmp_id: cmpId,
+        party,
+        selectedPriceLevel: selectedPriceLevel
+          ? {
+              _id: selectedPriceLevel?._id,
+              name: selectedPriceLevel?.pricelevel || selectedPriceLevel?.name || "",
+            }
+          : null,
+        items: items.map((item) => ({
+          _id: item?.id,
+          product_name: item?.name,
+          hsn_code: item?.hsn || "",
+          unit: item?.unit || "",
+          rate: Number(item?.rate) || 0,
+          billedQty: Number(item?.billedQty) || 0,
+          actualQty: Number(item?.actualQty) || 0,
+          taxRate: Number(item?.taxRate) || 0,
+          basePrice: Number(item?.basePrice) || 0,
+          discountType: item?.discountType || "percentage",
+          discountPercentage: Number(item?.discountPercentage) || 0,
+          discountAmount: Number(item?.discountAmount) || 0,
+          taxableAmount: Number(item?.taxableAmount) || 0,
+          taxAmount: Number(item?.taxAmount) || 0,
+          total: Number(item?.totalAmount) || 0,
+          totalAmount: Number(item?.totalAmount) || 0,
+          taxInclusive: Boolean(item?.taxInclusive),
+          isTaxInclusive: Boolean(item?.taxInclusive),
+          description: item?.description || "",
+        })),
+        despatchDetails,
+        additionalCharges,
+        subTotal: Number(totals?.subTotal) || 0,
+        totalDiscount: Number(totals?.totalDiscount) || 0,
+        taxableAmount: Number(totals?.taxableAmount) || 0,
+        totalTaxAmount: Number(totals?.totalTaxAmount) || 0,
+        totalAdditionalCharge: Number(totals?.totalAdditionalCharge) || 0,
+        amountWithAdditionalCharge:
+          Number(totals?.amountWithAdditionalCharge) || 0,
+        finalAmount: Number(totals?.finalAmount) || 0,
       };
 
-      const res = await api.post("/api/sUsers/createSaleOrder", payload, {
+      const res = await api.post("/sUsers/createSaleOrder", payload, {
         headers: { "Content-Type": "application/json" },
         withCredentials: true,
       });
@@ -500,7 +866,9 @@ export default function SalesCreatePage() {
         <div className="mx-auto flex max-w-5xl flex-col gap-4">
           <PartySection />
           <DetailsSection />
-          <ItemsSection
+          <ItemsSection />
+          <AdditionalChargesSection />
+          <SummarySection
             onCreate={() => createSaleOrderMutation.mutate()}
             createLoading={createLoading}
             createError={createSaleOrderMutation.error}

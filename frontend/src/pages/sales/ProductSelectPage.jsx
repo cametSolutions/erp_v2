@@ -44,6 +44,43 @@ import {
 } from "@/store/slices/transactionSlice";
 
 const PAGE_SIZE = 20;
+const PRODUCT_FILTERS_STORAGE_KEY = "sale-order-product-filters";
+
+function getStoredProductFilters(cmpId) {
+  if (!cmpId) return null;
+
+  try {
+    const raw = localStorage.getItem(
+      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmpId}`,
+    );
+    if (!raw) return null;
+
+    const parsed = JSON.parse(raw);
+    return {
+      search: parsed?.search || "",
+      priceLevel: parsed?.priceLevel || "",
+      brandId: parsed?.brandId || "",
+      categoryId: parsed?.categoryId || "",
+      subcategoryId: parsed?.subcategoryId || "",
+    };
+  } catch (error) {
+    console.error("Failed to read stored product filters", error);
+    return null;
+  }
+}
+
+function persistProductFilters(cmpId, filters) {
+  if (!cmpId) return;
+
+  try {
+    localStorage.setItem(
+      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmpId}`,
+      JSON.stringify(filters),
+    );
+  } catch (error) {
+    console.error("Failed to persist product filters", error);
+  }
+}
 
 function getProductId(product) {
   return product?._id || product?.id || product?.product_master_id;
@@ -589,22 +626,27 @@ export default function ProductSelectPage() {
   const transactionItems = useSelector((state) => state.transaction.items);
   const party = useSelector((state) => state.transaction.party);
   const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
-  const [search, setSearch] = useState("");
-  const [appliedPriceLevel, setAppliedPriceLevel] = useState(
-    reduxPriceLevel || "",
+  const storedFilters = useMemo(
+    () => getStoredProductFilters(cmpId),
+    [cmpId],
   );
-  const [brandId, setBrandId] = useState("");
-  const [categoryId, setCategoryId] = useState("");
-  const [subcategoryId, setSubcategoryId] = useState("");
+  const [search, setSearch] = useState(() => storedFilters?.search || "");
+  const [appliedPriceLevel, setAppliedPriceLevel] = useState(
+    () => reduxPriceLevel || storedFilters?.priceLevel || "",
+  );
+  const [brandId, setBrandId] = useState(() => storedFilters?.brandId || "");
+  const [categoryId, setCategoryId] = useState(
+    () => storedFilters?.categoryId || "",
+  );
+  const [subcategoryId, setSubcategoryId] = useState(
+    () => storedFilters?.subcategoryId || "",
+  );
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [stagedItems, setStagedItems] = useState({});
   const [loadingProductIds, setLoadingProductIds] = useState({});
   const [editingProductId, setEditingProductId] = useState(null);
   const [pendingPriceLevelChange, setPendingPriceLevelChange] = useState(null);
   const debouncedSearch = useDebouncedValue(search.trim(), 500);
-
-  console.log(stagedItems);
-  
 
   const {
     data,
@@ -629,6 +671,29 @@ export default function ProductSelectPage() {
   const { data: subcategoriesData = [] } = useSubcategoriesQuery({
     cmp_id: cmpId,
   });
+
+  useEffect(() => {
+    if (!cmpId) return;
+
+    const nextFilters = getStoredProductFilters(cmpId);
+    if (!nextFilters) return;
+
+    setSearch(nextFilters.search || "");
+    setAppliedPriceLevel(reduxPriceLevel || nextFilters.priceLevel || "");
+    setBrandId(nextFilters.brandId || "");
+    setCategoryId(nextFilters.categoryId || "");
+    setSubcategoryId(nextFilters.subcategoryId || "");
+  }, [cmpId, reduxPriceLevel]);
+
+  useEffect(() => {
+    persistProductFilters(cmpId, {
+      search,
+      priceLevel: appliedPriceLevel,
+      brandId,
+      categoryId,
+      subcategoryId,
+    });
+  }, [appliedPriceLevel, brandId, categoryId, cmpId, search, subcategoryId]);
 
   useEffect(() => {
     if (didSeedRef.current) return;
@@ -899,30 +964,45 @@ export default function ProductSelectPage() {
     setIsFilterSheetOpen(true);
   }, []);
 
-  const confirmPriceLevelChange = useCallback(() => {
+  const confirmPriceLevelChange = useCallback(async () => {
     if (!pendingPriceLevelChange) return;
 
     const { priceLevel } = pendingPriceLevelChange;
 
-    setStagedItems((current) => {
-      const next = { ...current };
+    try {
+      const repricedEntries = await Promise.all(
+        Object.entries(stagedItems).map(async ([productId, staged]) => {
+          const productDetail = await ensureProductDetail(
+            staged?.productDetail,
+            staged,
+          );
+          const nextRate = getPriceLevelRate(productDetail, priceLevel);
 
-      Object.entries(next).forEach(([productId, staged]) => {
-        const nextRate = getPriceLevelRate(staged?.productDetail, priceLevel);
+          return [
+            productId,
+            {
+              ...staged,
+              productDetail,
+              rate: nextRate != null ? Number(nextRate) || 0 : 0,
+              initialPriceSource: "priceLevel",
+            },
+          ];
+        }),
+      );
 
-        next[productId] = {
-          ...staged,
-          rate: nextRate != null ? Number(nextRate) || 0 : 0,
-          initialPriceSource: "priceLevel",
-        };
-      });
-
-      return next;
-    });
+      setStagedItems(Object.fromEntries(repricedEntries));
+    } catch (error) {
+      const message =
+        error?.response?.data?.message ||
+        error?.message ||
+        "Failed to re-price staged items";
+      toast.error(message);
+      return;
+    }
 
     applyFilters(pendingPriceLevelChange);
     setPendingPriceLevelChange(null);
-  }, [applyFilters, pendingPriceLevelChange]);
+  }, [applyFilters, pendingPriceLevelChange, stagedItems]);
 
   const cancelPriceLevelChange = useCallback(() => {
     setPendingPriceLevelChange(null);

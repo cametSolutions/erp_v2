@@ -1,5 +1,22 @@
 import { createSlice } from "@reduxjs/toolkit";
 
+function normalizeAdditionalCharge(row) {
+  const baseValue = Number(row?.value) || 0;
+  const taxPercentage = Number(row?.taxPercentage) || 0;
+  const taxAmt = (baseValue * taxPercentage) / 100;
+  const sign = row?.action === "substract" ? -1 : 1;
+  const finalValue = (baseValue + taxAmt) * sign;
+
+  return {
+    ...row,
+    value: row?.value ?? "",
+    action: row?.action === "substract" ? "substract" : "add",
+    taxPercentage,
+    taxAmt,
+    finalValue,
+  };
+}
+
 export function recalculateItem(item) {
   const billedQty = Number(item?.billedQty) || 0;
   const rate = Number(item?.rate) || 0;
@@ -81,27 +98,43 @@ function repriceAllItemsInternal(state) {
 }
 
 function recalculateTotals(state) {
-  const totals = state.items.reduce(
+  const itemTotals = state.items.reduce(
     (accumulator, item) => {
       accumulator.subTotal += Number(item?.basePrice) || 0;
       accumulator.totalDiscount += Number(item?.discountAmount) || 0;
+      accumulator.taxableAmount += Number(item?.taxableAmount) || 0;
+      accumulator.totalTaxAmount += Number(item?.taxAmount) || 0;
       accumulator.totalIgstAmt += Number(item?.taxAmount) || 0;
-      accumulator.finalAmount += Number(item?.totalAmount) || 0;
+      accumulator.itemTotal += Number(item?.totalAmount) || 0;
       return accumulator;
     },
     {
       subTotal: 0,
       totalDiscount: 0,
+      taxableAmount: 0,
+      totalTaxAmount: 0,
       totalIgstAmt: 0,
       totalCessAmt: 0,
       totalAddlCessAmt: 0,
+      itemTotal: 0,
       totalAdditionalCharge: 0,
+      amountWithAdditionalCharge: 0,
       finalAmount: 0,
       roundOff: 0,
     }
   );
 
-  state.totals = totals;
+  const totalAdditionalCharge = state.additionalCharges.reduce(
+    (accumulator, charge) => accumulator + (Number(charge?.finalValue) || 0),
+    0,
+  );
+
+  state.totals = {
+    ...itemTotals,
+    totalAdditionalCharge,
+    amountWithAdditionalCharge: itemTotals.itemTotal + totalAdditionalCharge,
+    finalAmount: itemTotals.itemTotal + totalAdditionalCharge,
+  };
 }
 
 const initialState = {
@@ -124,13 +157,18 @@ const initialState = {
   priceLevel: null,
   priceLevelObject: null,
   items: [],
+  additionalCharges: [],
   totals: {
     subTotal: 0,
     totalDiscount: 0,
+    taxableAmount: 0,
+    totalTaxAmount: 0,
     totalIgstAmt: 0,
     totalCessAmt: 0,
     totalAddlCessAmt: 0,
+    itemTotal: 0,
     totalAdditionalCharge: 0,
+    amountWithAdditionalCharge: 0,
     finalAmount: 0,
     roundOff: 0,
   },
@@ -183,6 +221,15 @@ const transactionSlice = createSlice({
     },
     clearParty(state) {
       state.party = null;
+    },
+    setAdditionalCharges(state, action) {
+      const rows = Array.isArray(action.payload) ? action.payload : [];
+      state.additionalCharges = rows.map(normalizeAdditionalCharge);
+      recalculateTotals(state);
+    },
+    resetAdditionalCharges(state) {
+      state.additionalCharges = [];
+      recalculateTotals(state);
     },
     addItemsFromSelection(state, action) {
       const incomingItems = Array.isArray(action.payload) ? action.payload : [];
@@ -246,6 +293,8 @@ export const {
   resetDespatchDetails,
   setParty,
   clearParty,
+  setAdditionalCharges,
+  resetAdditionalCharges,
   addItemsFromSelection,
   updateItem,
   setPriceLevel,
