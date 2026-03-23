@@ -5,12 +5,13 @@ export function recalculateItem(item) {
   const rate = Number(item?.rate) || 0;
   const taxRate = Number(item?.taxRate) || 0;
   const discountType = item?.discountType || "percentage";
-  const discountValue = Number(item?.discountValue) || 0;
+  const discountPercentage = Number(item?.discountPercentage) || 0;
+  const discountAmountValue = Number(item?.discountAmount) || 0;
   const taxInclusive = Boolean(item?.taxInclusive);
 
   const lineTotal = rate * billedQty;
   let baseBeforeTax;
-  let discountAmount;
+  let effectiveDiscountAmount;
   let taxableAmount;
   let taxAmount;
   let totalAmount;
@@ -23,19 +24,25 @@ export function recalculateItem(item) {
   }
 
   if (discountType === "percentage") {
-    discountAmount = (baseBeforeTax * discountValue) / 100;
+    effectiveDiscountAmount = (baseBeforeTax * discountPercentage) / 100;
   } else {
-    discountAmount = discountValue;
+    effectiveDiscountAmount = discountAmountValue;
   }
 
-  taxableAmount = baseBeforeTax - discountAmount;
+  taxableAmount = baseBeforeTax - effectiveDiscountAmount;
   if (taxableAmount < 0) taxableAmount = 0;
 
   taxAmount = (taxableAmount * taxRate) / 100;
-  totalAmount = taxInclusive ? lineTotal : taxableAmount + taxAmount;
+  if (taxInclusive) {
+    totalAmount = lineTotal - discountAmountValue;
+  } else {
+    totalAmount = taxableAmount + taxAmount;
+  }
 
   item.basePrice = baseBeforeTax;
-  item.discountAmount = discountAmount;
+  item.discountType = discountType;
+  item.discountPercentage = discountPercentage;
+  item.discountAmount = discountAmountValue;
   item.taxableAmount = taxableAmount;
   item.taxAmount = taxAmount;
   item.totalAmount = totalAmount;
@@ -44,23 +51,14 @@ export function recalculateItem(item) {
 }
 
 function resolveItemPriceLevelRate(item, nextPriceLevel) {
-  if (!nextPriceLevel || !item?.priceLevels) return null;
+  if (!nextPriceLevel || !Array.isArray(item?.priceLevels)) return null;
 
-  if (Array.isArray(item.priceLevels)) {
-    const match = item.priceLevels.find((level) => {
-      const key =
-        level?.levelName ||
-        level?.name ||
-        level?.pricelevel ||
-        level?.priceLevelName ||
-        level?.priceLevel;
-      return key === nextPriceLevel;
-    });
+  const match = item.priceLevels.find(
+    (level) =>
+      level?.priceLevel?.toString() === nextPriceLevel?.toString(),
+  );
 
-    return match?.rate ?? match?.priceRate ?? match?.pricerate ?? null;
-  }
-
-  return item.priceLevels[nextPriceLevel] ?? null;
+  return match?.priceRate ?? null;
 }
 
 function repriceAllItemsInternal(state) {
@@ -123,6 +121,7 @@ const initialState = {
   },
   party: null,
   priceLevel: null,
+  priceLevelObject: null,
   items: [],
   totals: {
     subTotal: 0,
@@ -227,6 +226,9 @@ const transactionSlice = createSlice({
     setPriceLevel(state, action) {
       state.priceLevel = action.payload || null;
     },
+    setPriceLevelObject(state, action) {
+      state.priceLevelObject = action.payload || null;
+    },
     repriceAllItems(state) {
       repriceAllItemsInternal(state);
       recalculateTotals(state);
@@ -246,6 +248,7 @@ export const {
   addItemsFromSelection,
   updateItem,
   setPriceLevel,
+  setPriceLevelObject,
   repriceAllItems,
 } = transactionSlice.actions;
 

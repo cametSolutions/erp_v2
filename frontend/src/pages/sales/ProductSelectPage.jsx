@@ -31,22 +31,19 @@ import {
   useBrandsQuery,
   useCategoriesQuery,
   useInfiniteProductListQuery,
+  usePriceLevelsQuery,
   useSubcategoriesQuery,
 } from "@/hooks/queries/productQueries";
 import { ROUTES } from "@/routes/paths";
 import {
   addItemsFromSelection,
+  recalculateItem,
   setPriceLevel,
+  setPriceLevelObject,
   updateItem,
 } from "@/store/slices/transactionSlice";
 
 const PAGE_SIZE = 20;
-const PRICE_LEVEL_OPTIONS = [
-  { value: "", label: "Default" },
-  { value: "retail", label: "Retail" },
-  { value: "wholesale", label: "Wholesale" },
-  { value: "retail price", label: "Retail price" },
-];
 
 function getProductId(product) {
   return product?._id || product?.id || product?.product_master_id;
@@ -84,6 +81,26 @@ function getSubcategoryCategoryId(subcategory) {
   );
 }
 
+function buildCalcItemFromStaged(stagedItem) {
+  if (!stagedItem) return null;
+
+  return {
+    rate: Number(stagedItem.rate) || 0,
+    billedQty:
+      Number(
+        stagedItem.billedQty != null
+          ? stagedItem.billedQty
+          : stagedItem.quantity,
+      ) || 0,
+    taxRate:
+      Number(stagedItem.productDetail?.taxRate ?? stagedItem.taxRate ?? 0) || 0,
+    taxInclusive: Boolean(stagedItem.taxInclusive),
+    discountType: stagedItem.discountType || "percentage",
+    discountPercentage: Number(stagedItem.discountPercentage) || 0,
+    discountAmount: Number(stagedItem.discountAmount) || 0,
+  };
+}
+
 function getProductTaxRate(productDetail) {
   const directTaxRate = productDetail?.taxRate;
   if (directTaxRate != null) return Number(directTaxRate) || 0;
@@ -97,7 +114,7 @@ function getProductTaxRate(productDetail) {
 }
 
 function buildProductDetail(product) {
-  const detail = product || {};
+  const { rate: _ignoredRate, ...detail } = product || {};
 
   return {
     ...detail,
@@ -109,7 +126,7 @@ function buildProductDetail(product) {
       detail?.taxRate != null
         ? Number(detail.taxRate) || 0
         : getProductTaxRate(detail),
-    priceLevels: productService.normalizePriceLevels(detail?.priceLevels),
+    priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
   };
 }
 
@@ -135,7 +152,8 @@ function createStagedItemFromTransactionItem(item) {
     actualQty,
     billedQty,
     discountType: item?.discountType || "percentage",
-    discountValue: Number(item?.discountValue) || 0,
+    discountPercentage: Number(item?.discountPercentage) || 0,
+    discountAmount: Number(item?.discountAmount) || 0,
     description: item?.description || "",
     warrantyCardId: item?.warrantyCardId || null,
     originalSnapshot: {
@@ -144,7 +162,8 @@ function createStagedItemFromTransactionItem(item) {
       actualQty,
       billedQty,
       discountType: item?.discountType || "percentage",
-      discountValue: Number(item?.discountValue) || 0,
+      discountPercentage: Number(item?.discountPercentage) || 0,
+      discountAmount: Number(item?.discountAmount) || 0,
       description: item?.description || "",
       warrantyCardId: item?.warrantyCardId || null,
     },
@@ -160,27 +179,32 @@ function buildEditableItem(productId, stagedItem) {
     hsn: detail?.hsn || "",
     unit: detail?.unit || "",
     taxRate: getProductTaxRate(detail),
-    priceLevels: detail?.priceLevels || {},
+    priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
     rate: Number(stagedItem?.rate) || 0,
     initialPriceSource: stagedItem?.initialPriceSource || "manual",
     actualQty: Number(stagedItem?.actualQty ?? stagedItem?.quantity) || 0,
     billedQty: Number(stagedItem?.billedQty ?? stagedItem?.quantity) || 0,
     taxInclusive: Boolean(stagedItem?.taxInclusive),
     discountType: stagedItem?.discountType || "percentage",
-    discountValue: Number(stagedItem?.discountValue) || 0,
+    discountPercentage: Number(stagedItem?.discountPercentage) || 0,
+    discountAmount: Number(stagedItem?.discountAmount) || 0,
     description: stagedItem?.description || "",
     warrantyCardId: stagedItem?.warrantyCardId || null,
     basePrice: 0,
-    discountAmount: 0,
     taxableAmount: 0,
     taxAmount: 0,
     totalAmount: 0,
   };
 }
 
-function getPriceLevelRate(productDetail, priceLevel) {
-  if (!priceLevel) return null;
-  return productDetail?.priceLevels?.[priceLevel] ?? null;
+function getPriceLevelRate(productDetail, priceLevelId) {
+  if (!priceLevelId || !Array.isArray(productDetail?.priceLevels)) return null;
+
+  const match = productDetail.priceLevels.find(
+    (level) => level?.priceLevel?.toString() === priceLevelId?.toString(),
+  );
+
+  return match?.priceRate ?? null;
 }
 
 async function fetchPartyLsp(partyId, productId) {
@@ -202,17 +226,17 @@ async function resolveInitialRate({
   priceLevel,
 }) {
   const partyLsp = await fetchPartyLsp(partyId, productId);
-  if (partyLsp != null) {
+  if (partyLsp != null && Number(partyLsp) > 0) {
     return { source: "partyLsp", rate: Number(partyLsp) || 0 };
   }
 
   const globalLsp = await fetchGlobalLsp(productId);
-  if (globalLsp != null) {
+  if (globalLsp != null && Number(globalLsp) > 0) {
     return { source: "globalLsp", rate: Number(globalLsp) || 0 };
   }
 
-  if (priceLevel && productDetail?.priceLevels) {
-    const levelRate = productDetail.priceLevels[priceLevel];
+  if (priceLevel) {
+    const levelRate = getPriceLevelRate(productDetail, priceLevel);
     if (levelRate != null) {
       return { source: "priceLevel", rate: Number(levelRate) || 0 };
     }
@@ -265,7 +289,7 @@ function FilterSheet({
   appliedBrandId,
   appliedCategoryId,
   appliedSubcategoryId,
-  priceLevelOptions,
+  priceLevels,
   brands,
   categories,
   subcategories,
@@ -342,13 +366,26 @@ function FilterSheet({
               </p>
             </div>
 
-            <FilterDropdown
-              label="Price Level"
-              value={draftPriceLevel}
-              onChange={setDraftPriceLevel}
-              options={priceLevelOptions.filter((option) => option.value)}
-              placeholder="Default"
-            />
+            <div className="space-y-2">
+              <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
+                Price Level
+              </label>
+              <div className="relative">
+                <select
+                  value={draftPriceLevel}
+                  onChange={(event) => setDraftPriceLevel(event.target.value)}
+                  className="h-12 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+                >
+                  <option value="">Default (no price level)</option>
+                  {priceLevels.map((priceLevel) => (
+                    <option key={priceLevel?._id} value={priceLevel?._id}>
+                      {priceLevel?.pricelevel || "Unnamed"}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown className="pointer-events-none absolute right-4 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              </div>
+            </div>
 
             <FilterDropdown
               label="Brand"
@@ -431,9 +468,17 @@ function ProductRow({
 }) {
   const quantity = Number(stagedItem?.quantity) || 0;
   const displayRate =
-    stagedItem?.rate ??
+    (stagedItem?.rate > 0 ? stagedItem.rate : null) ??
     getPriceLevelRate(buildProductDetail(product), priceLevel) ??
     0;
+  let totalAmount = null;
+  if (stagedItem && quantity > 0) {
+    const calcItem = buildCalcItemFromStaged(stagedItem);
+    if (calcItem) {
+      const result = recalculateItem({ ...calcItem });
+      totalAmount = result.totalAmount || 0;
+    }
+  }
 
   const subtitle = [
     product?.brand?.brand || product?.brandName || product?.brand,
@@ -507,6 +552,11 @@ function ProductRow({
               <p className="text-sm font-semibold text-slate-900">
                 {(Number(displayRate) || 0).toFixed(2)}
               </p>
+              {totalAmount != null && (
+                <p className="text-[11px] text-slate-600">
+                  Total: ₹{totalAmount.toFixed(2)}
+                </p>
+              )}
               <p className="text-[11px] text-slate-500">
                 {quantity > 0
                   ? stagedItem?.initialPriceSource || "manual"
@@ -535,7 +585,6 @@ export default function ProductSelectPage() {
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
   const loadMoreRef = useRef(null);
   const didSeedRef = useRef(false);
-  const previousPriceLevelRef = useRef(null);
   const reduxPriceLevel = useSelector((state) => state.transaction.priceLevel);
   const transactionItems = useSelector((state) => state.transaction.items);
   const party = useSelector((state) => state.transaction.party);
@@ -551,7 +600,11 @@ export default function ProductSelectPage() {
   const [stagedItems, setStagedItems] = useState({});
   const [loadingProductIds, setLoadingProductIds] = useState({});
   const [editingProductId, setEditingProductId] = useState(null);
+  const [pendingPriceLevelChange, setPendingPriceLevelChange] = useState(null);
   const debouncedSearch = useDebouncedValue(search.trim(), 500);
+
+  console.log(stagedItems);
+  
 
   const {
     data,
@@ -572,6 +625,7 @@ export default function ProductSelectPage() {
   });
 
   const { data: brandsData = [] } = useBrandsQuery({ cmp_id: cmpId });
+  const { data: priceLevelsData = [] } = usePriceLevelsQuery({ cmp_id: cmpId });
   const { data: categoriesData = [] } = useCategoriesQuery({ cmp_id: cmpId });
   const { data: subcategoriesData = [] } = useSubcategoriesQuery({
     cmp_id: cmpId,
@@ -623,38 +677,6 @@ export default function ProductSelectPage() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, data]);
 
-  useEffect(() => {
-    if (previousPriceLevelRef.current === null) {
-      previousPriceLevelRef.current = appliedPriceLevel || "";
-      return;
-    }
-
-    if (previousPriceLevelRef.current === (appliedPriceLevel || "")) return;
-    previousPriceLevelRef.current = appliedPriceLevel || "";
-
-    setStagedItems((current) => {
-      const next = { ...current };
-
-      Object.entries(next).forEach(([productId, staged]) => {
-        if (staged?.initialPriceSource !== "priceLevel") return;
-
-        const nextRate = getPriceLevelRate(
-          staged?.productDetail,
-          appliedPriceLevel || "",
-        );
-
-        if (nextRate == null) return;
-
-        next[productId] = {
-          ...staged,
-          rate: Number(nextRate) || 0,
-        };
-      });
-
-      return next;
-    });
-  }, [appliedPriceLevel]);
-
   const products = useMemo(
     () => data?.pages?.flatMap((page) => page?.items || []) || [],
     [data],
@@ -664,12 +686,11 @@ export default function ProductSelectPage() {
     ? stagedItems[editingProductId] || null
     : null;
 
-  const selectedCount = useMemo(
+  const stagedItemCount = useMemo(
     () =>
-      Object.values(stagedItems).reduce(
-        (sum, current) => sum + (Number(current?.quantity) || 0),
-        0,
-      ),
+      Object.values(stagedItems).filter(
+        (item) => (Number(item?.quantity) || 0) > 0,
+      ).length,
     [stagedItems],
   );
 
@@ -679,30 +700,36 @@ export default function ProductSelectPage() {
     ).length;
   }, [appliedPriceLevel, brandId, categoryId, subcategoryId]);
 
-  const resolvedPriceLevelOptions = useMemo(() => {
-    const optionsMap = new Map(
-      PRICE_LEVEL_OPTIONS.map((option) => [option.value, option]),
-    );
+  const applyFilters = useCallback(
+    ({
+      priceLevel,
+      brandId: nextBrandId,
+      categoryId: nextCategoryId,
+      subcategoryId: nextSubcategoryId,
+    }) => {
+      const matchedPriceLevel = priceLevelsData.find(
+        (level) => level?._id?.toString() === priceLevel?.toString(),
+      );
 
-    Object.values(stagedItems).forEach((staged) => {
-      Object.keys(staged?.productDetail?.priceLevels || {}).forEach((key) => {
-        if (!optionsMap.has(key)) {
-          optionsMap.set(key, {
-            value: key,
-            label: key.charAt(0).toUpperCase() + key.slice(1),
-          });
-        }
-      });
-    });
-
-    return Array.from(optionsMap.values());
-  }, [stagedItems]);
+      setAppliedPriceLevel(priceLevel || "");
+      setBrandId(nextBrandId || "");
+      setCategoryId(nextCategoryId || "");
+      setSubcategoryId(nextSubcategoryId || "");
+      dispatch(setPriceLevel(priceLevel || null));
+      dispatch(setPriceLevelObject(matchedPriceLevel || null));
+    },
+    [dispatch, priceLevelsData],
+  );
 
   const ensureProductDetail = async (product, stagedItem) => {
     const productId = getProductId(product) || stagedItem?.productDetail?._id;
     const existingDetail = stagedItem?.productDetail;
 
-    if (existingDetail?.unit && existingDetail?.priceLevels) {
+    if (
+      existingDetail?.unit &&
+      Array.isArray(existingDetail?.priceLevels) &&
+      existingDetail.priceLevels.length > 0
+    ) {
       return buildProductDetail(existingDetail);
     }
 
@@ -771,7 +798,8 @@ export default function ProductSelectPage() {
           actualQty: 1,
           billedQty: 1,
           discountType: "percentage",
-          discountValue: 0,
+          discountPercentage: 0,
+          discountAmount: 0,
           description: "",
           warrantyCardId: null,
           originalSnapshot: null,
@@ -857,7 +885,12 @@ export default function ProductSelectPage() {
           billedQty: nextBilledQty,
           actualQty: nextActualQty,
           rate: Number(changes?.rate) || 0,
-          discountValue: Number(changes?.discountValue) || 0,
+          discountType:
+            changes?.discountType ||
+            existingItem?.discountType ||
+            "percentage",
+          discountPercentage: Number(changes?.discountPercentage) || 0,
+          discountAmount: Number(changes?.discountAmount) || 0,
         },
       };
     });
@@ -865,6 +898,35 @@ export default function ProductSelectPage() {
 
   const openFilterSheet = useCallback(() => {
     setIsFilterSheetOpen(true);
+  }, []);
+
+  const confirmPriceLevelChange = useCallback(() => {
+    if (!pendingPriceLevelChange) return;
+
+    const { priceLevel } = pendingPriceLevelChange;
+
+    setStagedItems((current) => {
+      const next = { ...current };
+
+      Object.entries(next).forEach(([productId, staged]) => {
+        const nextRate = getPriceLevelRate(staged?.productDetail, priceLevel);
+
+        next[productId] = {
+          ...staged,
+          rate: nextRate != null ? Number(nextRate) || 0 : 0,
+          initialPriceSource: "priceLevel",
+        };
+      });
+
+      return next;
+    });
+
+    applyFilters(pendingPriceLevelChange);
+    setPendingPriceLevelChange(null);
+  }, [applyFilters, pendingPriceLevelChange]);
+
+  const cancelPriceLevelChange = useCallback(() => {
+    setPendingPriceLevelChange(null);
   }, []);
 
   const handleContinue = useCallback(() => {
@@ -879,7 +941,8 @@ export default function ProductSelectPage() {
         rate: Number(staged?.rate) || 0,
         taxInclusive: Boolean(staged?.taxInclusive),
         discountType: staged?.discountType || "percentage",
-        discountValue: Number(staged?.discountValue) || 0,
+        discountPercentage: Number(staged?.discountPercentage) || 0,
+        discountAmount: Number(staged?.discountAmount) || 0,
         description: staged?.description || "",
         warrantyCardId: staged?.warrantyCardId || null,
       };
@@ -895,7 +958,8 @@ export default function ProductSelectPage() {
             snapshot.rate !== baseChanges.rate ||
             snapshot.taxInclusive !== baseChanges.taxInclusive ||
             snapshot.discountType !== baseChanges.discountType ||
-            snapshot.discountValue !== baseChanges.discountValue ||
+            snapshot.discountPercentage !== baseChanges.discountPercentage ||
+            snapshot.discountAmount !== baseChanges.discountAmount ||
             snapshot.description !== baseChanges.description ||
             snapshot.warrantyCardId !== baseChanges.warrantyCardId ||
             (keptSameQuantity &&
@@ -929,7 +993,7 @@ export default function ProductSelectPage() {
         hsn: detail?.hsn || "",
         unit: detail?.unit || "",
         taxRate: getProductTaxRate(detail),
-        priceLevels: detail?.priceLevels || {},
+        priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
         priceLevel: appliedPriceLevel || null,
         rate: Number(staged?.rate) || 0,
         initialPriceSource: staged?.initialPriceSource || "manual",
@@ -937,11 +1001,11 @@ export default function ProductSelectPage() {
         billedQty: deltaQuantity,
         taxInclusive: Boolean(staged?.taxInclusive),
         discountType: staged?.discountType || "percentage",
-        discountValue: Number(staged?.discountValue) || 0,
+        discountPercentage: Number(staged?.discountPercentage) || 0,
+        discountAmount: Number(staged?.discountAmount) || 0,
         description: staged?.description || "",
         warrantyCardId: staged?.warrantyCardId || null,
         basePrice: 0,
-        discountAmount: 0,
         taxableAmount: 0,
         taxAmount: 0,
         totalAmount: 0,
@@ -1152,7 +1216,7 @@ export default function ProductSelectPage() {
         appliedBrandId={brandId}
         appliedCategoryId={categoryId}
         appliedSubcategoryId={subcategoryId}
-        priceLevelOptions={resolvedPriceLevelOptions}
+        priceLevels={Array.isArray(priceLevelsData) ? priceLevelsData : []}
         brands={Array.isArray(brandsData) ? brandsData : []}
         categories={Array.isArray(categoriesData) ? categoriesData : []}
         subcategories={
@@ -1164,11 +1228,28 @@ export default function ProductSelectPage() {
           categoryId: nextCategoryId,
           subcategoryId: nextSubcategoryId,
         }) => {
-          setAppliedPriceLevel(priceLevel || "");
-          setBrandId(nextBrandId || "");
-          setCategoryId(nextCategoryId || "");
-          setSubcategoryId(nextSubcategoryId || "");
-          dispatch(setPriceLevel(priceLevel || null));
+          const hasPriceLevelChanged =
+            (priceLevel || "") !== (appliedPriceLevel || "");
+          const hasStagedItems = Object.values(stagedItems).some(
+            (item) => (Number(item?.quantity) || 0) > 0,
+          );
+
+          if (hasPriceLevelChanged && hasStagedItems) {
+            setPendingPriceLevelChange({
+              priceLevel,
+              brandId: nextBrandId,
+              categoryId: nextCategoryId,
+              subcategoryId: nextSubcategoryId,
+            });
+            return;
+          }
+
+          applyFilters({
+            priceLevel,
+            brandId: nextBrandId,
+            categoryId: nextCategoryId,
+            subcategoryId: nextSubcategoryId,
+          });
         }}
       />
 
@@ -1184,6 +1265,39 @@ export default function ProductSelectPage() {
         }
         onSave={handleStagedSave}
       />
+
+      {pendingPriceLevelChange && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
+          <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
+            <h2 className="text-lg font-semibold text-slate-900">
+              Change Price Level?
+            </h2>
+            <p className="mt-2 text-sm text-slate-600">
+              {stagedItemCount} staged item{stagedItemCount === 1 ? "" : "s"}{" "}
+              will be re-priced to{" "}
+              {priceLevelsData.find(
+                (level) =>
+                  level?._id?.toString() ===
+                  pendingPriceLevelChange?.priceLevel?.toString(),
+              )?.pricelevel || "Default"}
+              . Items without this price level will be set to rate 0.
+            </p>
+
+            <div className="mt-6 flex items-center justify-end gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={cancelPriceLevelChange}
+              >
+                Cancel
+              </Button>
+              <Button type="button" onClick={confirmPriceLevelChange}>
+                Yes, Re-price
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

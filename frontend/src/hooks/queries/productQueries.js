@@ -3,6 +3,7 @@ import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import {
   fetchBrands,
   fetchCategories,
+  fetchPriceLevels,
   fetchSubcategories,
   getProducts,
 } from "@/api/services/product.service";
@@ -10,6 +11,7 @@ import {
 export const productQueryKeys = {
   all: ["products"],
   brands: (cmpId, search = "") => [...productQueryKeys.all, "brands", { cmpId, search }],
+  priceLevels: (cmpId) => ["priceLevels", cmpId],
   categories: (cmpId, search = "") => [
     ...productQueryKeys.all,
     "categories",
@@ -84,6 +86,14 @@ export const useBrandsQuery = ({ cmp_id, search = "", enabled = true }) =>
         search,
         skipGlobalLoader: true,
       }),
+    enabled: Boolean(cmp_id) && enabled,
+    staleTime: 60_000,
+  });
+
+export const usePriceLevelsQuery = ({ cmp_id, enabled = true }) =>
+  useQuery({
+    queryKey: productQueryKeys.priceLevels(cmp_id || ""),
+    queryFn: () => fetchPriceLevels(cmp_id, { skipGlobalLoader: true }),
     enabled: Boolean(cmp_id) && enabled,
     staleTime: 60_000,
   });

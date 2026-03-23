@@ -5,27 +5,7 @@ function getResponseData(response) {
 }
 
 function normalizePriceLevels(priceLevels) {
-  if (!Array.isArray(priceLevels)) {
-    return priceLevels && typeof priceLevels === "object" ? priceLevels : {};
-  }
-
-  return priceLevels.reduce((accumulator, level) => {
-    const key =
-      level?.levelName ||
-      level?.name ||
-      level?.pricelevel ||
-      level?.priceLevelName ||
-      level?.priceLevel?._id ||
-      level?.priceLevel;
-
-    const rate = level?.rate ?? level?.priceRate ?? level?.pricerate ?? null;
-
-    if (key && rate != null) {
-      accumulator[key] = rate;
-    }
-
-    return accumulator;
-  }, {});
+  return Array.isArray(priceLevels) ? priceLevels : [];
 }
 
 function mapMasterItem(item, type) {
@@ -106,9 +86,7 @@ export async function getProductById(id, options = {}) {
     });
     const product = getResponseData(response);
 
-    return product
-      ? { ...product, priceLevels: normalizePriceLevels(product.priceLevels) }
-      : null;
+    return product || null;
   } catch (error) {
     const status = error?.response?.status;
     if (status !== 404 && status !== 400) {
@@ -172,6 +150,27 @@ export async function fetchSubcategories(options = {}) {
   }
 }
 
+export async function fetchPriceLevels(cmp_id, options = {}) {
+  if (!cmp_id) return [];
+
+  try {
+    const response = await api.get("/price-levels", {
+      ...options,
+      params: {
+        cmp_id,
+      },
+      skipGlobalLoader: options?.skipGlobalLoader ?? true,
+    });
+
+    const payload = getResponseData(response);
+    return Array.isArray(payload) ? payload : [];
+  } catch (error) {
+    const status = error?.response?.status;
+    if (status !== 404 && status !== 400) throw error;
+    return [];
+  }
+}
+
 export async function fetchPartyLsp(partyId, productId, options = {}) {
   const resolvedPartyId =
     typeof partyId === "object" ? partyId?.partyId : partyId;
@@ -227,6 +226,7 @@ export const productService = {
   getProductById,
   fetchBrands,
   fetchCategories,
+  fetchPriceLevels,
   fetchSubcategories,
   fetchPartyLsp,
   fetchGlobalLsp,

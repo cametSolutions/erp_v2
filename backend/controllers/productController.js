@@ -7,39 +7,11 @@ const PRODUCT_POPULATE = [
   { path: "brand", select: "brand brand_id" },
   { path: "category", select: "category category_id" },
   { path: "sub_category", select: "subcategory subcategory_id" },
-  { path: "priceLevels.priceLevel", select: "pricelevel pricelevel_id" },
 ];
 
 function toObjectId(value) {
   if (!value || !mongoose.Types.ObjectId.isValid(value)) return null;
   return new mongoose.Types.ObjectId(value);
-}
-
-function mapProductPriceLevels(product) {
-  const rawPriceLevels = Array.isArray(product?.priceLevels)
-    ? product.priceLevels
-    : [];
-
-  const priceLevels = rawPriceLevels.reduce((accumulator, level) => {
-    const levelName =
-      level?.priceLevel?.pricelevel ||
-      level?.pricelevel ||
-      level?.levelName ||
-      level?.name ||
-      null;
-    const rate = level?.priceRate ?? level?.pricerate ?? level?.rate ?? null;
-
-    if (levelName && rate != null) {
-      accumulator[levelName.toLowerCase()] = rate;
-    }
-
-    return accumulator;
-  }, {});
-
-  return {
-    ...product,
-    priceLevels,
-  };
 }
 
 async function listProductMasters(Model, fieldName, req, res) {
@@ -142,7 +114,7 @@ export const listProducts = async (req, res) => {
     const hasMore = skip + items.length < total;
 
     return res.json({
-      items: items.map(mapProductPriceLevels),
+      items,
       total,
       page: pageNum,
       hasMore,
@@ -169,7 +141,7 @@ export const getProductById = async (req, res) => {
       return res.status(404).json({ message: "Product not found" });
     }
 
-    return res.json(mapProductPriceLevels(product));
+    return res.json(product);
   } catch (error) {
     console.error("getProductById error:", error);
     return res.status(500).json({ message: "Failed to fetch product" });

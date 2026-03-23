@@ -13,16 +13,37 @@ import {
 import { recalculateItem } from "@/store/slices/transactionSlice";
 
 function buildDraft(item, form) {
+  const discountType = form.discountType || "percentage";
+  const billedQty = Number(form.billedQty) || 0;
+  const rate = Number(form.rate) || 0;
+  const taxRate = Number(item?.taxRate) || 0;
+  const taxInclusive = Boolean(form.taxInclusive);
+  const lineTotal = rate * billedQty;
+  const baseBeforeTax = taxInclusive
+    ? lineTotal / (1 + taxRate / 100)
+    : lineTotal;
+
+  let discountPercentage = 0;
+  let discountAmount = 0;
+
+  if (discountType === "percentage") {
+    discountPercentage = Number(form.discountValue) || 0;
+    discountAmount = (baseBeforeTax * discountPercentage) / 100;
+  } else {
+    discountAmount = Number(form.discountValue) || 0;
+    discountPercentage =
+      baseBeforeTax > 0 ? (discountAmount / baseBeforeTax) * 100 : 0;
+  }
+
   return recalculateItem({
     ...item,
-    rate: Number(form.rate) || 0,
-    taxInclusive: Boolean(form.taxInclusive),
-    actualQty: Number(form.actualQty) || 0,
-    billedQty: Number(form.billedQty) || 0,
-    discountType: form.discountType || "percentage",
-    discountValue: Number(form.discountValue) || 0,
-    description: form.description || "",
-    warrantyCardId: form.warrantyCardId || null,
+    rate,
+    billedQty,
+    taxRate,
+    taxInclusive,
+    discountType,
+    discountPercentage,
+    discountAmount,
   });
 }
 
@@ -35,7 +56,6 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
     discountType: "percentage",
     discountValue: "",
     description: "",
-    warrantyCardId: "",
   });
 
   useEffect(() => {
@@ -47,9 +67,11 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
       actualQty: item.actualQty ?? 0,
       billedQty: item.billedQty ?? 0,
       discountType: item.discountType || "percentage",
-      discountValue: item.discountValue ?? 0,
+      discountValue:
+        (item.discountType || "percentage") === "amount"
+          ? item.discountAmount ?? 0
+          : item.discountPercentage ?? 0,
       description: item.description || "",
-      warrantyCardId: item.warrantyCardId || "",
     });
   }, [item, open]);
 
@@ -67,6 +89,7 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
 
   const handleSave = () => {
     if (!item || !onSave) return;
+    const summary = buildDraft(item, form);
 
     onSave({
       rate: Number(form.rate) || 0,
@@ -74,9 +97,9 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
       actualQty: Number(form.actualQty) || 0,
       billedQty: Number(form.billedQty) || 0,
       discountType: form.discountType || "percentage",
-      discountValue: Number(form.discountValue) || 0,
+      discountPercentage: Number(summary?.discountPercentage) || 0,
+      discountAmount: Number(summary?.discountAmount) || 0,
       description: form.description || "",
-      warrantyCardId: form.warrantyCardId || null,
     });
 
     onOpenChange(false);
@@ -110,8 +133,9 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
               Tax Inclusive
             </label>
             <select
-              className="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none"
+              className="flex h-8 w-full rounded-lg border border-slate-200 bg-white px-3 text-xs outline-none disabled:cursor-not-allowed disabled:opacity-60"
               value={form.taxInclusive ? "yes" : "no"}
+              // disabled
               onChange={(event) =>
                 handleChange("taxInclusive", event.target.value === "yes")
               }
@@ -119,6 +143,15 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
               <option value="no">No</option>
               <option value="yes">Yes</option>
             </select>
+          </div>
+
+          <div className="space-y-1">
+            <label className="text-[11px] font-medium text-slate-500">
+              Tax %
+            </label>
+            <div className="flex h-8 w-full items-center rounded-lg border border-slate-200 bg-slate-50 px-3 text-xs text-slate-700">
+              {Number(item?.taxRate) || 0}%
+            </div>
           </div>
 
           <div className="space-y-1">
@@ -161,7 +194,7 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
 
           <div className="space-y-1">
             <label className="text-[11px] font-medium text-slate-500">
-              Discount Value
+              {form.discountType === "percentage" ? "Discount %" : "Discount ₹"}
             </label>
             <Input
               type="number"
@@ -183,19 +216,6 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
               onChange={(event) => handleChange("description", event.target.value)}
             />
           </div>
-
-          <div className="space-y-1 md:col-span-2">
-            <label className="text-[11px] font-medium text-slate-500">
-              Warranty Card Id
-            </label>
-            <Input
-              className="h-8 text-xs"
-              value={form.warrantyCardId}
-              onChange={(event) =>
-                handleChange("warrantyCardId", event.target.value)
-              }
-            />
-          </div>
         </div>
 
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
@@ -205,7 +225,11 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
               <span>{summary?.basePrice?.toFixed(2) || "0.00"}</span>
             </div>
             <div className="flex justify-between gap-4">
-              <span>Discount</span>
+              <span>Discount %</span>
+              <span>{(Number(summary?.discountPercentage) || 0).toFixed(2)}%</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Discount Amount</span>
               <span>{summary?.discountAmount?.toFixed(2) || "0.00"}</span>
             </div>
             <div className="flex justify-between gap-4">

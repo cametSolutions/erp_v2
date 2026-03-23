@@ -61,10 +61,6 @@ export const registerUser = async (req, res) => {
 export const Login = async (req, res) => {
   try {
     const { identifier, password } = req.body;
- 
- 
-   
-   
    
     if (!identifier || !password) {
       return res
