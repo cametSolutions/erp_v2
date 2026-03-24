@@ -1,28 +1,31 @@
-// vite.config.js
-import { defineConfig } from "vite";
+/* eslint-disable no-undef */
+import { defineConfig, loadEnv } from "vite";
 import react from "@vitejs/plugin-react";
 import tailwindcss from "@tailwindcss/vite";
 import path from "path";
 
-// https://vite.dev/config/
-export default defineConfig({
-  plugins: [
-    react(),       // React plugin
-    tailwindcss(), // Tailwind v4 plugin
-  ],
-  resolve: {
-    alias: {
-      // eslint-disable-next-line no-undef
-      "@": path.resolve(__dirname, "./src"),
-    },
-  },
-  server: {
-    proxy: {
-      "/api": {
-        target: "http://localhost:4000", // your Express backend
-        changeOrigin: true,
-        secure: false,
+export default defineConfig(({ mode }) => {
+  // Load env based on mode (development / production)
+  const env = loadEnv(mode, process.cwd());
+
+  return {
+    plugins: [
+      react(),
+      tailwindcss(),
+    ],
+    resolve: {
+      alias: {
+        "@": path.resolve(__dirname, "./src"),
       },
     },
-  },
+    server: {
+      proxy: {
+        "/api": {
+          target: env.VITE_API_URL, // 👈 dynamic
+          changeOrigin: true,
+          secure: false,
+        },
+      },
+    },
+  };
 });

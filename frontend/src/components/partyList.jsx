@@ -1,5 +1,5 @@
 // src/components/PartyList.jsx
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Pencil, Trash2, Users } from "lucide-react";
@@ -9,6 +9,7 @@ import { useSelector } from "react-redux";
 import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import { Card, CardContent } from "@/components/ui/card";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { partyService } from "@/api/services/party.service";
 import { useDebouncedValue } from "@/hooks/useDebouncedValue";
 import {
@@ -22,7 +23,7 @@ const PAGE_SIZE = 20;
 function PartyRow({ party, rightContent, onClick }) {
   return (
     <Card
-      className="rounded border-none bg-slate-50 py-1 shadow-lg ring-0 cursor-pointer"
+      className="cursor-pointer rounded border-none bg-slate-50 py-1 shadow-lg ring-0"
       onClick={onClick}
     >
       <CardContent className="flex items-center justify-between gap-3 p-3.5">
@@ -52,11 +53,20 @@ function PartyRow({ party, rightContent, onClick }) {
 }
 
 /**
- * mode: "master" | "outstanding"
+ * PartyList component
+ *
+ * Props:
+ * - mode: "master" | "outstanding" | "select"
+ *   - master: used in Party masters screen (edit/delete actions).
+ *   - outstanding: used in Outstanding screen (shows total outstanding, navigates on click).
+ *   - select: used in transaction flows (Sale Order, Receipt) inside a sheet to pick a party.
+ * - onSelect?: function(party)
  */
-export function PartyList({ mode = "master" }) {
+export function PartyList({ mode = "master", onSelect }) {
   const [searchText, setSearchText] = useState("");
-  const [ledgerType, setLedgerType] = useState("ledger"); // ledger | receivable | payable
+  // ledger | receivable | payable (for outstanding screen)
+  const [ledgerType, setLedgerType] = useState("ledger");
+  const loadMoreRef = useRef(null);
 
   const navigate = useNavigate();
   const location = useLocation();
@@ -86,7 +96,13 @@ export function PartyList({ mode = "master" }) {
     ledgerType: mode === "outstanding" ? ledgerType : undefined,
   });
 
+  // Mobile header config (master & outstanding)
   useEffect(() => {
+    if (mode === "select") {
+      resetHeaderOptions();
+      return;
+    }
+
     setHeaderOptions({
       showMenuDots: mode === "master",
       menuItems:
@@ -118,6 +134,7 @@ export function PartyList({ mode = "master" }) {
     setHeaderOptions,
   ]);
 
+  // Error toast
   useEffect(() => {
     if (!isError) return;
     const message =
@@ -129,6 +146,24 @@ export function PartyList({ mode = "master" }) {
 
   const parties =
     data?.pages?.flatMap((page) => page?.items || []) || [];
+
+  // IntersectionObserver for infinite scroll
+  useEffect(() => {
+    if (!hasNextPage || isFetchingNextPage) return;
+
+    const node = loadMoreRef.current;
+    if (!node) return;
+
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) {
+        fetchNextPage();
+      }
+    });
+
+    observer.observe(node);
+
+    return () => observer.disconnect();
+  }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
   const handleEdit = (party) => {
     navigate(`${ROUTES.mastersPartyRegister}?partyId=${party._id}`);
@@ -203,7 +238,16 @@ export function PartyList({ mode = "master" }) {
     </div>
   );
 
-  // header total based on current filter & current page parties
+  const renderRightSelect = (party) => (
+    <div className="text-right">
+      <div className="text-sm font-semibold text-emerald-600">
+        {party.totalOutstanding?.toFixed(2) ?? "0.00"}
+      </div>
+      <div className="text-[10px] text-slate-500">Tap to select</div>
+    </div>
+  );
+
+  // Header total based on current filter & current page parties
   const { headerBalance, headerClassification } = useMemo(() => {
     const sum = parties.reduce((acc, p) => {
       const val = p.totalOutstanding || 0;
@@ -217,14 +261,78 @@ export function PartyList({ mode = "master" }) {
     };
   }, [parties, ledgerType]);
 
+  const listContent = (
+    <>
+      {isLoading && (
+        <div className="space-y-2">
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-16 animate-pulse rounded-xl border border-slate-200 bg-white"
+            />
+          ))}
+        </div>
+      )}
+
+      {!isLoading && parties.length === 0 && (
+        <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          {debouncedSearchText
+            ? `No matching ${emptyLabel}`
+            : `No ${emptyLabel} found`}
+        </div>
+      )}
+
+      {!isLoading && parties.length > 0 && (
+        <div className="space-y-2">
+          {parties.map((party) => (
+            <PartyRow
+              key={party._id}
+              party={party}
+              rightContent={
+                mode === "master"
+                  ? renderRightMaster(party)
+                  : mode === "outstanding"
+                    ? renderRightOutstanding(party)
+                    : renderRightSelect(party)
+              }
+              onClick={
+                mode === "master"
+                  ? undefined
+                  : mode === "outstanding"
+                    ? () =>
+                        navigate(
+                          ROUTES.outstandingPartyDetail.replace(
+                            ":partyId",
+                            party._id,
+                          ),
+                        )
+                    : () => onSelect && onSelect(party)
+              }
+            />
+          ))}
+        </div>
+      )}
+
+      {hasNextPage && <div ref={loadMoreRef} className="h-8" />}
+    </>
+  );
+
   return (
-    <div className="w-full font-[sans-serif]">
-      <div className="mx-auto w-full max-w-md space-y-3">
+    <div
+      className={`w-full font-[sans-serif] ${
+        mode === "select" ? "flex h-full min-h-0 flex-col" : ""
+      }`}
+    >
+      <div
+        className={`mx-auto w-full max-w-md ${
+          mode === "select" ? "flex h-full min-h-0 flex-col" : "space-y-3"
+        }`}
+      >
         {mode === "outstanding" && (
           <div className="mb-1 rounded-xl bg-sky-700 px-4 py-3 text-white">
             <div className="mb-2 flex items-center justify-between">
               <div className="flex items-center gap-2">
-              
+                {/* Ledger filter */}
                 <select
                   className="rounded-md bg-sky-600 px-2 py-1 text-xs outline-none"
                   value={ledgerType}
@@ -247,60 +355,27 @@ export function PartyList({ mode = "master" }) {
           </div>
         )}
 
-        {isLoading && (
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, index) => (
-              <div
-                key={index}
-                className="h-16 animate-pulse rounded-xl border border-slate-200 bg-white"
-              />
-            ))}
+        {mode === "select" && (
+          <div className="shrink-0 border-b border-slate-100 bg-white pb-3">
+            <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
+              Search Party
+            </p>
+            <input
+              type="text"
+              value={searchText}
+              onChange={(e) => setSearchText(e.target.value)}
+              placeholder="Search parties"
+              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-200"
+            />
           </div>
         )}
 
-        {!isLoading && parties.length === 0 && (
-          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
-            {debouncedSearchText
-              ? `No matching ${emptyLabel}`
-              : `No ${emptyLabel} found`}
-          </div>
-        )}
-
-        {!isLoading && parties.length > 0 && (
-          <div className="space-y-2">
-          {parties.map((party) => (
-  <PartyRow
-    key={party._id}
-    party={party}
-    rightContent={
-      mode === "master"
-        ? renderRightMaster(party)
-        : renderRightOutstanding(party)
-    }
-    onClick={
-      mode === "master"
-        ? undefined
-        : () =>
-            navigate(
-              ROUTES.outstandingPartyDetail.replace(":partyId", party._id)
-            )
-    }
-  />
-))}
-          </div>
-        )}
-
-        {hasNextPage && (
-          <button
-            type="button"
-            onClick={() => fetchNextPage()}
-            disabled={isFetchingNextPage}
-            className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {isFetchingNextPage
-              ? "Loading more..."
-              : `Load more ${emptyLabel}`}
-          </button>
+        {mode === "select" ? (
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="space-y-3 py-3">{listContent}</div>
+          </ScrollArea>
+        ) : (
+          listContent
         )}
       </div>
     </div>

@@ -5,8 +5,15 @@ import {
   stopGlobalLoading,
 } from "../../store/slices/uiSlice";
 
+// 👇 decide base URL based on environment
+
+const baseURL =
+  import.meta.env.DEV
+    ? "/api" // uses Vite proxy in development
+    : `${import.meta.env.VITE_API_URL}/api`; // direct API in production
+
 const api = axios.create({
-  baseURL: "/api",
+  baseURL,
   headers: { "Content-Type": "application/json" },
   withCredentials: true,
 });

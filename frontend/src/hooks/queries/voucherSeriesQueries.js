@@ -10,7 +10,7 @@ export const voucherSeriesKeys = {
 async function fetchVoucherSeries({ cmpId, voucherType }) {
   const res = await api.get(
     `/sUsers/getSeriesByVoucher/${cmpId}?voucherType=${voucherType}&restrict=true`,
-    { withCredentials: true }
+    { withCredentials: true },
   );
   return res.data; // { series: [...] }
 }
@@ -20,5 +20,8 @@ export function useVoucherSeries({ cmpId, voucherType, enabled = true }) {
     queryKey: voucherSeriesKeys.list(cmpId, voucherType),
     queryFn: () => fetchVoucherSeries({ cmpId, voucherType }),
     enabled: !!cmpId && !!voucherType && enabled,
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 }

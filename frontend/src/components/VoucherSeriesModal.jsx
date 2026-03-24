@@ -1,5 +1,18 @@
 // src/components/VoucherSeriesModal.jsx
-import { useState } from "react";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import { cn } from "@/lib/utils";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogClose,
+} from "@/components/ui/dialog";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Button } from "@/components/ui/button";
 
 export default function VoucherSeriesModal({
   isOpen,
@@ -10,9 +23,18 @@ export default function VoucherSeriesModal({
 }) {
   const [localSelectedId, setLocalSelectedId] = useState(selectedSeriesId);
 
+  useEffect(() => {
+    setLocalSelectedId(selectedSeriesId);
+  }, [selectedSeriesId]);
+
   if (!isOpen) return null;
 
-  const currentSeries = seriesList.find((s) => s._id === localSelectedId) || seriesList[0];
+  const fallbackId = seriesList[0]?._id ?? null;
+  const resolvedSelectedId = localSelectedId || selectedSeriesId || fallbackId;
+
+  const currentSeries =
+    seriesList.find((s) => s._id === resolvedSelectedId) ?? seriesList[0];
+
   const nextNumber =
     currentSeries?.currentNumber != null
       ? String(currentSeries.currentNumber).padStart(
@@ -29,70 +51,88 @@ export default function VoucherSeriesModal({
     return `${s.prefix || ""}${num}${s.suffix || ""}`;
   };
 
-  return (
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/40">
-      <div className="w-full max-w-md rounded-lg bg-white shadow-xl">
-        <header className="flex items-center justify-between border-b px-4 py-2.5">
-          <p className="text-sm font-semibold text-slate-800">Select {currentSeries?.voucherType || "Series"}</p>
-          <button
-            type="button"
-            onClick={onClose}
-            className="text-slate-400 hover:text-slate-600 text-lg"
-          >
-            ×
-          </button>
-        </header>
+  const handleConfirm = () => {
+    const selected =
+      seriesList.find((s) => s._id === resolvedSelectedId) ?? seriesList[0];
+    if (selected && onSelectSeries) onSelectSeries(selected);
+    onClose();
+  };
 
-        <div className="border-b px-4 py-2 text-xs text-slate-600">
-          <span className="font-medium">Current Number:</span>{" "}
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="w-full max-w-sm gap-0 p-0">
+        <DialogHeader className="flex flex-row items-center justify-between gap-2 border-b px-4 py-3">
+          <div>
+            <DialogTitle className="text-sm font-semibold">
+              Select series
+            </DialogTitle>
+            <DialogDescription className="mt-0.5 text-[11px] text-muted-foreground">
+              Choose which series to use for this voucher.
+            </DialogDescription>
+          </div>
+          
+        </DialogHeader>
+
+        <div className="border-b px-4 py-2 text-xs text-muted-foreground">
+          <span className="font-medium text-foreground">Current number:</span>{" "}
           <span className="tabular-nums">{nextNumber}</span>
         </div>
 
-        <div className="max-h-72 overflow-y-auto px-4 py-2">
-          {seriesList.map((s) => (
-            <button
-              key={s._id}
-              type="button"
-              onClick={() => setLocalSelectedId(s._id)}
-              className={`mb-2 w-full rounded-md border px-3 py-2 text-left text-xs ${
-                s._id === localSelectedId
-                  ? "border-violet-400 bg-violet-50"
-                  : "border-slate-200 bg-white hover:bg-slate-50"
-              }`}
-            >
-              <div className="flex items-center justify-between">
-                <span className="font-semibold text-slate-800">
-                  {s.seriesName}
-                </span>
-              </div>
-              <p className="mt-0.5 text-[11px] text-slate-500">
-                Next: {formatNext(s)}
+        <ScrollArea className="max-h-64 px-3 py-2.5">
+          <div className="space-y-1.5">
+            {seriesList.map((s) => {
+              const isActive = s._id === resolvedSelectedId;
+              return (
+                <button
+                  key={s._id}
+                  type="button"
+                  onClick={() => setLocalSelectedId(s._id)}
+                  className={cn(
+                    "w-full rounded-md border px-3 py-2 text-left text-xs transition-colors",
+                    isActive
+                      ? "border-primary/60 bg-primary/5"
+                      : "border-border bg-background hover:bg-muted/60"
+                  )}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="font-medium text-foreground">
+                      {s.seriesName}
+                    </span>
+                  </div>
+                  <p className="mt-0.5 text-[11px] text-muted-foreground">
+                    Next: {formatNext(s)}
+                  </p>
+                </button>
+              );
+            })}
+            {seriesList.length === 0 && (
+              <p className="px-1 py-4 text-center text-xs text-muted-foreground">
+                No series found for this voucher.
               </p>
-            </button>
-          ))}
-        </div>
+            )}
+          </div>
+        </ScrollArea>
 
-        <footer className="flex items-center justify-end gap-2 border-t px-4 py-2.5">
-          <button
+        <div className="flex items-center justify-end gap-2 border-t bg-muted/40 px-4 py-2.5">
+          <Button
             type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 px-3 text-xs"
             onClick={onClose}
-            className="rounded-md border border-slate-200 px-3 py-1.5 text-xs text-slate-600 hover:bg-slate-50"
           >
             Cancel
-          </button>
-          <button
+          </Button>
+          <Button
             type="button"
-            onClick={() => {
-              const selected = seriesList.find((s) => s._id === localSelectedId);
-              if (selected && onSelectSeries) onSelectSeries(selected);
-              onClose();
-            }}
-            className="rounded-md bg-slate-800 px-3 py-1.5 text-xs font-semibold text-white hover:bg-slate-900"
+            size="sm"
+            className="h-7 px-4 text-xs"
+            onClick={handleConfirm}
           >
             Select
-          </button>
-        </footer>
-      </div>
-    </div>
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }

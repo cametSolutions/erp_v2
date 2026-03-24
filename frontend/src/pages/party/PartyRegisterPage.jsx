@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useForm, useWatch } from "react-hook-form";
 import { z } from "zod";
@@ -8,9 +8,10 @@ import { Users } from "lucide-react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 
-import { fetchAccountGroups } from "../../api/client/accountGroupApi";
-import { fetchSubGroups } from "../../api/client/subGroupApi";
+import { countries, INDIA_STATES } from "../../constants/countries";
 import { partyService } from "@/api/services/party.service";
+import { useAccountGroupListQuery } from "@/hooks/queries/accountGroupQueries";
+import { useSubGroupListQuery } from "@/hooks/queries/subGroupQueries";
 import {
   partyQueryKeys,
   usePartyByIdQuery,
@@ -29,9 +30,7 @@ const optionalBalanceType = z.preprocess(
 const schema = z.object({
   partyName: z.string().min(1, "Party name is required"),
   partyType: z.enum(["party", "bank", "cash"]).optional(),
-  accountGroup: z
-    .string()
-    .min(1, "Account group is required"), 
+  accountGroup: z.string().min(1, "Account group is required"),
   subGroup: optionalString,
   mobileNumber: z.string().min(1, "Mobile number is required"),
   emailID: z.string().email("Invalid email").optional().or(z.literal("")),
@@ -61,10 +60,7 @@ export default function PartyRegisterPage() {
   const isEdit = Boolean(partyId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [accountGroups, setAccountGroups] = useState([]);
-  const [subGroups, setSubGroups] = useState([]);
-const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
-
+  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
 
   const {
     register,
@@ -87,18 +83,27 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
       shippingAddress: "",
       creditPeriod: "",
       creditLimit: "",
-      openingBalanceType: "",
-      openingBalanceAmount: "",
-      country: "",
-      state: "",
+      openingBalanceType: "dr",   // hidden default
+      openingBalanceAmount: "0",  // hidden default
+      country: "India",
+      state: "Kerala",
       pin: "",
     },
   });
 
-  const watchedAccountGroup = useWatch({
-    control,
-    name: "accountGroup",
-  });
+  const watchedAccountGroup = useWatch({ control, name: "accountGroup" });
+  const selectedCountry = useWatch({ control, name: "country" });
+
+  const {
+    data: accountGroups = [],
+    isError: isAccountGroupsError,
+    error: accountGroupsError,
+  } = useAccountGroupListQuery(cmpId, Boolean(cmpId));
+  const {
+    data: subGroups = [],
+    isError: isSubGroupsError,
+    error: subGroupsError,
+  } = useSubGroupListQuery(cmpId, watchedAccountGroup, Boolean(cmpId));
 
   const {
     data: party,
@@ -107,78 +112,48 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
     error,
   } = usePartyByIdQuery(partyId, isEdit);
 
-  useEffect(() => {
-    if (!cmpId) return;
-
-    const loadAccountGroups = async () => {
-      try {
-        const res = await fetchAccountGroups(cmpId);
-        setAccountGroups(res.data || []);
-      } catch (err) {
-        const message =
-          err?.response?.data?.message ||
-          err?.message ||
-          "Failed to load account groups";
-        toast.error(message);
-      }
-    };
-
-    loadAccountGroups();
-  }, [cmpId]);
+  const isIndia = selectedCountry === "India";
 
   useEffect(() => {
-    let isActive = true;
+    if (!isAccountGroupsError) return;
+    const message =
+      accountGroupsError?.response?.data?.message ||
+      accountGroupsError?.message ||
+      "Failed to load account groups";
+    toast.error(message);
+  }, [accountGroupsError, isAccountGroupsError]);
 
-    const loadSubGroups = async () => {
-      if (!cmpId || !watchedAccountGroup) {
-        if (isActive) {
-          setSubGroups([]);
-        }
-        return;
-      }
-
-      try {
-        const res = await fetchSubGroups(cmpId, watchedAccountGroup);
-        if (isActive) {
-          setSubGroups(res.data || []);
-        }
-      } catch (err) {
-        if (!isActive) return;
-
-        const message =
-          err?.response?.data?.message ||
-          err?.message ||
-          "Failed to load sub groups";
-        toast.error(message);
-      }
-    };
-
-    loadSubGroups();
-
-    return () => {
-      isActive = false;
-    };
-  }, [cmpId, watchedAccountGroup]);
+  useEffect(() => {
+    if (!isSubGroupsError) return;
+    const message =
+      subGroupsError?.response?.data?.message ||
+      subGroupsError?.message ||
+      "Failed to load sub groups";
+    toast.error(message);
+  }, [isSubGroupsError, subGroupsError]);
 
   useEffect(() => {
     if (!isError) return;
-
     const message =
-      error?.response?.data?.message || error?.message || "Failed to load party";
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to load party";
     toast.error(message);
   }, [error, isError]);
 
   useEffect(() => {
     if (!party) return;
- if (!accountGroups.length) return;
+    if (!accountGroups.length) return;
     reset({
       partyName: party.partyName || "",
       partyType: party.partyType || "party",
       accountGroup:
-      party.accountGroup?._id ||
-      party.accountGroup?.id ||
-      party.accountGroup || "",
-      subGroup: party.subGroup?._id || party.subGroup?.id || party.subGroup || "",
+        party.accountGroup?._id ||
+        party.accountGroup?.id ||
+        party.accountGroup ||
+        "",
+      subGroup:
+        party.subGroup?._id || party.subGroup?.id || party.subGroup || "",
       mobileNumber: party.mobileNumber || "",
       emailID: party.emailID || "",
       gstNo: party.gstNo || "",
@@ -187,21 +162,18 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
       shippingAddress: party.shippingAddress || "",
       creditPeriod: party.creditPeriod || "",
       creditLimit: party.creditLimit || "",
-      openingBalanceType: party.openingBalanceType || "",
-      openingBalanceAmount:
-        party.openingBalanceAmount != null
-          ? String(party.openingBalanceAmount)
-          : "",
+      openingBalanceType: "dr",   // always reset to dr
+      openingBalanceAmount: "0",  // always reset to 0
       country: party.country || "",
       state: party.state || "",
       pin: party.pin || "",
     });
-  }, [party,accountGroups, reset]);
+  }, [party, accountGroups, reset]);
 
   const selectedAccountGroupLabel = useMemo(() => {
     return (
-      accountGroups.find((item) => item._id === watchedAccountGroup)?.accountGroup ||
-      ""
+      accountGroups.find((item) => item._id === watchedAccountGroup)
+        ?.accountGroup || ""
     );
   }, [accountGroups, watchedAccountGroup]);
 
@@ -227,9 +199,9 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
         country: values.country?.trim() || "",
         state: values.state?.trim() || "",
         pin: values.pin?.trim() || "",
-        openingBalanceAmount: values.openingBalanceAmount
-          ? Number(values.openingBalanceAmount)
-          : 0,
+        // ✅ Always submit as dr / 0 — not collected from UI
+        openingBalanceType: "dr",
+        openingBalanceAmount: 0,
         subGroup: values.subGroup || "",
       };
 
@@ -249,7 +221,7 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
         });
       }
 
-      navigate(ROUTES.mastersPartyList);
+      navigate(ROUTES.mastersPartyList, { replace: true });
     } catch (err) {
       const message =
         err?.response?.data?.message || err?.message || "Save failed";
@@ -329,26 +301,27 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-  <label className={labelClass}>Account Group</label>
-  <select className={inputClass} {...register("accountGroup")}>
-    <option value="">Select account group</option>
-    {accountGroups.map((group) => (
-      <option key={group._id} value={group._id}>
-        {group.accountGroup}
-      </option>
-    ))}
-  </select>
-  {errors.accountGroup && (
-    <p className={errorClass}>{errors.accountGroup.message}</p>
-  )}
-</div>
-
+                  <label className={labelClass}>Account Group</label>
+                  <select className={inputClass} {...register("accountGroup")}>
+                    <option value="">Select account group</option>
+                    {accountGroups.map((group) => (
+                      <option key={group._id} value={group._id}>
+                        {group.accountGroup}
+                      </option>
+                    ))}
+                  </select>
+                  {errors.accountGroup && (
+                    <p className={errorClass}>{errors.accountGroup.message}</p>
+                  )}
+                </div>
 
                 <div>
                   <label className={labelClass}>Sub Group</label>
                   <select className={inputClass} {...register("subGroup")}>
                     <option value="">
-                      {watchedAccountGroup ? "Select sub group" : "Choose account group first"}
+                      {watchedAccountGroup
+                        ? "Select sub group"
+                        : "Choose account group first"}
                     </option>
                     {subGroups.map((group) => (
                       <option key={group._id} value={group._id}>
@@ -398,31 +371,6 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
                     placeholder="Enter PAN number"
                     {...register("panNo")}
                   />
-                </div>
-
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-                  <div>
-                    <label className={labelClass}>Opening Balance Type</label>
-                    <select className={inputClass} {...register("openingBalanceType")}>
-                      <option value="">Select type</option>
-                      <option value="dr">Debit</option>
-                      <option value="cr">Credit</option>
-                    </select>
-                    {errors.openingBalanceType && (
-                      <p className={errorClass}>{errors.openingBalanceType.message}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className={labelClass}>Opening Balance</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      className={inputClass}
-                      placeholder="0.00"
-                      {...register("openingBalanceAmount")}
-                    />
-                  </div>
                 </div>
               </div>
 
@@ -481,29 +429,47 @@ const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className={labelClass}>Country</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    placeholder="Enter country"
-                    {...register("country")}
-                  />
+                  <select className={inputClass} {...register("country")}>
+                    <option value="">Select country</option>
+                    {countries.map((country) => (
+                      <option
+                        key={country.countryName}
+                        value={country.countryName}
+                      >
+                        {country.countryName}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 <div>
                   <label className={labelClass}>State</label>
-                  <input
-                    type="text"
-                    className={inputClass}
-                    placeholder="Enter state"
-                    {...register("state")}
-                  />
+                  {isIndia ? (
+                    <select className={inputClass} {...register("state")}>
+                      <option value="">Select state</option>
+                      {INDIA_STATES.map((state) => (
+                        <option key={state} value={state}>
+                          {state}
+                        </option>
+                      ))}
+                    </select>
+                  ) : (
+                    <input
+                      type="text"
+                      className={inputClass}
+                      placeholder="Enter state"
+                      {...register("state")}
+                    />
+                  )}
                 </div>
               </div>
 
               <div className="flex justify-end gap-3 border-t border-slate-100 pt-4">
                 <button
                   type="button"
-                  onClick={() => navigate(ROUTES.mastersPartyList)}
+                  onClick={() =>
+                    navigate(ROUTES.mastersPartyList, { replace: true })
+                  }
                   className="rounded-sm border border-slate-200 px-4 py-2 text-sm font-medium text-slate-600 transition-colors hover:bg-slate-50"
                 >
                   Cancel

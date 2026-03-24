@@ -1,95 +1,103 @@
-// src/pages/users/UserListPage.jsx
-import React, { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { FaUser, FaEdit, FaTrash } from "react-icons/fa";
+import { Pencil, Trash2, Users } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 import { deleteUser } from "../../api/client/userApi";
-import { useUserOptionsQuery } from "@/hooks/queries/userQueries";
+import { useUserOptionsQuery, userQueryKeys } from "@/hooks/queries/userQueries";
 import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
+import { Card, CardContent } from "@/components/ui/card";
 import { ROUTES } from "@/routes/paths";
 
-const UserCard = ({ user, onDeleted }) => {
+function UserRow({ user }) {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const confirmDelete = useDeleteConfirm();
 
   const handleEdit = () => {
-    navigate(`${ROUTES.mastersUserRegister}?userId=${user.id}`);
+    navigate(`${ROUTES.mastersUserRegister}?userId=${user.id}`, {
+      replace: true,
+    });
   };
 
   const handleDelete = async () => {
-    const ok = await confirmDelete("Delete this user?");
+    const ok = await confirmDelete({
+      title: "Delete this user?",
+      description:
+        "This staff account will be removed permanently. This action cannot be undone.",
+      confirmLabel: "Delete",
+    });
     if (!ok) return;
 
     try {
       const res = await deleteUser(user.id);
-      toast.success(res.data.message || "User deleted");
-      onDeleted(user.id);
+      toast.success(res?.data?.message || "User deleted");
+      await queryClient.invalidateQueries({ queryKey: userQueryKeys.all });
     } catch (err) {
       const msg =
-        err?.response?.data?.message || err.message || "Delete failed";
+        err?.response?.data?.message || err?.message || "Delete failed";
       toast.error(msg);
     }
   };
-console.log(user)
 
+  const subtitle = [user?.email, user?.mobile].filter(Boolean).join(" | ");
 
   return (
-    <div className="bg-white shadow-sm rounded-lg p-4 flex items-center justify-between mb-3 w-full">
-      <div className="flex items-center gap-3">
-        <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600 flex-shrink-0">
-          <FaUser size={18} />
+    <Card className="rounded border-none bg-slate-50 py-1 shadow-lg ring-0">
+      <CardContent className="flex items-center justify-between gap-3 p-3.5">
+        <div className="min-w-0 flex items-center gap-3">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+            <Users className="h-4 w-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="truncate text-sm font-bold text-slate-900">
+              {user?.name || "Untitled User"}
+            </p>
+            <p className="truncate text-xs text-slate-500">
+              {subtitle || "No contact details"}
+            </p>
+            <p className="mt-0.5 text-[11px] font-medium uppercase tracking-wide text-slate-400">
+              {user?.role || "Staff"}
+            </p>
+          </div>
         </div>
-        <div>
-          <h3 className="text-sm font-semibold text-gray-900">
-            {user.name}
-          </h3>
-          <p className="text-xs text-gray-500">
-            {user.email} • {user.mobileNumber}
-          </p>
-          <p className="text-xs text-gray-400 capitalize">
-            Role: {user.role}
-          </p>
-        </div>
-      </div>
 
-      <div className="flex items-center gap-2">
-        <button
-          onClick={handleEdit}
-          className="p-2 rounded-full hover:bg-gray-100 text-gray-600"
-          title="Edit"
-        >
-          <FaEdit size={14} />
-        </button>
-        <button
-          onClick={handleDelete}
-          className="p-2 rounded-full hover:bg-red-50 text-red-600"
-          title="Delete"
-        >
-          <FaTrash size={14} />
-        </button>
-      </div>
-    </div>
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={handleEdit}
+            className="rounded-md p-2 text-slate-600 transition-colors hover:bg-slate-100"
+            title="Edit"
+          >
+            <Pencil className="h-4 w-4" />
+          </button>
+          <button
+            type="button"
+            onClick={handleDelete}
+            className="rounded-md p-2 text-rose-600 transition-colors hover:bg-rose-50"
+            title="Delete"
+          >
+            <Trash2 className="h-4 w-4" />
+          </button>
+        </div>
+      </CardContent>
+    </Card>
   );
-};
+}
 
-const UserListPage = () => {
-  const [searchText, setSearchText] = useState("");
+export default function UserListPage() {
   const navigate = useNavigate();
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
+  const {
+    data: users = [],
+    isLoading,
+    isError,
+    error,
+  } = useUserOptionsQuery(true);
 
- const {
-  data: users = [],
-  isLoading,
-  isError,
-  error,
-} = useUserOptionsQuery(true); // or just useUserOptionsQuery()
-
-
-  const handleDeleted = () => {
-    // optional: invalidate here if your deleteUser doesn't already do it
-  };
+  const [searchText, setSearchText] = useState("");
 
   useEffect(() => {
     setHeaderOptions({
@@ -97,7 +105,8 @@ const UserListPage = () => {
       menuItems: [
         {
           label: "Add User",
-          onSelect: () => navigate(ROUTES.mastersUserRegister),
+          onSelect: () =>
+            navigate(ROUTES.mastersUserRegister, { replace: true }),
         },
       ],
       search: {
@@ -109,45 +118,55 @@ const UserListPage = () => {
     });
 
     return () => resetHeaderOptions();
-  }, [navigate, resetHeaderOptions, searchText, setHeaderOptions]);
+  }, [navigate, resetHeaderOptions, searchText, setHeaderOptions, setSearchText]);
 
   useEffect(() => {
     if (!isError) return;
     toast.error(error?.message || "Failed to load users");
-  }, [isError, error]);
+  }, [error, isError]);
 
+  const filteredUsers = useMemo(() => {
+    const q = String(searchText || "").trim().toLowerCase();
+    if (!q) return users;
 
-  const filteredUsers = users.filter((u) => {
-  const q = searchText.trim().toLowerCase();
-  if (!q) return true;
+    return users.filter((user) => {
+      const haystack = [user?.name, user?.email, user?.mobile, user?.role]
+        .filter(Boolean)
+        .join(" ")
+        .toLowerCase();
+
+      return haystack.includes(q);
+    });
+  }, [searchText, users]);
+
   return (
-    u.name?.toLowerCase().includes(q) ||
-    u.email?.toLowerCase().includes(q) ||
-    (u.mobileNumber || "").toLowerCase().includes(q) ||
-    (u.role || "").toLowerCase().includes(q)
-  );
-});
-  return (
-    <div className="font-[sans-serif] w-full">
-      <div className="max-w-3xl mx-auto">
-        <div className="flex items-center justify-between mb-4">
-          <h2 className="text-lg font-semibold text-gray-900">Users</h2>
-        </div>
-
-        {isLoading && users.length === 0 && (
-          <p className="text-sm text-gray-500">Loading...</p>
+    <div className="w-full font-[sans-serif]">
+      <div className="mx-auto w-full max-w-md space-y-3">
+        {isLoading && (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-16 animate-pulse rounded-xl border border-slate-200 bg-white"
+              />
+            ))}
+          </div>
         )}
 
         {!isLoading && filteredUsers.length === 0 && (
-          <p className="text-sm text-gray-500">No users found.</p>
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+            {searchText ? "No matching users" : "No users found"}
+          </div>
         )}
 
-        {filteredUsers.map((u) => (
-          <UserCard key={u.id} user={u} onDeleted={handleDeleted} />
-        ))}
+        {!isLoading && filteredUsers.length > 0 && (
+          <div className="space-y-2">
+            {filteredUsers.map((user) => (
+              <UserRow key={user.id} user={user} />
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
-};
-
-export default UserListPage;
+}
