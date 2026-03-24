@@ -27,16 +27,20 @@ function QuickActionCard({
   description,
   icon,
   onClick,
-  iconClassName,
-  className,
+  iconClassName = "",
+  className = "",
   wide = false,
+  showArrow = true,
+  layout = "vertical", // "vertical" | "horizontal"
 }) {
+  const baseClasses =
+    "group relative rounded-2xl border text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md";
+
   const containerClassName = wide
-    ? "group relative col-span-2 flex items-center justify-between rounded-2xl border px-3 py-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md"
-    : "group relative rounded-3xl border p-3 text-left shadow-sm transition-all duration-300 hover:-translate-y-0.5 hover:shadow-md";
-  const contentClassName = wide ? "flex items-center gap-3" : "";
-  const bodyClassName = wide ? "text-left" : "mt-4";
-  const titleClassName = wide ? "text-[12px]" : "text-[13px]";
+    ? `${baseClasses} col-span-2 flex h-[72px] items-center justify-between px-4`
+    : layout === "vertical"
+      ? `${baseClasses} flex h-[82px] flex-col items-start justify-between px-4 py-3`
+      : `${baseClasses} flex h-[82px] items-center justify-between px-4`;
 
   return (
     <button
@@ -44,24 +48,77 @@ function QuickActionCard({
       onClick={onClick}
       className={`${containerClassName} ${className}`}
     >
-      <div className={contentClassName}>
-        <div
-          className={`flex h-10 w-10 items-center justify-center rounded-2xl ${iconClassName}`}
-        >
-          {icon ? createElement(icon, { className: "h-4 w-4" }) : null}
-        </div>
-        <div className={bodyClassName}>
-          <p className={`${titleClassName} font-semibold text-slate-800`}>
-            {title}
-          </p>
-          {description ? (
-            <p className="text-[11px] text-slate-500">{description}</p>
-          ) : null}
-        </div>
-      </div>
-      <span className="text-slate-300 transition-colors group-hover:text-slate-500">
-        {"->"}
-      </span>
+      {wide ? (
+        <>
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-9 w-9 items-center justify-center rounded-2xl ${iconClassName}`}
+            >
+              {icon ? createElement(icon, { className: "h-4 w-4" }) : null}
+            </div>
+            <div className="text-left">
+              <p className="text-[12px] font-semibold text-slate-900">
+                {title}
+              </p>
+              {description ? (
+                <p className="text-[10px] text-slate-500">{description}</p>
+              ) : null}
+            </div>
+          </div>
+          {showArrow && (
+            <span className="pr-1 text-base leading-none text-slate-300 transition-colors group-hover:text-slate-500">
+              {"···"}
+            </span>
+          )}
+        </>
+      ) : layout === "vertical" ? (
+        <>
+          <div className="flex flex-col items-start gap-2 ]">
+            <div
+              className={`flex h-9 w-9 items-center justify-center rounded-2xl ${iconClassName}`}
+            >
+              {icon ? createElement(icon, { className: "h-4 w-4" }) : null}
+            </div>
+            <div className="text-left">
+              <p className="text-[11px] font-semibold text-slate-900">
+                {title}
+              </p>
+              {description ? (
+                <p className="text-[9px] text-slate-500">{description}</p>
+              ) : null}
+            </div>
+          </div>
+          {showArrow && (
+            <span className="pr-1 text-sm leading-none text-slate-300 transition-colors group-hover:text-slate-500">
+              {"···"}
+            </span>
+          )}
+        </>
+      ) : (
+        // horizontal compact (Statements / Stock register)
+        <>
+          <div className="flex items-center gap-3">
+            <div
+              className={`flex h-9 w-9 items-center justify-center rounded-2xl ${iconClassName}`}
+            >
+              {icon ? createElement(icon, { className: "h-4 w-4" }) : null}
+            </div>
+            <div className="text-left">
+              <p className="text-[11px] font-semibold text-slate-900">
+                {title}
+              </p>
+              {description ? (
+                <p className="text-[9px] text-slate-500">{description}</p>
+              ) : null}
+            </div>
+          </div>
+          {showArrow && (
+            <span className="pr-1 text-sm leading-none text-slate-300 transition-colors group-hover:text-slate-500">
+              {"···"}
+            </span>
+          )}
+        </>
+      )}
     </button>
   );
 }
@@ -187,23 +244,27 @@ export default function MobileWalletCard({
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-3 text-xs">
+          <div className="grid grid-cols-2 gap-3">
             <QuickActionCard
               title="Customers"
               description="Manage parties"
               icon={Users}
               onClick={() => navigate(ROUTES.mastersCustomers)}
               iconClassName="bg-amber-100 text-amber-600"
-              className="border-amber-100 bg-gradient-to-br from-amber-50 to-white"
+              className="border-amber-100 bg-gradient-to-br from-amber-50 to-white !h-26"
+              layout="vertical" // icon top, text below
             />
+
             <QuickActionCard
               title="Products"
               description="Catalog items"
               icon={Package}
               onClick={() => navigate(ROUTES.mastersProducts)}
               iconClassName="bg-pink-100 text-pink-600"
-              className="border-pink-100 bg-gradient-to-br from-pink-50 to-white"
+              className="border-pink-100 bg-gradient-to-br from-pink-50 to-white  !h-26"
+              layout="vertical"
             />
+
             <QuickActionCard
               title="Outstandings"
               description="Pending dues"
@@ -213,20 +274,27 @@ export default function MobileWalletCard({
               className="border-slate-100 bg-white"
               wide
             />
+
             <QuickActionCard
               title="Statements"
               icon={FileText}
               onClick={() => navigate(ROUTES.statements)}
               iconClassName="rounded-xl bg-indigo-100 text-indigo-500"
-              className="flex items-center gap-3 rounded-2xl border-slate-100 bg-white px-3 py-3"
+              className="border-slate-100 bg-white !h-18"
+              layout="horizontal" // icon + text in a row
+              showArrow={true}
             />
+
             <QuickActionCard
               title="Stock register"
               icon={Boxes}
               onClick={() => navigate(ROUTES.stockRegister)}
               iconClassName="rounded-xl bg-green-100 text-green-500"
-              className="flex items-center gap-3 rounded-2xl border-slate-100 bg-white px-3 py-3"
+              className="border-slate-100 bg-white !h-18"
+              layout="horizontal"
+              showArrow={true}
             />
+
             <QuickActionCard
               title="Cash / Bank"
               description="Ledger & balance"
