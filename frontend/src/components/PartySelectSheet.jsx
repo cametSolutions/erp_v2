@@ -10,7 +10,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { partyService } from "@/api/services/party.service";
-import { PartyList } from "@/components/PartyList";
+import { PartyList } from "@/components/partyList";
 import { setParty } from "@/store/slices/transactionSlice";
 
 export default function PartySelectSheet({ open, onOpenChange }) {
