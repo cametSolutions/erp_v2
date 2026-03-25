@@ -45,7 +45,7 @@ export const getSeriesByVoucher = async (req, res) => {
 export const createVoucherSeries = async (req, res) => {
   try {
     const { cmp_id } = req.params;
-    const primary_user_id = req.user._id; // from protect middleware
+    const primary_user_id = req.user._id;
     const {
       voucherType,
       seriesName,
@@ -63,15 +63,25 @@ export const createVoucherSeries = async (req, res) => {
       });
     }
 
-    // normalize "sale" -> "sales" if needed
     const normalizedVoucherType =
       voucherType === "sale" ? "sales" : voucherType;
 
-    // find existing doc for this company + voucherType, or create new one
     let voucherSeriesDoc = await VoucherSeries.findOne({
       cmp_id,
       voucherType: normalizedVoucherType,
     });
+
+    // if doc exists, check duplicate currentNumber
+    if (voucherSeriesDoc) {
+      const existsWithSameCurrent = voucherSeriesDoc.series.some(
+        (s) => s.currentNumber === currentNumber
+      );
+      if (existsWithSameCurrent) {
+        return res.status(400).json({
+          message: `A series with starting number ${currentNumber} already exists for this voucher type`,
+        });
+      }
+    }
 
     const newSeries = {
       seriesName,
@@ -86,7 +96,6 @@ export const createVoucherSeries = async (req, res) => {
     };
 
     if (!voucherSeriesDoc) {
-      // create first doc for this voucherType
       voucherSeriesDoc = new VoucherSeries({
         primary_user_id,
         cmp_id,
@@ -119,7 +128,7 @@ export const updateVoucherSeries = async (req, res) => {
       seriesName,
       prefix = "",
       suffix = "",
-      currentNumber,
+      // currentNumber,  // ⬅ remove from destructuring
       widthOfNumericalPart,
     } = req.body;
 
@@ -132,7 +141,6 @@ export const updateVoucherSeries = async (req, res) => {
     const normalizedVoucherType =
       voucherType === "sale" ? "sales" : voucherType;
 
-    // Find the document that has this cmp_id + voucherType and contains given seriesId
     const doc = await VoucherSeries.findOne({
       cmp_id,
       voucherType: normalizedVoucherType,
@@ -145,7 +153,6 @@ export const updateVoucherSeries = async (req, res) => {
         .json({ message: "Voucher series document not found" });
     }
 
-    // Find subdocument and update fields
     const sub = doc.series.id(seriesId);
     if (!sub) {
       return res.status(404).json({ message: "Series not found" });
@@ -154,10 +161,7 @@ export const updateVoucherSeries = async (req, res) => {
     sub.seriesName = seriesName;
     sub.prefix = prefix;
     sub.suffix = suffix;
-    if (typeof currentNumber === "number") {
-      sub.currentNumber = currentNumber;
-      sub.lastUsedNumber = currentNumber;
-    }
+    // ❌ do not touch currentNumber / lastUsedNumber here
     sub.widthOfNumericalPart = widthOfNumericalPart;
 
     await doc.save();
@@ -213,6 +217,48 @@ export const deleteVoucherSeriesById = async (req, res) => {
     });
   } catch (error) {
     console.error("Error deleting voucher series:", error);
+    return res.status(500).json({ message: "Server error" });
+  }
+};
+
+
+// controller: getNextVoucherSeriesNumber
+export const getNextVoucherSeriesNumber = async (req, res) => {
+  try {
+    const { cmp_id } = req.params;
+    const { voucherType } = req.query;
+
+    if (!cmp_id || !voucherType) {
+      return res.status(400).json({
+        message: "cmp_id and voucherType are required",
+      });
+    }
+
+    const normalizedVoucherType =
+      voucherType === "sale" ? "sales" : voucherType;
+
+    const doc = await VoucherSeries.findOne({
+      cmp_id,
+      voucherType: normalizedVoucherType,
+    });
+
+    if (!doc || !doc.series || doc.series.length === 0) {
+      return res.status(200).json({
+        nextCurrentNumber: 1,
+      });
+    }
+
+    // find max currentNumber among all series for that voucherType
+    const maxCurrent = doc.series.reduce(
+      (max, s) => Math.max(max, s.currentNumber || 0),
+      0
+    );
+
+    return res.status(200).json({
+      nextCurrentNumber: maxCurrent + 1,
+    });
+  } catch (error) {
+    console.error("Error getting next voucher series number:", error);
     return res.status(500).json({ message: "Server error" });
   }
 };
