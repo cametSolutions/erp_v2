@@ -24,7 +24,9 @@ const CompanyRow = ({ company }) => {
 
 
   const handleEdit = () => {
-    navigate(`${ROUTES.mastersCompanyRegister}?companyId=${company._id}`);
+    navigate(`${ROUTES.mastersCompanyRegister}?companyId=${company._id}`, {
+      replace: true,
+    });
   };
 
   const handleDelete = async () => {
@@ -97,7 +99,8 @@ const CompanyListPage = () => {
       menuItems: [
         {
           label: "Add Company",
-          onSelect: () => navigate(ROUTES.mastersCompanyRegister),
+          onSelect: () =>
+            navigate(ROUTES.mastersCompanyRegister, { replace: true }),
         },
       ],
       search: {

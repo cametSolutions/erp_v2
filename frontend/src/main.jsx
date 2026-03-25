@@ -9,6 +9,7 @@ import { DeleteConfirmProvider } from "./components/common/DeleteConfirmProvider
 import { store } from "./store";
 import GlobalApiLoader from "./components/Loaders/GlobalApiLoader";
 import "./App.css";
+import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 
 const queryClient = new QueryClient();
 
@@ -35,6 +36,9 @@ ReactDOM.createRoot(document.getElementById("root")).render(
             />
 
             <App />
+            <ReactQueryDevtools initialIsOpen={false} 
+            // position="bottom-right"
+             />
           </BrowserRouter>
         </DeleteConfirmProvider>
       </QueryClientProvider>

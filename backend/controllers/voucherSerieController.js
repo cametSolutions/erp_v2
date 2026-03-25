@@ -5,6 +5,8 @@ import VoucherSeries from "../Model/VoucherSeriesSchema.js";
 
 export const getSeriesByVoucher = async (req, res) => {
   try {
+
+
     const { voucherType } = req.query;
     const cmp_id = req.params.cmp_id;
 

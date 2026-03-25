@@ -1,172 +1,199 @@
 import mongoose from "mongoose";
-import { convertToUTCMidnight } from "../utils/dateHelpers.js";
 const { Schema } = mongoose;
 
 const saleOrderSchema = new Schema(
-  
+  {
     transactionDate: { type: String },
     voucherType: { type: String, default: "saleOrder" },
     voucherNumber: { type: Number },
 
     serialNumber: { type: Number },
     userLevelSerialNumber: { type: Number },
-  
+
     series_id: {
       type: Schema.Types.ObjectId,
       ref: "VoucherSeries",
       required: true,
     },
+
     usedSeriesNumber: { type: Number, required: true },
+
     Primary_user_id: {
       type: Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-    cmp_id: { type: Schema.Types.ObjectId, ref: "Company", required: true },
-    Secondary_user_id: { type: Schema.Types.ObjectId, ref: "User" },
-  
 
-  
-    // Party with embedded details and reference ID
+    cmp_id: {
+      type: Schema.Types.ObjectId,
+      ref: "Company",
+      required: true,
+    },
+
+    Secondary_user_id: {
+      type: Schema.Types.ObjectId,
+      ref: "User",
+    },
+
+    // Party Details
     party: {
       _id: { type: Schema.Types.ObjectId, ref: "Party" },
-      partyName: { type: String },
-      accountGroupName: { type: String },
+      partyName: String,
+      accountGroupName: String,
+
       accountGroup_id: {
-        type: mongoose.Types.ObjectId,
+        type: Schema.Types.ObjectId,
         ref: "AccountGroup",
         required: true,
       },
-      subGroupName: { type: String },
-      subGroup_id: { type: mongoose.Schema.Types.ObjectId, ref: "SubGroup" },
-      mobileNumber: { type: String },
-      country: { type: String },
-      state: { type: String },
-      pin: { type: String },
-      emailID: { type: String },
-      gstNo: { type: String },
-      party_master_id: { type: String },
-      billingAddress: { type: String },
-      shippingAddress: { type: String },
-      accountGroup: { type: String },
-      totalOutstanding: { type: Number },
+
+      subGroupName: String,
+      subGroup_id: { type: Schema.Types.ObjectId, ref: "SubGroup" },
+
+      mobileNumber: String,
+      country: String,
+      state: String,
+      pin: String,
+      emailID: String,
+      gstNo: String,
+      party_master_id: String,
+      billingAddress: String,
+      shippingAddress: String,
+      accountGroup: String,
+      totalOutstanding: Number,
       latestBillDate: { type: Date, default: null },
       newAddress: { type: Object },
     },
 
-    // priceLevel: { type: Schema.Types.ObjectId, ref: 'PriceLevel' },
-
+    // Price Level
     selectedPriceLevel: {
       _id: { type: Schema.Types.ObjectId, ref: "PriceLevel" },
-      name: { type: String },
+      name: String,
     },
 
+    // Items
     items: [
       {
         _id: { type: Schema.Types.ObjectId, ref: "Product" },
-        product_name: { type: String },
+        product_name: String,
         cmp_id: { type: Schema.Types.ObjectId, ref: "Company" },
-        product_code: { type: String },
-        balance_stock: { type: Number },
+        product_code: String,
+        balance_stock: Number,
+
         Primary_user_id: { type: Schema.Types.ObjectId, ref: "User" },
         brand: { type: Schema.Types.ObjectId, ref: "Brand" },
         category: { type: Schema.Types.ObjectId, ref: "Category" },
         sub_category: { type: Schema.Types.ObjectId, ref: "SubCategory" },
-        unit: { type: String },
-        purchase_price: { type: Number },
-        purchase_cost: { type: Number },
-        item_mrp: { type: Number },
+
+        unit: String,
+        purchase_price: Number,
+        purchase_cost: Number,
+        item_mrp: Number,
 
         GodownList: [
           {
             godownMongoDbId: { type: Schema.Types.ObjectId, ref: "Godown" },
-            godown: { type: String },
-            balance_stock: { type: Number },
-            godown_id: { type: String },
-            defaultGodown: { type: Boolean },
-            batch: {
-              type: String,
-            },
+            godown: String,
+            balance_stock: Number,
+            godown_id: String,
+            defaultGodown: Boolean,
+            batch: String,
+
             mfgdt: {
               type: Date,
               default: null,
-              set: () => null, // Set to null by default in saleOrder
+              set: () => null,
             },
+
             expdt: {
               type: Date,
               default: null,
-              set: () => null, // Set to null by default in saleOrder
+              set: () => null,
             },
-            description: { type: String },
-            selectedPriceRate: { type: Number },
-            added: { type: Boolean },
-            count: { type: Number },
-            actualCount: { type: Number },
-            basePrice: { type: Number },
-            discountAmount: { type: Number },
-            discountPercentage: { type: Number },
-            discountType: { type: String },
-            taxableAmount: { type: Number },
-            cgstValue: { type: Number },
-            sgstValue: { type: Number },
-            igstValue: { type: Number },
-            cessValue: { type: Number },
-            addlCessValue: { type: Number },
-            cgstAmt: { type: Number },
-            sgstAmt: { type: Number },
-            igstAmt: { type: Number },
-            cessAmt: { type: Number },
-            addlCessAmt: { type: Number },
-            individualTotal: { type: Number },
-            isTaxInclusive: { type: Boolean },
-            igstAmount: { type: Number },
-            cgstAmount: { type: Number },
-            sgstAmount: { type: Number },
-            cessAmount: { type: Number },
-            additionalCessAmount: { type: Number },
-            totalCessAmount: { type: Number },
+
+            description: String,
+            selectedPriceRate: Number,
+            added: Boolean,
+            count: Number,
+            actualCount: Number,
+            basePrice: Number,
+
+            discountAmount: Number,
+            discountPercentage: Number,
+            discountType: String,
+
+            taxableAmount: Number,
+
+            cgstValue: Number,
+            sgstValue: Number,
+            igstValue: Number,
+            cessValue: Number,
+            addlCessValue: Number,
+
+            cgstAmt: Number,
+            sgstAmt: Number,
+            igstAmt: Number,
+            cessAmt: Number,
+            addlCessAmt: Number,
+
+            individualTotal: Number,
+
+            isTaxInclusive: Boolean,
+
+            igstAmount: Number,
+            cgstAmount: Number,
+            sgstAmount: Number,
+            cessAmount: Number,
+            additionalCessAmount: Number,
+            totalCessAmount: Number,
           },
         ],
-        hsn_code: { type: String },
-        cgst: { type: Number },
-        sgst: { type: Number },
-        igst: { type: Number },
-        product_master_id: { type: String },
-        batchEnabled: { type: Boolean },
-        gdnEnabled: { type: Boolean },
+
+        hsn_code: String,
+        cgst: Number,
+        sgst: Number,
+        igst: Number,
+        product_master_id: String,
+
+        batchEnabled: Boolean,
+        gdnEnabled: Boolean,
 
         Priceleveles: [
           {
             _id: { type: Schema.Types.ObjectId, ref: "PriceLevel" },
-            pricelevel: { type: String },
-            pricerate: { type: Number },
-            priceDisc: { type: Number },
-            applicabledt: { type: String },
+            pricelevel: String,
+            pricerate: Number,
+            priceDisc: Number,
+            applicabledt: String,
           },
         ],
 
-        addl_cess: { type: Number },
-        cess: { type: Number },
-        hasGodownOrBatch: { type: Boolean },
-        isTaxInclusive: { type: Boolean },
-        isExpanded: { type: Boolean },
-        totalCount: { type: Number },
-        totalActualCount: { type: Number },
-        total: { type: Number },
-        totalCgstAmt: { type: Number },
-        totalSgstAmt: { type: Number },
-        totalIgstAmt: { type: Number },
-        totalCessAmt: { type: Number },
-        totalAddlCessAmt: { type: Number },
-        added: { type: Boolean },
-        taxInclusive: { type: Boolean },
+        addl_cess: Number,
+        cess: Number,
+
+        hasGodownOrBatch: Boolean,
+        isTaxInclusive: Boolean,
+        isExpanded: Boolean,
+
+        totalCount: Number,
+        totalActualCount: Number,
+        total: Number,
+
+        totalCgstAmt: Number,
+        totalSgstAmt: Number,
+        totalIgstAmt: Number,
+        totalCessAmt: Number,
+        totalAddlCessAmt: Number,
+
+        added: Boolean,
+        taxInclusive: Boolean,
       },
     ],
 
+    // Despatch Details
     despatchDetails: {
       type: Object,
       set: function (value) {
-        // Ensure the title is always included
         return { title: "Despatch Details", ...value };
       },
       default: {
@@ -182,56 +209,58 @@ const saleOrderSchema = new Schema(
       },
     },
 
+    // Additional Charges
     additionalCharges: [
       {
         _id: { type: Schema.Types.ObjectId, ref: "AdditionalCharge" },
-        option: { type: String },
-        value: { type: String },
-        action: { type: String },
-        taxPercentage: { type: Number },
-        taxAmt: { type: Number }, 
-        hsn: { type: String },
-        finalValue: { type: Number },
+        option: String,
+        value: String,
+        action: String,
+        taxPercentage: Number,
+        taxAmt: Number,
+        hsn: String,
+        finalValue: Number,
       },
     ],
 
-   subTotal:{type:Number,required:true},
-   totalAdditionalCharge:{type:Number,required:true},
+    subTotal: { type: Number, required: true },
+    totalAdditionalCharge: { type: Number, required: true },
     finalAmount: { type: Number, required: true },
-  
-   
-  
+  },
   {
     timestamps: true,
   }
 );
 
-// 1. Primary unique identifier (order number per company)
+
+// ✅ INDEXES
+
+// Unique voucher number per company + series
 saleOrderSchema.index(
-  { cmp_id: 1, series_id: 1, orderNumber: 1 },
-  { unique: true, name: "unique_order_number_per_series" }
+  { cmp_id: 1, series_id: 1, voucherNumber: 1 },
+  { unique: true, name: "unique_voucher_per_series" }
 );
 
-// 3. Most common query pattern (company + date sorting)
-saleOrderSchema.index({ cmp_id: 1, date: -1 });
+// Sorting by transaction date
+saleOrderSchema.index({ cmp_id: 1, transactionDate: -1 });
 
-// 4. Party reference queries
+// Party queries
 saleOrderSchema.index({ cmp_id: 1, "party._id": 1 });
 
-// 5. User-specific workflows
+// User workflows
 saleOrderSchema.index({ cmp_id: 1, Secondary_user_id: 1 });
 
-// 6. Sequential document access
+// Serial access
 saleOrderSchema.index({ cmp_id: 1, serialNumber: -1 });
 
-// 7. User-level document sequences (alternative to index #2 if needed)
+// User-level sequence
 saleOrderSchema.index({
   cmp_id: 1,
   Secondary_user_id: 1,
   userLevelSerialNumber: -1,
 });
 
-// NEW INDEX: For fast validation of usedSeriesNumber existence
+// Series validation
 saleOrderSchema.index(
   {
     cmp_id: 1,
@@ -244,4 +273,4 @@ saleOrderSchema.index(
   }
 );
 
-export default mongoose.model("Invoice", saleOrderSchema);
+export default mongoose.model("SaleOrder", saleOrderSchema);

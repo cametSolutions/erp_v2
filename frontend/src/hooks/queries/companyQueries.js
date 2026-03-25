@@ -13,6 +13,8 @@ export const useCompanyListQuery = (enabled = true) =>
     queryFn: companyService.getCompanies,
     enabled,
     staleTime: 30 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });
 
 export const useCompanyOptionsQuery = (enabled = true) =>
@@ -34,4 +36,6 @@ export const useCompanyByIdQuery = (companyId, enabled = true) =>
     queryFn: () => companyService.getCompanyById(companyId),
     enabled: Boolean(companyId) && enabled,
     staleTime: 30 * 1000,
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
   });

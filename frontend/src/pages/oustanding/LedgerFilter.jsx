@@ -3,7 +3,7 @@ export function LedgerFilter({ value, onChange, className = "" }) {
   return (
     <div className={`flex items-center gap-2 ${className}`}>
       <select
-        className="rounded-md bg-sky-600 px-2 py-1 text-xs text-white outline-none"
+        className="rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-700 outline-none transition focus:border-violet-300"
         value={value}
         onChange={(e) => onChange(e.target.value)}
       >

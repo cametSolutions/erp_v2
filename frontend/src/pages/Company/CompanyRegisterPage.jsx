@@ -354,7 +354,7 @@ export default function CompanyRegisterPage() {
           exact: true,
         });
       }
-      navigate(ROUTES.mastersCompany);
+      navigate(ROUTES.mastersCompany, { replace: true });
     } catch (err) {
       const msg = err?.response?.data?.message || err.message || "Save failed";
       toast.error(msg);
