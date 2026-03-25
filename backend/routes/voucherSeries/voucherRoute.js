@@ -1,7 +1,7 @@
 import express from "express";
 
 import { protect } from "../../middleware/authMiddleware.js";
-import { getSeriesByVoucher,createVoucherSeries,updateVoucherSeries,deleteVoucherSeriesById } from "../../controllers/voucherSerieController.js";
+import { getSeriesByVoucher,createVoucherSeries,updateVoucherSeries,deleteVoucherSeriesById,getNextVoucherSeriesNumber } from "../../controllers/voucherSerieController.js";
 
 const router = express.Router();
 
@@ -16,5 +16,11 @@ router.delete(
   "/deleteVoucherSeriesById/:cmp_id",
   protect,
   deleteVoucherSeriesById
+);
+
+router.get(
+  "/nextVoucherSeriesNumber/:cmp_id",
+  protect,
+  getNextVoucherSeriesNumber
 );
 export default router;

@@ -14,6 +14,7 @@ const CreateVoucherSeriesPage = () => {
   const voucherType = location?.state?.from;        // "saleOrder"
   const editingSeries = location?.state?.series;    // object when editing
   const mode = location?.state?.mode || "create";   // "edit" | "create"
+  const isEdit = mode === "edit";
 
   const cmp_id =
     useSelector((state) => state.company.selectedCompanyId) || "";
@@ -40,11 +41,56 @@ const CreateVoucherSeriesPage = () => {
     }
   }, [mode, editingSeries]);
 
+  // ON CREATE: fetch latest current number and set next value
+  useEffect(() => {
+    const fetchNextNumber = async () => {
+      if (!cmp_id || !voucherType || isEdit) return;
+
+      try {
+        const res = await api.get(
+          `/sUsers/nextVoucherSeriesNumber/${cmp_id}`,
+          {
+            params: { voucherType },
+            withCredentials: true,
+          }
+        );
+
+        const next = res.data?.nextCurrentNumber ?? 1;
+
+        setForm((prev) => ({
+          ...prev,
+          currentNumber: next,
+        }));
+      } catch (error) {
+        console.error("Error fetching next current number:", error);
+        // fallback: keep default 1
+      }
+    };
+
+    fetchNextNumber();
+  }, [cmp_id, voucherType, isEdit]);
+
   const handleChange = (field) => (e) => {
+    const raw = e.target.value;
+
+    // allow letters/numbers, and - or / only BETWEEN them
+    const middleDashOrSlash = /^[A-Za-z0-9]+(?:[-\/][A-Za-z0-9]+)*$/;
+
+    // apply this rule to prefix & suffix
+    if (field === "prefix" || field === "suffix") {
+      if (raw === "" || middleDashOrSlash.test(raw)) {
+        setForm((prev) => ({
+          ...prev,
+          [field]: raw,
+        }));
+      }
+      return;
+    }
+
     const value =
       field === "currentNumber" || field === "widthOfNumericalPart"
-        ? Number(e.target.value || 0)
-        : e.target.value;
+        ? Number(raw || 0)
+        : raw;
 
     setForm((prev) => ({
       ...prev,
@@ -70,17 +116,25 @@ const CreateVoucherSeriesPage = () => {
 
     try {
       setLoading(true);
-      const payload = {
+
+      const basePayload = {
         voucherType,
         seriesName: form.seriesName.trim(),
         prefix: form.prefix.trim(),
         suffix: form.suffix.trim(),
-        currentNumber: form.currentNumber || 1,
         widthOfNumericalPart: form.widthOfNumericalPart,
       };
 
+      // only send currentNumber when creating new series
+      const payload =
+        mode === "edit"
+          ? basePayload
+          : {
+              ...basePayload,
+              currentNumber: form.currentNumber || 1,
+            };
+
       if (mode === "edit" && editingSeries?._id) {
-        // call your UPDATE API here (you need such a controller)
         await api.put(
           `/sUsers/updateVoucherSeries/${cmp_id}/${editingSeries._id}`,
           payload,
@@ -88,7 +142,6 @@ const CreateVoucherSeriesPage = () => {
         );
         toast.success("Series updated successfully");
       } else {
-        // create
         const res = await api.post(
           `/sUsers/createVoucherSeries/${cmp_id}`,
           payload,
@@ -122,117 +175,138 @@ const CreateVoucherSeriesPage = () => {
   };
 
   return (
-    <div className="flex-1 bg-slate-50">
-      <div className="bg-slate-900 text-white px-4 py-3 flex items-center justify-between">
-        <h1 className="text-base font-semibold">
-          {formatVoucherType(voucherType)} Series
-          {mode === "edit" ? " (Edit)" : " (Create)"}
-        </h1>
-      </div>
+    <div className="min-h-screen bg-slate-50 flex flex-col">
+      <main className="flex-1">
+        <div className="mx-auto max-w-3xl px-4 py-6">
+          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
+            <form onSubmit={handleSubmit} className="space-y-6 px-6 py-5">
+              {/* Series Name */}
+              <div className="space-y-1.5">
+                <label className="flex items-center justify-between text-[11px] font-medium text-slate-700">
+                  <span>
+                    Series name<span className="text-rose-500">*</span>
+                  </span>
+                  <span className="text-[10px] font-normal text-slate-400">
+                    Example: Sales 2025
+                  </span>
+                </label>
+                <input
+                  type="text"
+                  value={form.seriesName}
+                  onChange={handleChange("seriesName")}
+                  placeholder="E.g. Sales Invoice 2025"
+                  className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                />
+              </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="mx-auto max-w-3xl px-4 py-6 space-y-5"
-      >
-        {/* fields exactly as you already have */}
-        {/* Series Name */}
-        <div>
-          <label className="block text-xs font-medium text-slate-700 mb-1">
-            Series Name<span className="text-rose-500">*</span>
-          </label>
-          <input
-            type="text"
-            value={form.seriesName}
-            onChange={handleChange("seriesName")}
-            placeholder="E.g., Sales Invoice Series 2025"
-            className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-          />
-        </div>
+              {/* Prefix / Suffix */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-slate-700">
+                    Prefix
+                  </label>
+                  <input
+                    type="text"
+                    value={form.prefix}
+                    onChange={handleChange("prefix")}
+                    placeholder="E.g. SO-"
+                    className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
 
-        {/* Prefix / Suffix */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Prefix
-            </label>
-            <input
-              type="text"
-              value={form.prefix}
-              onChange={handleChange("prefix")}
-              placeholder="E.g., SO-"
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-            />
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-slate-700">
+                    Suffix
+                  </label>
+                  <input
+                    type="text"
+                    value={form.suffix}
+                    onChange={handleChange("suffix")}
+                    placeholder="E.g. -25"
+                    className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                  />
+                </div>
+              </div>
+
+              {/* Number + Width */}
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-slate-700">
+                    Current number<span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.currentNumber}
+                    onChange={handleChange("currentNumber")}
+                    disabled={isEdit}
+                    className={`w-full rounded-md border px-3 py-2 text-xs outline-none ${
+                      isEdit
+                        ? "bg-slate-100 border-slate-200 text-slate-500"
+                        : "bg-slate-50 border-slate-300 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                    }`}
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-[11px] font-medium text-slate-700">
+                    Width of numerical part<span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="number"
+                    min={1}
+                    value={form.widthOfNumericalPart}
+                    onChange={handleChange("widthOfNumericalPart")}
+                    className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
+                  />
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Controls zero padding. Width 4 with value 12 → 0012.
+                  </p>
+                </div>
+              </div>
+
+              {/* Live preview */}
+              <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-4 py-3">
+                <p className="text-[11px] font-medium text-slate-600">
+                  Live preview
+                </p>
+                <p className="mt-1 text-sm font-semibold tracking-[0.18em] text-slate-900">
+                  {livePreview()}
+                </p>
+              </div>
+
+              {/* Actions */}
+              <div className="flex flex-col gap-3 border-t border-slate-100 pt-4 sm:flex-row sm:justify-end">
+                <button
+                  type="button"
+                  onClick={() =>
+                    navigate(ROUTES.settingsVoucherSeriesList, {
+                      state: { from: voucherType },
+                    })
+                  }
+                  className="inline-flex items-center justify-center rounded-md border border-slate-300 bg-white px-4 py-2 text-xs font-medium text-slate-700 shadow-sm hover:bg-slate-50"
+                >
+                  Cancel
+                </button>
+
+                <button
+                  type="submit"
+                  disabled={loading}
+                  className="inline-flex items-center justify-center rounded-md bg-black px-4 py-2 text-xs font-semibold text-white shadow-sm hover:bg-pink-700 disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  {loading
+                    ? mode === "edit"
+                      ? "Updating..."
+                      : "Saving..."
+                    : mode === "edit"
+                    ? "Update series"
+                    : "Save series"}
+                </button>
+              </div>
+            </form>
           </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Suffix
-            </label>
-            <input
-              type="text"
-              value={form.suffix}
-              onChange={handleChange("suffix")}
-              placeholder="E.g., -2025"
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-            />
-          </div>
         </div>
-
-        {/* Current Number / Width */}
-        <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Current Number<span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={form.currentNumber}
-              onChange={handleChange("currentNumber")}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-            />
-          </div>
-
-          <div>
-            <label className="block text-xs font-medium text-slate-700 mb-1">
-              Width of Numerical Part<span className="text-rose-500">*</span>
-            </label>
-            <input
-              type="number"
-              min={1}
-              value={form.widthOfNumericalPart}
-              onChange={handleChange("widthOfNumericalPart")}
-              className="w-full rounded border border-slate-300 px-3 py-2 text-sm outline-none focus:border-sky-500 focus:ring-1 focus:ring-sky-500"
-            />
-          </div>
-        </div>
-
-        {/* Live Preview */}
-        <div className="rounded border border-slate-200 bg-slate-100 px-4 py-3">
-          <p className="text-xs font-medium text-slate-600 mb-1">
-            Live Preview:
-          </p>
-          <p className="text-sm font-semibold text-slate-900">
-            {livePreview()}
-          </p>
-        </div>
-
-        <div className="pt-4">
-          <button
-            type="submit"
-            disabled={loading}
-            className="w-full rounded bg-pink-600 py-2 text-sm font-semibold text-white shadow hover:bg-pink-700 disabled:opacity-60"
-          >
-            {loading
-              ? mode === "edit"
-                ? "Updating..."
-                : "Saving..."
-              : mode === "edit"
-              ? "Update Series"
-              : "Save Series"}
-          </button>
-        </div>
-      </form>
+      </main>
     </div>
   );
 };

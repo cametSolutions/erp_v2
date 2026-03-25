@@ -25,7 +25,7 @@ const VoucherSettings = () => {
     <div className="bg-white">
       
       <div
-        className={`space-y-4 bg-white p-4 mx-1 transition-opacity duration-300 ${
+        className={`space-y-4 bg-white  mx-1 transition-opacity duration-300 ${
           loading ? "pointer-events-none opacity-70" : "opacity-100"
         }`}
       >

@@ -29,7 +29,7 @@ const Settings = () => {
   return (
     <div className="bg-white">
     
-      <div className="space-y-4 b-white p-4   mx-1">
+      <div className="space-y-4 b-white    mx-1">
         {settingsOptions.map((option, index) => (
           <SettingsCard option={option} index={index} />
         ))}

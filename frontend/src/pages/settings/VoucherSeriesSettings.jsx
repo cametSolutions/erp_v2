@@ -42,7 +42,7 @@ const VoucherSeriesSettings = () => {
   return (
     <div className="bg-white">
      
-      <div className={`space-y-4 bg-white p-4 mx-1`}>
+      <div className={`space-y-4 bg-white  mx-1`}>
         {voucherOptions.map((option, index) => (
           <SettingsCard key={index} option={option} index={index} />
         ))}
