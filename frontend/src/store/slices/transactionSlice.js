@@ -17,6 +17,34 @@ function normalizeAdditionalCharge(row) {
   };
 }
 
+function enrichSelectedSeries(series) {
+  if (!series) return null;
+
+  const usedSeriesNumber = Number(series?.currentNumber) || 0;
+  const voucherNumber = String(usedSeriesNumber).padStart(
+    Number(series?.widthOfNumericalPart) || 1,
+    "0",
+  );
+  const voucherPrefix = series?.prefix || "";
+  const voucherSuffix = series?.suffix || "";
+
+  return {
+    _id: series?._id || null,
+    seriesName: series?.seriesName || "",
+    isDefault: Boolean(series?.isDefault),
+    currentlySelected: Boolean(series?.currentlySelected),
+    under: series?.under || "",
+    usedSeriesNumber,
+    voucherPrefix,
+    voucherNumber,
+    voucherSuffix,
+    widthOfNumericalPart: Number(series?.widthOfNumericalPart) || 1,
+    voucherNumberUi: [voucherPrefix, voucherNumber, voucherSuffix]
+      .filter(Boolean)
+      .join(" / "),
+  };
+}
+
 export function recalculateItem(item) {
   const billedQty = Number(item?.billedQty) || 0;
   const rate = Number(item?.rate) || 0;
@@ -186,12 +214,16 @@ const transactionSlice = createSlice({
     },
     setSelectedSeries(state, action) {
       const { series, cmpId } = action.payload || {};
-      state.selectedSeries = series || null;
+      const enrichedSeries = enrichSelectedSeries(series);
+      state.selectedSeries = enrichedSeries;
 
-      if (!series?._id || !cmpId) return;
+      if (!enrichedSeries?._id || !cmpId) return;
 
       try {
-        localStorage.setItem(`lastSeriesId_saleOrder_${cmpId}`, series._id);
+        localStorage.setItem(
+          `lastSeries_saleOrder_${cmpId}`,
+          JSON.stringify(enrichedSeries),
+        );
       } catch (error) {
         console.error("Failed to persist last series id", error);
       }
@@ -201,8 +233,15 @@ const transactionSlice = createSlice({
       if (!cmpId) return;
 
       try {
-        const id = localStorage.getItem(`lastSeriesId_saleOrder_${cmpId}`);
-        state.selectedSeries = id ? { _id: id } : null;
+        const raw = localStorage.getItem(`lastSeries_saleOrder_${cmpId}`);
+
+        if (raw) {
+          state.selectedSeries = JSON.parse(raw);
+          return;
+        }
+
+        const legacyId = localStorage.getItem(`lastSeriesId_saleOrder_${cmpId}`);
+        state.selectedSeries = legacyId ? { _id: legacyId } : null;
       } catch (error) {
         console.error("Failed to hydrate last series id", error);
       }
