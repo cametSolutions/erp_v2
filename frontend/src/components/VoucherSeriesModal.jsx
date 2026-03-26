@@ -37,10 +37,16 @@ export default function VoucherSeriesModal({
 
   const nextNumber =
     currentSeries?.currentNumber != null
-      ? String(currentSeries.currentNumber).padStart(
-          currentSeries.widthOfNumericalPart || 1,
-          "0"
-        )
+      ? [
+          currentSeries.prefix || "",
+          String(currentSeries.currentNumber).padStart(
+            currentSeries.widthOfNumericalPart || 1,
+            "0"
+          ),
+          currentSeries.suffix || "",
+        ]
+          .filter(Boolean)
+          .join(" / ")
       : "--";
 
   const formatNext = (s) => {
@@ -48,7 +54,7 @@ export default function VoucherSeriesModal({
       s.widthOfNumericalPart || 1,
       "0"
     );
-    return `${s.prefix || ""}${num}${s.suffix || ""}`;
+    return [s.prefix || "", num, s.suffix || ""].filter(Boolean).join(" / ");
   };
 
   const handleConfirm = () => {

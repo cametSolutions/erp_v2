@@ -66,23 +66,6 @@ export const createVoucherSeries = async (req, res) => {
     const normalizedVoucherType =
       voucherType === "sale" ? "sales" : voucherType;
 
-    let voucherSeriesDoc = await VoucherSeries.findOne({
-      cmp_id,
-      voucherType: normalizedVoucherType,
-    });
-
-    // if doc exists, check duplicate currentNumber
-    if (voucherSeriesDoc) {
-      const existsWithSameCurrent = voucherSeriesDoc.series.some(
-        (s) => s.currentNumber === currentNumber
-      );
-      if (existsWithSameCurrent) {
-        return res.status(400).json({
-          message: `A series with starting number ${currentNumber} already exists for this voucher type`,
-        });
-      }
-    }
-
     const newSeries = {
       seriesName,
       prefix,
@@ -95,18 +78,27 @@ export const createVoucherSeries = async (req, res) => {
       under,
     };
 
-    if (!voucherSeriesDoc) {
-      voucherSeriesDoc = new VoucherSeries({
-        primary_user_id,
+    const voucherSeriesDoc = await VoucherSeries.findOneAndUpdate(
+      {
         cmp_id,
         voucherType: normalizedVoucherType,
-        series: [newSeries],
-      });
-    } else {
-      voucherSeriesDoc.series.push(newSeries);
-    }
-
-    await voucherSeriesDoc.save();
+      },
+      {
+        $setOnInsert: {
+          primary_user_id,
+          cmp_id,
+          voucherType: normalizedVoucherType,
+        },
+        $push: {
+          series: newSeries,
+        },
+      },
+      {
+        new: true,
+        upsert: true,
+        runValidators: true,
+      }
+    ).lean();
 
     return res.status(201).json({
       message: "Voucher series created successfully",
@@ -141,30 +133,25 @@ export const updateVoucherSeries = async (req, res) => {
     const normalizedVoucherType =
       voucherType === "sale" ? "sales" : voucherType;
 
-    const doc = await VoucherSeries.findOne({
-      cmp_id,
-      voucherType: normalizedVoucherType,
-      "series._id": seriesId,
-    });
-
-    if (!doc) {
-      return res
-        .status(404)
-        .json({ message: "Voucher series document not found" });
-    }
-
-    const sub = doc.series.id(seriesId);
-    if (!sub) {
-      return res.status(404).json({ message: "Series not found" });
-    }
-
-    sub.seriesName = seriesName;
-    sub.prefix = prefix;
-    sub.suffix = suffix;
-    // ❌ do not touch currentNumber / lastUsedNumber here
-    sub.widthOfNumericalPart = widthOfNumericalPart;
-
-    await doc.save();
+    const doc = await VoucherSeries.findOneAndUpdate(
+      {
+        cmp_id,
+        voucherType: normalizedVoucherType,
+        "series._id": seriesId,
+      },
+      {
+        $set: {
+          "series.$.seriesName": seriesName,
+          "series.$.prefix": prefix,
+          "series.$.suffix": suffix,
+          "series.$.widthOfNumericalPart": widthOfNumericalPart,
+        },
+      },
+      {
+        new: true,
+        runValidators: true,
+      }
+    ).lean();
 
     return res.status(200).json({
       message: "Voucher series updated successfully",
@@ -234,28 +221,8 @@ export const getNextVoucherSeriesNumber = async (req, res) => {
       });
     }
 
-    const normalizedVoucherType =
-      voucherType === "sale" ? "sales" : voucherType;
-
-    const doc = await VoucherSeries.findOne({
-      cmp_id,
-      voucherType: normalizedVoucherType,
-    });
-
-    if (!doc || !doc.series || doc.series.length === 0) {
-      return res.status(200).json({
-        nextCurrentNumber: 1,
-      });
-    }
-
-    // find max currentNumber among all series for that voucherType
-    const maxCurrent = doc.series.reduce(
-      (max, s) => Math.max(max, s.currentNumber || 0),
-      0
-    );
-
     return res.status(200).json({
-      nextCurrentNumber: maxCurrent + 1,
+      nextCurrentNumber: 1,
     });
   } catch (error) {
     console.error("Error getting next voucher series number:", error);

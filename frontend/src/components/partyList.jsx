@@ -6,7 +6,7 @@ import { Pencil, Trash2, Users } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 
-import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
+import { useDeleteConfirm } from "@/components/common/deleteConfirmContext";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";

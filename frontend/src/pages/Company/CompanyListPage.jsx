@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 
 import { deleteCompany } from "../../api/client/companyApi";
-import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
+import { useDeleteConfirm } from "@/components/common/deleteConfirmContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import {

@@ -2,30 +2,37 @@ import { useEffect, useState } from "react";
 import { FaEdit } from "react-icons/fa";
 import { MdOutlineInsertLink } from "react-icons/md";
 import { RiDeleteBin6Fill } from "react-icons/ri";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
 
 import api from "@/api/client/apiClient";
 import { ROUTES } from "@/routes/paths";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
-import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
-import { formatVoucherType } from "@/utils/formatVoucherType";
+import {
+  useVoucherSeries,
+  voucherSeriesKeys,
+} from "@/hooks/queries/voucherSeriesQueries";
 
 function VoucherSeriesList() {
-  const [series, setSeries] = useState([]);
-  const [loading, setLoading] = useState(false);
-
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
-
-const confirmDelete = useDeleteConfirm();
-
-
-
-  const voucherType = location?.state?.from;
+  const voucherType =
+    location?.state?.from || searchParams.get("voucherType") || "";
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
+  const [seriesToDelete, setSeriesToDelete] = useState(null);
+  const [deletingSeriesId, setDeletingSeriesId] = useState("");
+  const { data, isLoading: loading } = useVoucherSeries({
+    cmpId: cmp_id,
+    voucherType,
+    enabled: Boolean(cmp_id && voucherType),
+  });
+  const series = data?.series || [];
 
   // Header setup
   useEffect(() => {
@@ -37,9 +44,15 @@ const confirmDelete = useDeleteConfirm();
         {
           label: "Add Series",
           onSelect: () =>
-            navigate(ROUTES.settingsVoucherSeriesCreate, {
-              state: { from: voucherType },
-            }),
+            navigate(
+              {
+                pathname: ROUTES.settingsVoucherSeriesCreate,
+                search: `?voucherType=${voucherType}`,
+              },
+              {
+                state: { from: voucherType },
+              },
+            ),
         },
       ],
     });
@@ -47,97 +60,86 @@ const confirmDelete = useDeleteConfirm();
     return () => resetHeaderOptions();
   }, [navigate, resetHeaderOptions, setHeaderOptions, voucherType]);
 
-  // Fetch series on mount
-  useEffect(() => {
-    if (!cmp_id || !voucherType) return;
-
-    const fetchSeries = async () => {
-      try {
-        setLoading(true);
-        const res = await api.get(`/sUsers/getSeriesByVoucher/${cmp_id}`, {
-          params: { voucherType },
-          withCredentials: true,
-        });
-        setSeries(res.data?.series || []);
-      } catch (error) {
-        console.error("Error fetching series:", error);
-        toast.error("Failed to load voucher series");
-        setSeries([]);
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    fetchSeries();
-  }, [cmp_id, voucherType]);
-
   // Handle delete
-  const handleDelete = async (seriesItem) => {
-    const { _id: seriesId, isDefault } = seriesItem;
+  const handleDelete = async () => {
+    if (!seriesToDelete) return;
+
+    const { _id: seriesId } = seriesToDelete;
+
+    if (!cmp_id || !voucherType) {
+      toast.error("Missing voucher type or company");
+      return;
+    }
+
+    setDeletingSeriesId(seriesId);
+
+    try {
+      const res = await api.delete(
+        `/sUsers/deleteVoucherSeriesById/${cmp_id}`,
+        {
+          data: { voucherType, seriesId },
+          withCredentials: true,
+        },
+      );
+      queryClient.setQueryData(voucherSeriesKeys.list(cmp_id, voucherType), {
+        voucherSeriesId: res?.data?.voucherSeriesId,
+        series: res?.data?.series || [],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: voucherSeriesKeys.list(cmp_id, voucherType),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: voucherSeriesKeys.nextNumber(cmp_id, voucherType),
+      });
+      toast.success(res?.data?.message || "Series deleted");
+      setSeriesToDelete(null);
+    } catch (error) {
+      console.error("Failed to delete series:", error);
+      toast.error(
+        error?.response?.data?.message ||
+          error?.message ||
+          "Failed to delete series",
+      );
+    } finally {
+      setDeletingSeriesId("");
+    }
+  };
+
+  const handleDeleteClick = (seriesItem) => {
+    const { isDefault } = seriesItem;
 
     if (isDefault) {
       toast.warning("Cannot delete default series");
       return;
     }
-
-    const confirmed = await confirmDelete({
-      title: "Delete this series?",
-      description: `This will permanently delete "${seriesItem.seriesName}".`,
-      confirmLabel: "Delete",
-      cancelLabel: "Cancel",
-    });
-
-    if (!confirmed) return;
-
-    try {
-      await api.delete(`/sUsers/deleteVoucherSeriesById/${cmp_id}`, {
-        data: { voucherType, seriesId },
-        withCredentials: true,
-      });
-      setSeries((prev) => prev.filter((s) => s._id !== seriesId));
-      toast.success("Series deleted");
-    } catch (error) {
-      console.error("Failed to delete series:", error);
-      toast.error("Failed to delete series");
-    }
+    setSeriesToDelete(seriesItem);
   };
 
   const handleEditClick = (seriesItem) => {
-    navigate(ROUTES.settingsVoucherSeriesCreate, {
-      state: { series: seriesItem, from: voucherType, mode: "edit" },
-    });
+    navigate(
+      {
+        pathname: ROUTES.settingsVoucherSeriesCreate,
+        search: `?voucherType=${voucherType}`,
+      },
+      {
+        state: { series: seriesItem, from: voucherType, mode: "edit" },
+      },
+    );
   };
 
   const formatNumber = (num, width) => num.toString().padStart(width, "0");
 
   return (
-    <section className="flex-1 bg-slate-50 text-slate-700">
+    <section className="flex-1 bg-white text-slate-700">
       {/* Header */}
-      <header className="border-b border-slate-200 bg-white">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3">
-          <button
-            type="button"
-            onClick={() =>
-              navigate(ROUTES.settingsVoucherSeriesCreate, {
-                state: { from: voucherType },
-              })
-            }
-            className="hidden items-center rounded-md bg-pink-600 px-3 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-pink-700 sm:inline-flex"
-          >
-            + Add series
-          </button>
-        </div>
-      </header>
 
       {/* Content */}
-      <main className="mx-auto max-w-5xl px-4 py-5">
+      <main className="mx-auto max-w-6xl px-2 py-5">
         {loading && (
           <div className="flex h-40 items-center justify-center">
             <div className="flex flex-col items-center gap-2">
               <div className="h-5 w-5 animate-spin rounded-full border-[2px] border-slate-300 border-t-pink-600" />
-              <p className="text-xs text-slate-500">
-                Loading voucher series…
-              </p>
+              <p className="text-xs text-slate-500">Loading voucher series…</p>
             </div>
           </div>
         )}
@@ -154,9 +156,15 @@ const confirmDelete = useDeleteConfirm();
               <button
                 type="button"
                 onClick={() =>
-                  navigate(ROUTES.settingsVoucherSeriesCreate, {
-                    state: { from: voucherType },
-                  })
+                  navigate(
+                    {
+                      pathname: ROUTES.settingsVoucherSeriesCreate,
+                      search: `?voucherType=${voucherType}`,
+                    },
+                    {
+                      state: { from: voucherType },
+                    },
+                  )
                 }
                 className="mt-3 inline-flex items-center rounded-md bg-pink-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-pink-700"
               >
@@ -171,23 +179,23 @@ const confirmDelete = useDeleteConfirm();
             {series.map((item) => {
               const formattedNumber = `${item?.prefix ?? ""}${formatNumber(
                 item?.currentNumber,
-                item?.widthOfNumericalPart
+                item?.widthOfNumericalPart,
               )}${item?.suffix ?? ""}`;
 
               return (
                 <div
                   key={item._id}
-                  className="rounded-lg border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-md"
+                  className="rounded-sm border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-md"
                 >
-                  <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="flex items-center justify-between gap-4">
                     {/* Left */}
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-pink-50 text-pink-600">
                         <MdOutlineInsertLink className="-rotate-90" size={18} />
                       </div>
-                      <div>
+                      <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-semibold text-slate-900">
+                          <p className="max-w-xs truncate text-sm font-semibold text-slate-900">
                             {item?.seriesName}
                           </p>
                           {item?.isDefault && (
@@ -202,22 +210,27 @@ const confirmDelete = useDeleteConfirm();
                       </div>
                     </div>
 
-                    {/* Actions */}
+                    {/* Actions: icon-only */}
                     <div className="flex items-center gap-2">
                       <button
+                        type="button"
                         onClick={() => handleEditClick(item)}
-                        className="inline-flex items-center gap-1 rounded-md border border-slate-300 bg-white px-2.5 py-1 text-[11px] font-medium text-slate-700 hover:bg-slate-50"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:border-slate-300"
+                        aria-label="Edit"
                       >
-                        <FaEdit className="text-slate-500" size={11} />
-                        Edit
+                        <FaEdit size={12} />
                       </button>
                       <button
-                        onClick={() => handleDelete(item)}
+                        type="button"
+                        onClick={async (event) => {
+                          event.stopPropagation();
+                          handleDeleteClick(item);
+                        }}
                         disabled={item?.isDefault}
-                        className="inline-flex items-center gap-1 rounded-md border border-red-200 bg-red-50 px-2.5 py-1 text-[11px] font-medium text-red-600 hover:bg-red-100"
+                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
+                        aria-label="Delete"
                       >
-                        <RiDeleteBin6Fill size={11} />
-                        Delete
+                        <RiDeleteBin6Fill size={12} />
                       </button>
                     </div>
                   </div>
@@ -227,6 +240,62 @@ const confirmDelete = useDeleteConfirm();
           </div>
         )}
       </main>
+
+      {seriesToDelete && (
+        <div
+          className="fixed inset-0 z-[220] flex items-center justify-center bg-black/55 px-4"
+          onClick={() => {
+            if (!deletingSeriesId) {
+              setSeriesToDelete(null);
+            }
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="voucher-delete-title"
+            aria-describedby="voucher-delete-description"
+            className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="space-y-2">
+              <h2
+                id="voucher-delete-title"
+                className="text-lg font-semibold text-slate-900"
+              >
+                Delete this series?
+              </h2>
+              <p
+                id="voucher-delete-description"
+                className="text-sm leading-6 text-slate-500"
+              >
+                This will permanently delete "{seriesToDelete.seriesName}".
+              </p>
+            </div>
+
+            <div className="mt-5 flex gap-3">
+              <Button
+                type="button"
+                variant="outline"
+                className="flex-1"
+                disabled={Boolean(deletingSeriesId)}
+                onClick={() => setSeriesToDelete(null)}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="destructive"
+                className="flex-1 bg-rose-600 text-white hover:bg-rose-700"
+                disabled={Boolean(deletingSeriesId)}
+                onClick={handleDelete}
+              >
+                {deletingSeriesId ? "Deleting..." : "Delete"}
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </section>
   );
 }

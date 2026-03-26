@@ -32,10 +32,10 @@ const OutstandingPartyDetailPage = lazy(
 );
 
 const DataEntrySettingsPage = lazy(
-  () => import("@/pages/settings/DataEntrySettings "),
+  () => import("@/pages/settings/DataEntrySettings"),
 );
 const VoucherSettingsPage = lazy(
-  () => import("@/pages/settings/VoucherSettings "),
+  () => import("@/pages/settings/VoucherSettings"),
 );
 const VoucherSeriesSettingsPage = lazy(
   () => import("@/pages/settings/VoucherSeriesSettings"),

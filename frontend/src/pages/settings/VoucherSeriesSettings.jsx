@@ -1,52 +1,10 @@
-
-
-import { IoFastFoodSharp } from "react-icons/io5";
-import { GiStorkDelivery } from "react-icons/gi";
-import {
-  TbFileInvoice,
-  TbShoppingCart,
-  TbTruckDelivery,
-  TbShoppingBag,
-  TbArrowBigUpLines,
-  TbArrowBigDownLines,
-  TbArrowsExchange,
-} from "react-icons/tb";
-import { IoReceiptSharp } from "react-icons/io5";
-import { MdReceipt } from "react-icons/md";
-import { ROUTES } from "@/routes/paths";
-import SettingsCard from "./SettingsCard";
-
-
+import SettingsList from "@/features/settings/components/SettingsList";
+import { getVoucherSeriesSettingsItems } from "@/features/settings/config/settingsSections";
 
 const VoucherSeriesSettings = () => {
-  const voucherOptions = [
-    {
-      title: "Sale Order",
-      description: "Configure voucher series for Sale Orders",
-      icon: <TbFileInvoice />,
-     to: ROUTES.settingsVoucherSeriesList,
-      active: true,
-      from: "saleOrder",
-    },
-   
-     {
-      title: "Reciept",
-      description: "Configure voucher series for Reciept",
-      icon: <TbFileInvoice />,
-     to: ROUTES.settingsVoucherSeriesList,
-      active: true,
-      from: "reciept",
-    },
-  ];
-
   return (
     <div className="bg-white">
-     
-      <div className={`space-y-4 bg-white  mx-1`}>
-        {voucherOptions.map((option, index) => (
-          <SettingsCard key={index} option={option} index={index} />
-        ))}
-      </div>
+      <SettingsList items={getVoucherSeriesSettingsItems()} />
     </div>
   );
 };

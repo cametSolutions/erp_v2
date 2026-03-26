@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 import { deleteUser } from "../../api/client/userApi";
 import { useUserOptionsQuery, userQueryKeys } from "@/hooks/queries/userQueries";
-import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
+import { useDeleteConfirm } from "@/components/common/deleteConfirmContext";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { ROUTES } from "@/routes/paths";
