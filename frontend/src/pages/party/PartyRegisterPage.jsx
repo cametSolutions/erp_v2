@@ -60,7 +60,7 @@ export default function PartyRegisterPage() {
   const isEdit = Boolean(partyId);
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
 
   const {
     register,
@@ -98,12 +98,12 @@ export default function PartyRegisterPage() {
     data: accountGroups = [],
     isError: isAccountGroupsError,
     error: accountGroupsError,
-  } = useAccountGroupListQuery(cmpId, Boolean(cmpId));
+  } = useAccountGroupListQuery(cmp_id, Boolean(cmp_id));
   const {
     data: subGroups = [],
     isError: isSubGroupsError,
     error: subGroupsError,
-  } = useSubGroupListQuery(cmpId, watchedAccountGroup, Boolean(cmpId));
+  } = useSubGroupListQuery(cmp_id, watchedAccountGroup, Boolean(cmp_id));
 
   const {
     data: party,
@@ -178,7 +178,7 @@ export default function PartyRegisterPage() {
   }, [accountGroups, watchedAccountGroup]);
 
   const onSubmit = async (values) => {
-    if (!cmpId) {
+    if (!cmp_id) {
       toast.error("Select a company first");
       return;
     }
@@ -186,7 +186,7 @@ export default function PartyRegisterPage() {
     try {
       const payload = {
         ...values,
-        cmp_id: cmpId,
+        cmp_id: cmp_id,
         partyName: values.partyName.trim(),
         mobileNumber: values.mobileNumber.trim(),
         emailID: values.emailID?.trim() || "",
@@ -249,7 +249,7 @@ export default function PartyRegisterPage() {
             </div>
           </div>
 
-          {!cmpId ? (
+          {!cmp_id ? (
             <div className="rounded-sm border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
               Select a company first to create a party.
             </div>

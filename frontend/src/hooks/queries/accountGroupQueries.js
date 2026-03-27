@@ -4,16 +4,16 @@ import { fetchAccountGroups } from "@/api/client/accountGroupApi";
 
 export const accountGroupQueryKeys = {
   all: ["account-groups"],
-  list: (cmpId) => [...accountGroupQueryKeys.all, "list", cmpId || ""],
+  list: (cmp_id) => [...accountGroupQueryKeys.all, "list", cmp_id || ""],
 };
 
-export const useAccountGroupListQuery = (cmpId, enabled = true) =>
+export const useAccountGroupListQuery = (cmp_id, enabled = true) =>
   useQuery({
-    queryKey: accountGroupQueryKeys.list(cmpId),
+    queryKey: accountGroupQueryKeys.list(cmp_id),
     queryFn: async () => {
-      const res = await fetchAccountGroups(cmpId);
+      const res = await fetchAccountGroups(cmp_id);
       return res.data || [];
     },
-    enabled: Boolean(cmpId) && enabled,
+    enabled: Boolean(cmp_id) && enabled,
     staleTime: 5 * 60_000,
   });

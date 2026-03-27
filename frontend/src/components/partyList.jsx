@@ -110,7 +110,7 @@ export function PartyList({ mode = "master", onSelect }) {
   const queryClient = useQueryClient();
   const confirmDelete = useDeleteConfirm();
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
-  const cmpId =
+  const cmp_id =
     useSelector((state) => state.company.selectedCompanyId) || "";
 
   const debouncedSearchText = useDebouncedValue(
@@ -131,7 +131,7 @@ export function PartyList({ mode = "master", onSelect }) {
     hasNextPage,
     refetch,
   } = useInfinitePartyListQuery({
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
     limit: PAGE_SIZE,
     search: debouncedSearchText,
     ledgerType: mode === "outstanding" ? ledgerType : undefined,
@@ -246,7 +246,7 @@ export function PartyList({ mode = "master", onSelect }) {
     }
   };
 
-  if (!cmpId) {
+  if (!cmp_id) {
     return (
       <div className="w-full font-[sans-serif]">
         <div className="mx-auto w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">

@@ -244,7 +244,7 @@ function DetailsSection() {
 
 function AdditionalChargesSection() {
   const dispatch = useDispatch();
-  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const selectedCharges = useSelector((state) => state.transaction.additionalCharges);
   const totals = useSelector((state) => state.transaction.totals);
   const items = useSelector((state) => state.transaction.items);
@@ -253,8 +253,8 @@ function AdditionalChargesSection() {
   const hasItems = items.length > 0;
 
   const { data: charges = [], isLoading, isError, error } = useAdditionalChargesQuery({
-    cmp_id: cmpId,
-    enabled: Boolean(cmpId) && hasItems,
+    cmp_id: cmp_id,
+    enabled: Boolean(cmp_id) && hasItems,
   });
 
   useEffect(() => {
@@ -781,7 +781,7 @@ function SummarySection({
 }
 
 export default function SalesCreatePage() {
-  const cmpId = useSelector((state) => state.company.selectedCompanyId);
+  const cmp_id = useSelector((state) => state.company.selectedCompanyId);
   const party = useSelector((state) => state.transaction.party);
   const items = useSelector((state) => state.transaction.items);
   const despatchDetails = useSelector((state) => state.transaction.despatchDetails);
@@ -792,17 +792,17 @@ export default function SalesCreatePage() {
   const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
 
   useEffect(() => {
-    if (!cmpId) return;
+    if (!cmp_id) return;
 
-    dispatch(setCompany({ cmpId }));
-  }, [cmpId, dispatch]);
+    dispatch(setCompany({ cmp_id }));
+  }, [cmp_id, dispatch]);
 
   const createSaleOrderMutation = useMutation({
     mutationFn: async () => {
       const headerPayload = buildHeaderPayload ? buildHeaderPayload() : {};
       const payload = {
         ...headerPayload,
-        cmp_id: cmpId,
+        cmp_id: cmp_id,
         party,
         selectedPriceLevel: selectedPriceLevel
           ? {
@@ -867,12 +867,12 @@ export default function SalesCreatePage() {
   const headerReady = Boolean(buildHeaderPayload);
   const hasParty = Boolean(party?._id || party?.id);
   const hasItems = items.length > 0;
-  const disableCreate = !cmpId || !headerReady || !hasParty || !hasItems;
+  const disableCreate = !cmp_id || !headerReady || !hasParty || !hasItems;
 
   return (
     <div className="flex h-full flex-col bg-slate-50">
       <TransactionHeader
-        cmpId={cmpId}
+        cmp_id={cmp_id}
         title="Order"
         numberField="salesOrderNumber"
         onHeaderReady={setBuildHeaderPayload}

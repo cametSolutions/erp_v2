@@ -162,7 +162,7 @@ function recalculateTotals(state) {
 }
 
 const initialState = {
-  cmpId: null,
+  cmp_id: null,
   voucherType: "saleOrder",
   transactionDate: null,
   selectedSeries: null,
@@ -203,21 +203,21 @@ const transactionSlice = createSlice({
   initialState,
   reducers: {
     setCompany(state, action) {
-      state.cmpId = action.payload?.cmpId ?? null;
+      state.cmp_id = action.payload?.cmp_id ?? null;
     },
     setTransactionDate(state, action) {
       state.transactionDate = action.payload?.transactionDate ?? null;
     },
     setSelectedSeries(state, action) {
-      const { series, cmpId } = action.payload || {};
+      const { series, cmp_id } = action.payload || {};
       const enrichedSeries = enrichSelectedSeries(series);
       state.selectedSeries = enrichedSeries;
 
-      if (!enrichedSeries?._id || !cmpId) return;
+      if (!enrichedSeries?._id || !cmp_id) return;
 
       try {
         localStorage.setItem(
-          `lastSeries_saleOrder_${cmpId}`,
+          `lastSeries_saleOrder_${cmp_id}`,
           JSON.stringify(enrichedSeries),
         );
       } catch (error) {
@@ -225,18 +225,18 @@ const transactionSlice = createSlice({
       }
     },
     hydrateSelectedSeries(state, action) {
-      const { cmpId } = action.payload || {};
-      if (!cmpId) return;
+      const { cmp_id } = action.payload || {};
+      if (!cmp_id) return;
 
       try {
-        const raw = localStorage.getItem(`lastSeries_saleOrder_${cmpId}`);
+        const raw = localStorage.getItem(`lastSeries_saleOrder_${cmp_id}`);
 
         if (raw) {
           state.selectedSeries = enrichSelectedSeries(JSON.parse(raw));
           return;
         }
 
-        const legacyId = localStorage.getItem(`lastSeriesId_saleOrder_${cmpId}`);
+        const legacyId = localStorage.getItem(`lastSeriesId_saleOrder_${cmp_id}`);
         state.selectedSeries = legacyId ? { _id: legacyId } : null;
       } catch (error) {
         console.error("Failed to hydrate last series id", error);

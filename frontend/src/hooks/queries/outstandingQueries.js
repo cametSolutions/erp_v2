@@ -3,26 +3,26 @@ import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { outstandingService } from "@/api/services/outstanding.service";
 
 export const outstandingQueryKeys = {
-  party: (partyId, cmpId) => ["outstanding", "party", { partyId, cmpId }],
-  partyInfinite: (partyId, cmpId, limit) => [
+  party: (partyId, cmp_id) => ["outstanding", "party", { partyId, cmp_id }],
+  partyInfinite: (partyId, cmp_id, limit) => [
     "outstanding",
     "party",
     "infinite",
-    { partyId, cmpId, limit },
+    { partyId, cmp_id, limit },
   ],
 };
 
-export const usePartyOutstandingQuery = (partyId, cmpId, enabled = true) =>
+export const usePartyOutstandingQuery = (partyId, cmp_id, enabled = true) =>
   useQuery({
-    queryKey: outstandingQueryKeys.party(partyId, cmpId),
+    queryKey: outstandingQueryKeys.party(partyId, cmp_id),
     queryFn: ({ signal }) =>
       outstandingService.getPartyOutstanding({
         partyId,
-        cmp_id: cmpId,
+        cmp_id: cmp_id,
         signal,
         skipGlobalLoader: true,
       }),
-    enabled: Boolean(partyId && cmpId) && enabled,
+    enabled: Boolean(partyId && cmp_id) && enabled,
     staleTime: 30_000,
   });
 

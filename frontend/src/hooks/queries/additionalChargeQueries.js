@@ -4,7 +4,7 @@ import { fetchAdditionalCharges } from "@/api/services/additionalCharge.service"
 
 export const additionalChargeQueryKeys = {
   all: ["additional-charges"],
-  list: (cmpId) => [...additionalChargeQueryKeys.all, cmpId],
+  list: (cmp_id) => [...additionalChargeQueryKeys.all, cmp_id],
 };
 
 export function useAdditionalChargesQuery({ cmp_id, enabled = true }) {

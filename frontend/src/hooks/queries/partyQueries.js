@@ -6,15 +6,15 @@ const SALE_LOOKUP_STALE_TIME = 5 * 60_000;
 
 export const partyQueryKeys = {
   all: ["parties"],
-  infiniteList: (cmpId, limit = 20, search = "", ledgerType = "all") => [
+  infiniteList: (cmp_id, limit = 20, search = "", ledgerType = "all") => [
     ...partyQueryKeys.all,
     "infinite-list",
-    { cmpId, limit, search, ledgerType },
+    { cmp_id, limit, search, ledgerType },
   ],
-  list: (cmpId, page = 1, limit = 20, search = "", ledgerType = "all") => [
+  list: (cmp_id, page = 1, limit = 20, search = "", ledgerType = "all") => [
     ...partyQueryKeys.all,
     "list",
-    { cmpId, page, limit, search, ledgerType },
+    { cmp_id, page, limit, search, ledgerType },
   ],
   detail: (partyId) => [...partyQueryKeys.all, "detail", partyId],
 };

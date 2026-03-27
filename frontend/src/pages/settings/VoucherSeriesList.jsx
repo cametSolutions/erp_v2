@@ -28,7 +28,7 @@ function VoucherSeriesList() {
   const [seriesToDelete, setSeriesToDelete] = useState(null);
   const [deletingSeriesId, setDeletingSeriesId] = useState("");
   const { data, isLoading: loading } = useVoucherSeries({
-    cmpId: cmp_id,
+    cmp_id: cmp_id,
     voucherType,
     enabled: Boolean(cmp_id && voucherType),
   });

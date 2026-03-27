@@ -46,12 +46,12 @@ import {
 const PAGE_SIZE = 20;
 const PRODUCT_FILTERS_STORAGE_KEY = "sale-order-product-filters";
 
-function getStoredProductFilters(cmpId) {
-  if (!cmpId) return null;
+function getStoredProductFilters(cmp_id) {
+  if (!cmp_id) return null;
 
   try {
     const raw = localStorage.getItem(
-      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmpId}`,
+      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`,
     );
     if (!raw) return null;
 
@@ -69,12 +69,12 @@ function getStoredProductFilters(cmpId) {
   }
 }
 
-function persistProductFilters(cmpId, filters) {
-  if (!cmpId) return;
+function persistProductFilters(cmp_id, filters) {
+  if (!cmp_id) return;
 
   try {
     localStorage.setItem(
-      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmpId}`,
+      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`,
       JSON.stringify(filters),
     );
   } catch (error) {
@@ -625,10 +625,10 @@ export default function ProductSelectPage() {
   const reduxPriceLevel = useSelector((state) => state.transaction.priceLevel);
   const transactionItems = useSelector((state) => state.transaction.items);
   const party = useSelector((state) => state.transaction.party);
-  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const storedFilters = useMemo(
-    () => getStoredProductFilters(cmpId),
-    [cmpId],
+    () => getStoredProductFilters(cmp_id),
+    [cmp_id],
   );
   const [search, setSearch] = useState(() => storedFilters?.search || "");
   const [appliedPriceLevel, setAppliedPriceLevel] = useState(
@@ -657,7 +657,7 @@ export default function ProductSelectPage() {
     fetchNextPage,
     hasNextPage,
   } = useInfiniteProductListQuery({
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
     limit: PAGE_SIZE,
     search: debouncedSearch,
     brand: brandId,
@@ -665,17 +665,17 @@ export default function ProductSelectPage() {
     subcategory: subcategoryId,
   });
 
-  const { data: brandsData = [] } = useBrandsQuery({ cmp_id: cmpId });
-  const { data: priceLevelsData = [] } = usePriceLevelsQuery({ cmp_id: cmpId });
-  const { data: categoriesData = [] } = useCategoriesQuery({ cmp_id: cmpId });
+  const { data: brandsData = [] } = useBrandsQuery({ cmp_id: cmp_id });
+  const { data: priceLevelsData = [] } = usePriceLevelsQuery({ cmp_id: cmp_id });
+  const { data: categoriesData = [] } = useCategoriesQuery({ cmp_id: cmp_id });
   const { data: subcategoriesData = [] } = useSubcategoriesQuery({
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
   });
 
   useEffect(() => {
-    if (!cmpId) return;
+    if (!cmp_id) return;
 
-    const nextFilters = getStoredProductFilters(cmpId);
+    const nextFilters = getStoredProductFilters(cmp_id);
     if (!nextFilters) return;
 
     setSearch(nextFilters.search || "");
@@ -683,17 +683,17 @@ export default function ProductSelectPage() {
     setBrandId(nextFilters.brandId || "");
     setCategoryId(nextFilters.categoryId || "");
     setSubcategoryId(nextFilters.subcategoryId || "");
-  }, [cmpId, reduxPriceLevel]);
+  }, [cmp_id, reduxPriceLevel]);
 
   useEffect(() => {
-    persistProductFilters(cmpId, {
+    persistProductFilters(cmp_id, {
       search,
       priceLevel: appliedPriceLevel,
       brandId,
       categoryId,
       subcategoryId,
     });
-  }, [appliedPriceLevel, brandId, categoryId, cmpId, search, subcategoryId]);
+  }, [appliedPriceLevel, brandId, categoryId, cmp_id, search, subcategoryId]);
 
   useEffect(() => {
     if (didSeedRef.current) return;
@@ -744,7 +744,7 @@ export default function ProductSelectPage() {
   const filterSignature = useMemo(
     () =>
       [
-        cmpId,
+        cmp_id,
         debouncedSearch,
         appliedPriceLevel,
         brandId,
@@ -755,7 +755,7 @@ export default function ProductSelectPage() {
       appliedPriceLevel,
       brandId,
       categoryId,
-      cmpId,
+      cmp_id,
       debouncedSearch,
       subcategoryId,
     ],
@@ -1169,7 +1169,7 @@ export default function ProductSelectPage() {
     setHeaderOptions,
   ]);
 
-  if (!cmpId) {
+  if (!cmp_id) {
     return (
       <div className="flex h-full items-center justify-center px-4">
         <div className="w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">

@@ -13,7 +13,7 @@ import { usePartyByIdQuery } from "@/hooks/queries/partyQueries";
 export default function OutstandingPartyDetailPage() {
   const { partyId } = useParams();
   const location = useLocation();
-  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
 
   const [ledgerType, setLedgerType] = useState("ledger");
@@ -32,7 +32,7 @@ export default function OutstandingPartyDetailPage() {
     hasNextPage,
   } = useInfinitePartyOutstandingQuery({
     partyId,
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
     limit: 20,
   });
 

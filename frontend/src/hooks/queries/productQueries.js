@@ -12,20 +12,20 @@ const SALE_LOOKUP_STALE_TIME = 5 * 60_000;
 
 export const productQueryKeys = {
   all: ["products"],
-  brands: (cmpId, search = "") => [...productQueryKeys.all, "brands", { cmpId, search }],
-  priceLevels: (cmpId) => ["priceLevels", cmpId],
-  categories: (cmpId, search = "") => [
+  brands: (cmp_id, search = "") => [...productQueryKeys.all, "brands", { cmp_id, search }],
+  priceLevels: (cmp_id) => ["priceLevels", cmp_id],
+  categories: (cmp_id, search = "") => [
     ...productQueryKeys.all,
     "categories",
-    { cmpId, search },
+    { cmp_id, search },
   ],
-  subcategories: (cmpId, search = "") => [
+  subcategories: (cmp_id, search = "") => [
     ...productQueryKeys.all,
     "subcategories",
-    { cmpId, search },
+    { cmp_id, search },
   ],
   infiniteList: (
-    cmpId,
+    cmp_id,
     limit = 20,
     search = "",
     priceLevel = "",
@@ -35,7 +35,7 @@ export const productQueryKeys = {
   ) => [
     ...productQueryKeys.all,
     "infinite-list",
-    { cmpId, limit, search, priceLevel, brand, category, subcategory },
+    { cmp_id, limit, search, priceLevel, brand, category, subcategory },
   ],
 };
 
