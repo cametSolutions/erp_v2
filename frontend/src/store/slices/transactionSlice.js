@@ -20,26 +20,22 @@ function normalizeAdditionalCharge(row) {
 function enrichSelectedSeries(series) {
   if (!series) return null;
 
-  const usedSeriesNumber = Number(series?.currentNumber) || 0;
-  const voucherNumber = String(usedSeriesNumber).padStart(
+  const currentNumber = Number(series?.currentNumber) || 0;
+  const voucherNumber = String(currentNumber).padStart(
     Number(series?.widthOfNumericalPart) || 1,
     "0",
   );
-  const voucherPrefix = series?.prefix || "";
-  const voucherSuffix = series?.suffix || "";
+  const prefix = series?.prefix || "";
+  const suffix = series?.suffix || "";
 
   return {
     _id: series?._id || null,
     seriesName: series?.seriesName || "",
-    isDefault: Boolean(series?.isDefault),
-    currentlySelected: Boolean(series?.currentlySelected),
-    under: series?.under || "",
-    usedSeriesNumber,
-    voucherPrefix,
-    voucherNumber,
-    voucherSuffix,
+    currentNumber,
+    prefix,
+    suffix,
     widthOfNumericalPart: Number(series?.widthOfNumericalPart) || 1,
-    voucherNumberUi: [voucherPrefix, voucherNumber, voucherSuffix]
+    transactionNumber: [prefix, voucherNumber, suffix]
       .filter(Boolean)
       .join(" / "),
   };
@@ -236,7 +232,7 @@ const transactionSlice = createSlice({
         const raw = localStorage.getItem(`lastSeries_saleOrder_${cmpId}`);
 
         if (raw) {
-          state.selectedSeries = JSON.parse(raw);
+          state.selectedSeries = enrichSelectedSeries(JSON.parse(raw));
           return;
         }
 
