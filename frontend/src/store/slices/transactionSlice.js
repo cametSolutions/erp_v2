@@ -4,13 +4,13 @@ function normalizeAdditionalCharge(row) {
   const baseValue = Number(row?.value) || 0;
   const taxPercentage = Number(row?.taxPercentage) || 0;
   const taxAmt = (baseValue * taxPercentage) / 100;
-  const sign = row?.action === "substract" ? -1 : 1;
+  const sign = row?.action === "subtract" ? -1 : 1;
   const finalValue = (baseValue + taxAmt) * sign;
 
   return {
     ...row,
     value: row?.value ?? "",
-    action: row?.action === "substract" ? "substract" : "add",
+    action: row?.action === "subtract" ? "subtract" : "add",
     taxPercentage,
     taxAmt,
     finalValue,

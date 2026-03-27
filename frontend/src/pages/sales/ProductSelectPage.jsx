@@ -741,10 +741,34 @@ export default function ProductSelectPage() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, data]);
 
-  const products = useMemo(
-    () => data?.pages?.flatMap((page) => page?.items || []) || [],
-    [data],
+  const filterSignature = useMemo(
+    () =>
+      [
+        cmpId,
+        debouncedSearch,
+        appliedPriceLevel,
+        brandId,
+        categoryId,
+        subcategoryId,
+      ].join("|"),
+    [
+      appliedPriceLevel,
+      brandId,
+      categoryId,
+      cmpId,
+      debouncedSearch,
+      subcategoryId,
+    ],
   );
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    setProducts([]);
+  }, [filterSignature]);
+
+  useEffect(() => {
+    setProducts(data?.pages?.flatMap((page) => page?.items || []) || []);
+  }, [data, filterSignature]);
 
   const editingStagedItem = editingProductId
     ? stagedItems[editingProductId] || null
@@ -1212,7 +1236,7 @@ export default function ProductSelectPage() {
 
         <div className=" mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden py-1 sm:py-4">
           <div className="min-h-0 flex-1 overflow-hidden rounded-sm border border-slate-200 bg-white">
-            <ScrollArea className="h-full">
+            <ScrollArea key={filterSignature} className="h-full">
               <div className="space-y-3 p-3 sm:p-4">
                 {isLoading && (
                   <div className="space-y-2">

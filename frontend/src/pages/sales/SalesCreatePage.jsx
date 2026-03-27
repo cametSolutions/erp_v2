@@ -44,7 +44,7 @@ function calculateAdditionalChargeRow(row) {
   const value = Number(row?.value) || 0;
   const taxPercentage = Number(row?.taxPercentage) || 0;
   const taxAmt = (value * taxPercentage) / 100;
-  const sign = row?.action === "substract" ? -1 : 1;
+  const sign = row?.action === "subtract" ? -1 : 1;
   const finalValue = (value + taxAmt) * sign;
 
   return {
@@ -131,6 +131,9 @@ function SectionCard({
 function PartySection() {
   const [open, setOpen] = useState(false);
   const party = useSelector((state) => state.transaction.party);
+  const dataaa = useSelector((state) => state.transaction);
+
+  console.log(dataaa)
 
   return (
     <>
@@ -433,7 +436,7 @@ function AdditionalChargesSection() {
                           className="flex h-9 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm outline-none"
                         >
                           <option value="add">Add</option>
-                          <option value="substract">Subtract</option>
+                          <option value="subtract">Subtract</option>
                         </select>
                       </div>
 
