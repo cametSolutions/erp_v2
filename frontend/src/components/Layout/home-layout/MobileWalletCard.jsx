@@ -207,14 +207,18 @@ export default function MobileWalletCard({
             </div>
           </div>
 
-          <div className="relative mb-5 overflow-hidden rounded-2xl border border-white/10 bg-white/10 py-6 text-center backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={() => navigate(ROUTES.statements)}
+            className="relative mb-5 block w-full overflow-hidden rounded-2xl border border-white/10 bg-white/10 py-6 text-center backdrop-blur-sm transition-colors hover:bg-white/15"
+          >
             <div className="absolute left-1/4 right-1/4 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
             <p className="mb-1 text-[11px] uppercase tracking-wide text-blue-200">
               Total Balance
             </p>
             <p className="text-3xl font-bold tracking-tight">$3,756.00</p>
-            <p className="mt-1 text-[11px] text-blue-300">↑ 4.2% this month</p>
-          </div>
+            <p className="mt-1 text-[11px] text-blue-300">Tap to view voucher list</p>
+          </button>
 
           <div className="flex gap-3">
             <Button

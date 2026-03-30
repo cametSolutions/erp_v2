@@ -240,6 +240,48 @@ export async function createSaleOrder(req, res) {
   }
 }
 
+export async function getSaleOrderById(req, res) {
+  try {
+    const { saleOrderId } = req.params;
+    const cmpId = req.query.cmpId;
+
+    if (!saleOrderId) {
+      return res.status(400).json({
+        success: false,
+        message: "saleOrderId is required",
+      });
+    }
+
+    const filter = { _id: saleOrderId };
+    if (cmpId) {
+      filter.cmp_id = cmpId;
+    }
+
+    const saleOrder = await SaleOrder.findOne(filter).lean();
+
+    if (!saleOrder) {
+      return res.status(404).json({
+        success: false,
+        message: "Sale order not found",
+      });
+    }
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        saleOrder,
+      },
+    });
+  } catch (error) {
+    console.error("getSaleOrderById error:", error);
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to fetch sale order",
+    });
+  }
+}
+
 export default {
   createSaleOrder,
+  getSaleOrderById,
 };

@@ -64,6 +64,11 @@ export default function MobileTopHeader({
       [ROUTES.mastersPartyRegister]: ROUTES.mastersPartyList,
     };
 
+    if (location.pathname.startsWith("/sale-orders/")) {
+      navigate(ROUTES.createOrder, { replace: true });
+      return;
+    }
+
     const targetRoute = backRouteMap[location.pathname];
     if (targetRoute) {
       navigate(targetRoute, { replace: true });

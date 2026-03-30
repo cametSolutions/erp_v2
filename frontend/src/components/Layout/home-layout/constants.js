@@ -30,6 +30,7 @@ export const routeTitleMap = {
   [ROUTES.stockRegister]: "Stock Register",
   [ROUTES.cashBank]: "Cash / Bank",
   [ROUTES.createOrder]: "Create Order",
+  [ROUTES.saleOrderDetail]: "Sale Order",
   [ROUTES.salesSelectItems]: "Select Items",
   [ROUTES.createReceipt]: "Create Receipt",
 };

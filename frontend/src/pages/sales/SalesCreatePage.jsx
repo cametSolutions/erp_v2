@@ -131,9 +131,6 @@ function SectionCard({
 function PartySection() {
   const [open, setOpen] = useState(false);
   const party = useSelector((state) => state.transaction.party);
-  const dataaa = useSelector((state) => state.transaction);
-
-  console.log(dataaa)
 
   return (
     <>
@@ -789,6 +786,7 @@ export default function SalesCreatePage() {
   const totals = useSelector((state) => state.transaction.totals);
   const selectedPriceLevel = useSelector((state) => state.transaction.priceLevelObject);
   const dispatch = useDispatch();
+  const navigate=useNavigate();
   const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
 
   useEffect(() => {
@@ -874,6 +872,12 @@ export default function SalesCreatePage() {
     onSuccess: (data) => {
       console.log("Sale order created", data);
       toast.success(data?.message || "Sales order created");
+      const saleOrder = data?.data?.saleOrder;
+      if (saleOrder?._id) {
+        navigate(ROUTES.saleOrderDetail.replace(":saleOrderId", saleOrder._id), {
+          state: { saleOrder },
+        });
+      }
     },
     onError: (error) => {
       const message =

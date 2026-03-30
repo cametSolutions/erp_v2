@@ -19,6 +19,9 @@ export function getPageTitle(pathname) {
   if (pathname.startsWith("/outstanding/party/")) {
     return "Outstanding Details";
   }
+  if (pathname.startsWith("/sale-orders/")) {
+    return "Sale Order";
+  }
 
   const segment = pathname.split("/").filter(Boolean).at(-1);
   if (!segment) return "Home";

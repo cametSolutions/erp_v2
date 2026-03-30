@@ -8,6 +8,7 @@ import {
   deleteVoucherSeriesById,
   getNextVoucherSeriesNumber,
   createSaleOrder,
+  getSaleOrderById,
 } from "../../controllers/voucherSerieController.js";
 
 const router = express.Router();
@@ -30,5 +31,6 @@ router.get(
   protect,
   getNextVoucherSeriesNumber
 );
+router.get("/saleOrders/:saleOrderId", protect, getSaleOrderById);
 router.post("/createSaleOrder", protect, createSaleOrder);
 export default router;

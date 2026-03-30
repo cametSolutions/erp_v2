@@ -20,6 +20,7 @@ import productRoute from "./routes/product/productRoute.js";
 import accountGroupRoute from "./routes/accountGroup/accountGroupRoute.js";
 import subGroupRoute from "./routes/subGroup/subGroupRoute.js";
 import voucherRoute from "./routes/voucherSeries/voucherRoute.js";
+import voucherListRoute from "./routes/voucher/voucherRoute.js";
 import outstandingRoute from "./routes/outstanding/outstandingRoute.js";
 import tallyDataRoute from "./routes/tallyData/tallyDataRoutes.js";
 // ----------------- App Init -----------------
@@ -85,6 +86,7 @@ app.use("/api/product", productRoute);
 app.use("/api/account-group", accountGroupRoute);
 app.use("/api/subgroup", subGroupRoute);
 app.use("/api/sUsers", voucherRoute);
+app.use("/api/vouchers", voucherListRoute);
 app.use("/api/outstanding", outstandingRoute);
 app.use("/api/tally", tallyDataRoute);
 

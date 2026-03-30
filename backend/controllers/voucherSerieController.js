@@ -2,7 +2,7 @@
 
 // controllers/voucherSeriesController.js
 import VoucherSeries from "../Model/VoucherSeriesSchema.js";
-import { createSaleOrder } from "./saleOrderController.js";
+import { createSaleOrder, getSaleOrderById } from "./saleOrderController.js";
 
 export const getSeriesByVoucher = async (req, res) => {
   try {
@@ -231,4 +231,4 @@ export const getNextVoucherSeriesNumber = async (req, res) => {
   }
 };
 
-export { createSaleOrder };
+export { createSaleOrder, getSaleOrderById };

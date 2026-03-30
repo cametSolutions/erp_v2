@@ -19,6 +19,7 @@ export const ROUTES = {
   stockRegister: "/stock-register",
   CashBankBalancePage: "/cash-bank",
   createOrder: "/create-order",
+  saleOrderDetail: "/sale-orders/:saleOrderId",
   salesSelectItems: "/sales/create/select-items",
   createReceipt: "/create-receipt",
   mastersUserRegister: "/users/create",
