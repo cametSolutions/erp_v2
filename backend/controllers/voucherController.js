@@ -80,9 +80,17 @@ function resolveVoucherTypes(voucherType) {
     .filter(Boolean);
 }
 
+function parsePositiveInteger(value, fallback) {
+  const parsed = Number.parseInt(value, 10);
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return fallback;
+  }
+  return parsed;
+}
+
 export async function getVouchers(req, res) {
   try {
-    const { cmpId, from, to, voucherType } = req.query;
+    const { cmpId, from, to, voucherType, page, limit } = req.query;
 
     if (!cmpId) {
       return res.status(400).json({
@@ -93,6 +101,8 @@ export async function getVouchers(req, res) {
 
     const { fromDate, toDate } = resolveDateRange(from, to);
     const voucherTypes = resolveVoucherTypes(voucherType);
+    const currentPage = parsePositiveInteger(page, 1);
+    const pageSize = parsePositiveInteger(limit, 20);
 
     if (!voucherTypes.includes("saleOrder")) {
       return res.json({
@@ -100,31 +110,38 @@ export async function getVouchers(req, res) {
         data: {
           from: fromDate.toISOString(),
           to: toDate.toISOString(),
+          page: currentPage,
+          limit: pageSize,
+          hasMore: false,
           count: 0,
           vouchers: [],
         },
       });
     }
 
-    const saleOrders = await SaleOrder.find(
-      {
-        cmp_id: cmpId,
-        date: {
-          $gte: fromDate,
-          $lte: toDate,
-        },
+    const saleOrderFilter = {
+      cmp_id: cmpId,
+      date: {
+        $gte: fromDate,
+        $lte: toDate,
       },
-      {
-        _id: 1,
-        voucher_type: 1,
-        date: 1,
-        voucher_number: 1,
-        status: 1,
-        "party_snapshot.name": 1,
-        "totals.final_amount": 1,
-      }
-    )
+    };
+
+    const totalCount = await SaleOrder.countDocuments(saleOrderFilter);
+    const skip = (currentPage - 1) * pageSize;
+
+    const saleOrders = await SaleOrder.find(saleOrderFilter, {
+      _id: 1,
+      voucher_type: 1,
+      date: 1,
+      voucher_number: 1,
+      status: 1,
+      "party_snapshot.name": 1,
+      "totals.final_amount": 1,
+    })
       .sort({ date: -1, voucher_number: 1 })
+      .skip(skip)
+      .limit(pageSize)
       .lean();
 
     const vouchers = saleOrders.map((doc) => ({
@@ -142,7 +159,10 @@ export async function getVouchers(req, res) {
       data: {
         from: fromDate.toISOString(),
         to: toDate.toISOString(),
-        count: vouchers.length,
+        page: currentPage,
+        limit: pageSize,
+        hasMore: skip + vouchers.length < totalCount,
+        count: totalCount,
         vouchers,
       },
     });
