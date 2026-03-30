@@ -2,12 +2,14 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useInfiniteQuery } from "@tanstack/react-query";
 import { useSelector } from "react-redux";
 import { FileText, LoaderCircle } from "lucide-react";
+import { useNavigate } from "react-router-dom";
 
 import api from "@/api/client/apiClient";
 import ErrorRetryState from "@/components/common/ErrorRetryState";
 import TransactionFilterSheet from "@/components/filters/TransactionFilterSheet";
 import TransactionFilterSummaryCard from "@/components/filters/TransactionFilterSummaryCard";
 import { DEFAULT_DAYBOOK_VOUCHER_TYPES } from "@/components/filters/daybookFilterOptions";
+import { ROUTES } from "@/routes/paths";
 import {
   buildDateRangePresetOptions,
   formatDateDisplay,
@@ -70,6 +72,7 @@ function VoucherTypeBadge({ type }) {
 
 export default function DaybookPage() {
   const cmpId = useSelector((state) => state.company.selectedCompanyId);
+  const navigate = useNavigate();
   const initialPreset = useMemo(() => {
     const presets = buildDateRangePresetOptions(new Date());
     return presets.find((preset) => preset.id === "this-month") || presets[0];
@@ -218,6 +221,31 @@ export default function DaybookPage() {
             {vouchers.map((voucher) => (
               <li
                 key={voucher._id}
+                role="button"
+                tabIndex={0}
+                onClick={() =>
+                  navigate(
+                    ROUTES.transactionDetail
+                      .replace(":voucherType", voucher.voucher_type)
+                      .replace(":voucherId", voucher._id),
+                    {
+                      state: { transaction: voucher },
+                    },
+                  )
+                }
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" || event.key === " ") {
+                    event.preventDefault();
+                    navigate(
+                      ROUTES.transactionDetail
+                        .replace(":voucherType", voucher.voucher_type)
+                        .replace(":voucherId", voucher._id),
+                      {
+                        state: { transaction: voucher },
+                      },
+                    );
+                  }
+                }}
                 className="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm transition hover:border-slate-300 hover:shadow-md"
               >
                 <div className="flex items-start justify-between px-3 py-2.5">

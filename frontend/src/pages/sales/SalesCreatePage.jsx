@@ -41,9 +41,14 @@ export default function SalesCreatePage() {
     onSuccess: (data) => {
       const saleOrder = data?.data?.saleOrder;
       if (saleOrder?._id) {
-        navigate(ROUTES.saleOrderDetail.replace(":saleOrderId", saleOrder._id), {
-          state: { saleOrder },
-        });
+        navigate(
+          ROUTES.transactionDetail
+            .replace(":voucherType", "saleOrder")
+            .replace(":voucherId", saleOrder._id),
+          {
+            state: { transaction: saleOrder },
+          },
+        );
       }
     },
   });
