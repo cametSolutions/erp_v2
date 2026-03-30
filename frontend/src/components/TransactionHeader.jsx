@@ -9,6 +9,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { useVoucherSeries } from "@/hooks/queries/voucherSeriesQueries";
 import VoucherSeriesModal from "@/components/VoucherSeriesModal";
+import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 import {
   hydrateSelectedSeries,
   setTransactionDate,
@@ -54,7 +55,7 @@ const getVoucherParts = (series) => {
 
 // only for UI (PREFIX / NUMBER / SUFFIX)
 const formatVoucherForUi = ({ prefix, number, suffix }) =>
-  [prefix, number, suffix].filter(Boolean).join(" / ");
+  formatVoucherNumber(prefix, number, suffix);
 
 export default function TransactionHeader({
   cmp_id,
@@ -127,14 +128,17 @@ export default function TransactionHeader({
   useEffect(() => {
     if (!onHeaderReady || !effectiveSeries || !transactionDate) return;
 
+    const voucherPrefix = voucherParts.prefix || undefined;
+    const voucherSuffix = voucherParts.suffix || undefined;
+
     onHeaderReady(() => () => ({
       transactionDate,
       voucherType,
       series_id: effectiveSeries._id,
       usedSeriesNumber: effectiveSeries.currentNumber,
-      voucherPrefix: voucherParts.prefix,
+      voucherPrefix,
       voucherNumber: voucherParts.number,
-      voucherSuffix: voucherParts.suffix,
+      voucherSuffix,
       // if backend still expects combined number, keep this:
       [numberField]: voucherNumber,
     }));

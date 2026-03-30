@@ -112,6 +112,8 @@ const SaleOrderSchema = new Schema(
     series_name: { type: String, required: true },
     voucher_number: { type: String, required: true },       // "SOR / 01 / 2024-25"
     current_series_number: { type: Number, required: true },// for $inc after save
+    company_level_serial_number: { type: Number, required: true },
+    user_level_serial_number: { type: Number, required: true },
 
     // Date
     date: { type: Date, required: true },
@@ -169,6 +171,11 @@ SaleOrderSchema.index({ cmp_id: 1, "items.item_id": 1, date: -1 });
 
 // Voucher number lookup + duplicate prevention
 SaleOrderSchema.index({ cmp_id: 1, voucher_number: 1 }, { unique: true });
+SaleOrderSchema.index({ cmp_id: 1, company_level_serial_number: 1 }, { unique: true });
+SaleOrderSchema.index(
+  { cmp_id: 1, created_by: 1, user_level_serial_number: 1 },
+  { unique: true },
+);
 
 // Series-level number tracking (for generating next number safely)
 SaleOrderSchema.index({ cmp_id: 1, series_id: 1, current_series_number: -1 });

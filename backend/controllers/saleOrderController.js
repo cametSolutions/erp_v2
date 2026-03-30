@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 import SaleOrder from "../Model/SaleOrder.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
+import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 
 function firstDefined(...values) {
   return values.find((value) => value !== undefined);
@@ -82,7 +83,7 @@ function normalizeTaxType(body = {}) {
   return body.tax_type || body.taxType || "igst";
 }
 
-function buildSaleOrderPayload(body, nextVoucher, userId) {
+function buildSaleOrderPayload(body, nextVoucher, serialNumbers, userId) {
   const {
     cmpId,
     transactionDate,
@@ -104,6 +105,8 @@ function buildSaleOrderPayload(body, nextVoucher, userId) {
     series_name: selectedSeries?.seriesName || nextVoucher.series?.seriesName || null,
     voucher_number: nextVoucher.voucherNumber,
     current_series_number: nextVoucher.nextNumber,
+    company_level_serial_number: serialNumbers.companyLevelSerialNumber,
+    user_level_serial_number: serialNumbers.userLevelSerialNumber,
     date: new Date(transactionDate),
     party_id: party?._id,
     party_snapshot: {
@@ -204,6 +207,7 @@ export async function createSaleOrder(req, res) {
     const body = req.body || {};
     const cmpId = body.cmpId || body.cmp_id;
     const selectedSeries = normalizeSelectedSeries(body);
+    const userId = req.user?._id || req.user?.id || null;
 
     await session.withTransaction(async () => {
       const nextVoucher = await getNextVoucherNumber({
@@ -213,10 +217,18 @@ export async function createSaleOrder(req, res) {
         session,
       });
 
+      const serialNumbers = await getNextTransactionSerialNumbers({
+        cmpId,
+        transactionType: "saleOrder",
+        userId,
+        session,
+      });
+
       const saleOrderDoc = buildSaleOrderPayload(
         { ...body, cmpId },
         nextVoucher,
-        req.user?._id || req.user?.id || null
+        serialNumbers,
+        userId
       );
 
       const [created] = await SaleOrder.create([saleOrderDoc], { session });

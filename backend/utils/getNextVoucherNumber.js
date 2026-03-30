@@ -1,5 +1,30 @@
 import VoucherSeries from "../Model/VoucherSeriesSchema.js";
 
+function normalizeVoucherPart(value) {
+  if (value == null) return "";
+  return String(value).trim();
+}
+
+function formatVoucherNumber(prefix, number, suffix) {
+  const normalizedPrefix = normalizeVoucherPart(prefix);
+  const normalizedNumber = normalizeVoucherPart(number);
+  const normalizedSuffix = normalizeVoucherPart(suffix);
+
+  if (normalizedPrefix && normalizedNumber && normalizedSuffix) {
+    return `${normalizedPrefix} / ${normalizedNumber} / ${normalizedSuffix}`;
+  }
+
+  if (normalizedPrefix && normalizedNumber) {
+    return `${normalizedPrefix} / ${normalizedNumber}`;
+  }
+
+  if (normalizedNumber && normalizedSuffix) {
+    return `${normalizedNumber} / ${normalizedSuffix}`;
+  }
+
+  return normalizedNumber || normalizedPrefix || normalizedSuffix;
+}
+
 export async function getNextVoucherNumber({
   cmpId,
   voucherType,
@@ -43,7 +68,11 @@ export async function getNextVoucherNumber({
     updatedSeries.widthOfNumericalPart,
     "0"
   );
-  const voucherNumber = `${updatedSeries.prefix} / ${paddedNumber} / ${updatedSeries.suffix}`;
+  const voucherNumber = formatVoucherNumber(
+    updatedSeries.prefix,
+    paddedNumber,
+    updatedSeries.suffix
+  );
 
   return {
     series: updatedSeries,

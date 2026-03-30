@@ -1,12 +1,11 @@
 import { useEffect, useMemo } from "react";
 import { useSelector } from "react-redux";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import { ArrowRight, FileText, Printer, SquarePen, Truck, User2 } from "lucide-react";
 
-import api from "@/api/client/apiClient";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import { Button } from "@/components/ui/button";
+import { useSaleOrderDetailQuery } from "@/hooks/queries/saleOrderQueries";
 
 function formatDate(value) {
   if (!value) return "--";
@@ -64,19 +63,14 @@ export default function SaleOrderDetailPage() {
 
   const saleOrderFromState = location.state?.saleOrder || null;
 
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["sale-order-detail", saleOrderId, cmpId],
-    queryFn: async () => {
-      const response = await api.get(`/sUsers/saleOrders/${saleOrderId}`, {
-        params: cmpId ? { cmpId } : {},
-        skipGlobalLoader: true,
-      });
-
-      return response.data?.data?.saleOrder || null;
+  const { data, isLoading, isError, error } = useSaleOrderDetailQuery(
+    saleOrderId,
+    cmpId,
+    {
+      enabled: Boolean(saleOrderId),
+      initialData: saleOrderFromState,
     },
-    enabled: Boolean(saleOrderId),
-    initialData: saleOrderFromState,
-  });
+  );
 
   const saleOrder = data || saleOrderFromState;
 

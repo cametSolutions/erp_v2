@@ -7,6 +7,7 @@ import { useForm } from "react-hook-form";
 import { ROUTES } from "@/routes/paths";
 import api from "@/api/client/apiClient";
 import { voucherSeriesKeys } from "@/hooks/queries/voucherSeriesQueries";
+import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
 const middleSeparatorPattern = /^[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)*$/;
 
@@ -153,9 +154,11 @@ const CreateVoucherSeriesPage = () => {
       widthValue || 1,
       "0"
     );
-    return [formValues.prefix || "", num, formValues.suffix || ""]
-      .filter(Boolean)
-      .join(" / ");
+    return formatVoucherNumber(
+      formValues.prefix || "",
+      num,
+      formValues.suffix || "",
+    );
   };
 
   return (

@@ -1,5 +1,6 @@
 import { createSlice } from "@reduxjs/toolkit";
 import { calculateItemAmounts, calculateItemsWithTotals } from "@/utils/salesCalculation";
+import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
 function normalizeAdditionalCharge(row) {
   const baseValue = Number(row?.value) || 0;
@@ -36,9 +37,7 @@ function enrichSelectedSeries(series) {
     prefix,
     suffix,
     widthOfNumericalPart: Number(series?.widthOfNumericalPart) || 1,
-    voucherNumber: [prefix, voucherNumber, suffix]
-      .filter(Boolean)
-      .join(" / "),
+    voucherNumber: formatVoucherNumber(prefix, voucherNumber, suffix),
   };
 }
 
