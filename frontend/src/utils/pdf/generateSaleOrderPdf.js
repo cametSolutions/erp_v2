@@ -39,14 +39,39 @@ function getCompanyAddress(org = {}) {
 function normalizeConfigurations(configurations = {}) {
   return {
     printTitle: configurations?.printTitle || configurations?.print_title || "Sale Order",
+    showPrintTitle:
+      configurations?.showPrintTitle ??
+      configurations?.show_print_title ??
+      true,
     showCompanyDetails:
       configurations?.enable_company_details ??
+      true,
+    showDiscountColumn:
+      configurations?.enable_discount_column ??
+      true,
+    showHsn:
+      configurations?.enable_hsn ??
+      true,
+    showTaxPercentage:
+      configurations?.enable_tax_percentage ??
+      true,
+    showStockWiseTaxAmount:
+      configurations?.enable_stock_wise_tax_amount ??
       true,
     showTaxAmount:
       configurations?.enable_tax_amount ??
       true,
     showNetAmount:
       configurations?.enable_net_amount ??
+      true,
+    showRate:
+      configurations?.enable_rate ??
+      true,
+    showQuantity:
+      configurations?.enable_quantity ??
+      true,
+    showStockWiseAmount:
+      configurations?.enable_stock_wise_amount ??
       true,
     showBankDetails:
       configurations?.enable_bank_details ??
@@ -201,7 +226,7 @@ export async function generateSaleOrderPdf({
   const margin = 14;
   let currentY = 14;
 
-  if (resolvedConfigurations.printTitle) {
+  if (resolvedConfigurations.showPrintTitle && resolvedConfigurations.printTitle) {
     doc.setFont("helvetica", "bold");
     doc.setFontSize(16);
     doc.text(
@@ -227,6 +252,8 @@ export async function generateSaleOrderPdf({
       org?.pan ? `PAN: ${org.pan}` : null,
       org?.mobile ? `Mobile: ${org.mobile}` : null,
       org?.email ? `Email: ${org.email}` : null,
+      org?.pan ? `PAN: ${org.pan}` : null,
+      org?.gstNum ? `GST: ${org.gstNum}` : null,
     ].filter(Boolean);
 
     companyLines.forEach((line) => {
@@ -295,6 +322,155 @@ export async function generateSaleOrderPdf({
   });
   currentY += billBoxHeight + 8;
 
+  const itemColumns = [
+    {
+      key: "no",
+      header: "No",
+      value: (_, index) => index + 1,
+      style: { cellWidth: 7, halign: "center" },
+    },
+    {
+      key: "items",
+      header: "Items",
+      value: (item) => item?.item_name || "--",
+      style: { cellWidth: 34, halign: "left" },
+    },
+    resolvedConfigurations.showHsn
+      ? {
+          key: "hsn",
+          header: "HSN",
+          value: (item) => item?.hsn || "--",
+          style: { cellWidth: 14, halign: "center" },
+        }
+      : null,
+    resolvedConfigurations.showTaxPercentage
+      ? {
+          key: "tax_rate",
+          header: "Tax %",
+          value: (item) => formatCompactAmount(item?.tax_rate),
+          style: { cellWidth: 10, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showTaxPercentage
+      ? {
+          key: "cess_rate",
+          header: "Cess %",
+          value: (item) => formatCompactAmount(getItemCessRate(item)),
+          style: { cellWidth: 10, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showTaxPercentage
+      ? {
+          key: "addl_cess_rate",
+          header: "Addl Cess",
+          value: (item) => formatCompactAmount(getItemAddlCessRate(item)),
+          style: { cellWidth: 11, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showQuantity
+      ? {
+          key: "qty",
+          header: "Qty",
+          value: (item) =>
+            `${formatCompactAmount(item?.billed_qty)} ${item?.unit || ""}`.trim(),
+          style: { cellWidth: 11, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showRate
+      ? {
+          key: "rate",
+          header: "Rate",
+          value: (item) => formatCompactAmount(item?.rate),
+          style: { cellWidth: 13, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showDiscountColumn
+      ? {
+          key: "discount",
+          header: "Disc",
+          value: (item) => formatCompactAmount(item?.discount_amount),
+          style: { cellWidth: 11, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showStockWiseAmount
+      ? {
+          key: "amount",
+          header: "Amt",
+          value: (item) =>
+            formatCompactAmount(item?.taxable_amount ?? item?.base_price),
+          style: { cellWidth: 13, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showStockWiseTaxAmount
+      ? {
+          key: "tax_amount",
+          header: "Tax Amt",
+          value: (item) => formatCompactAmount(item?.tax_amount || 0),
+          style: { cellWidth: 12, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showStockWiseTaxAmount
+      ? {
+          key: "cess_amount",
+          header: "Cess Amt",
+          value: (item) => formatCompactAmount(getItemCessAmount(item)),
+          style: { cellWidth: 12, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showStockWiseTaxAmount
+      ? {
+          key: "addl_cess_amount",
+          header: "Addl Amt",
+          value: (item) => formatCompactAmount(getItemAddlCessAmount(item)),
+          style: { cellWidth: 12, halign: "right" },
+        }
+      : null,
+    resolvedConfigurations.showNetAmount
+      ? {
+          key: "net_amount",
+          header: "Net Amt",
+          value: (item) => formatCompactAmount(item?.total_amount),
+          style: { cellWidth: 12, halign: "right" },
+        }
+      : null,
+  ].filter(Boolean);
+
+  const availableTableWidth = pageWidth - margin * 2;
+  const totalBaseWidth = itemColumns.reduce(
+    (sum, column) => sum + (Number(column?.style?.cellWidth) || 0),
+    0
+  );
+  const widthScale = totalBaseWidth > 0 ? availableTableWidth / totalBaseWidth : 1;
+
+  const columnStyles = itemColumns.reduce((accumulator, column, index) => {
+    accumulator[index] = {
+      ...column.style,
+      cellWidth: (Number(column?.style?.cellWidth) || 0) * widthScale,
+    };
+    return accumulator;
+  }, {});
+
+  const footerRow = itemColumns.map((column) => {
+    switch (column.key) {
+      case "items":
+        return "Subtotal";
+      case "amount":
+        return formatCompactAmount(
+          saleOrder?.totals?.taxable_amount ?? saleOrder?.totals?.sub_total
+        );
+      case "tax_amount":
+        return formatCompactAmount(saleOrder?.totals?.total_tax_amount);
+      case "cess_amount":
+        return formatCompactAmount(saleOrder?.totals?.total_cess_amt);
+      case "addl_cess_amount":
+        return formatCompactAmount(saleOrder?.totals?.total_addl_cess_amt);
+      case "net_amount":
+        return formatCompactAmount(saleOrder?.totals?.final_amount);
+      default:
+        return "";
+    }
+  });
+
   autoTable(doc, {
     startY: currentY,
     theme: "grid",
@@ -314,74 +490,12 @@ export async function generateSaleOrderPdf({
     bodyStyles: {
       textColor: [51, 65, 85],
     },
-    columnStyles: {
-      0: { cellWidth: 7, halign: "center" },
-      1: { cellWidth: 34, halign: "left" },
-      2: { cellWidth: 14, halign: "center" },
-      3: { cellWidth: 10, halign: "right" },
-      4: { cellWidth: 10, halign: "right" },
-      5: { cellWidth: 11, halign: "right" },
-      6: { cellWidth: 11, halign: "right" },
-      7: { cellWidth: 13, halign: "right" },
-      8: { cellWidth: 11, halign: "right" },
-      9: { cellWidth: 13, halign: "right" },
-      10: { cellWidth: 12, halign: "right" },
-      11: { cellWidth: 12, halign: "right" },
-      12: { cellWidth: 12, halign: "right" },
-      13: { cellWidth: 12, halign: "right" },
-    },
-    head: [[
-      "No",
-      "Items",
-      "HSN",
-      "Tax %",
-      "Cess %",
-      "Addl Cess",
-      "Qty",
-      "Rate",
-      "Disc",
-      "Amt",
-      "Tax Amt",
-      "Cess Amt",
-      "Addl Amt",
-      "Net Amt",
-    ]],
-    body: (saleOrder?.items || []).map((item, index) => [
-      index + 1,
-      item?.item_name || "--",
-      item?.hsn || "--",
-      formatCompactAmount(item?.tax_rate),
-      formatCompactAmount(getItemCessRate(item)),
-      formatCompactAmount(getItemAddlCessRate(item)),
-      `${formatCompactAmount(item?.billed_qty)} ${item?.unit || ""}`.trim(),
-      formatCompactAmount(item?.rate),
-      formatCompactAmount(item?.discount_amount),
-      formatCompactAmount(item?.taxable_amount ?? item?.base_price),
-      formatCompactAmount(item?.tax_amount || 0),
-      formatCompactAmount(getItemCessAmount(item)),
-      formatCompactAmount(getItemAddlCessAmount(item)),
-      formatCompactAmount(item?.total_amount),
-    ]),
-    foot: [[
-      "",
-      "Subtotal",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      "",
-      formatCompactAmount(
-        saleOrder?.totals?.taxable_amount ?? saleOrder?.totals?.sub_total
-      ),
-      formatCompactAmount(saleOrder?.totals?.total_tax_amount),
-      formatCompactAmount(saleOrder?.totals?.total_cess_amt),
-      formatCompactAmount(saleOrder?.totals?.total_addl_cess_amt),
-      formatCompactAmount(
-        saleOrder?.totals?.final_amount
-      ),
-    ]],
+    columnStyles,
+    head: [itemColumns.map((column) => column.header)],
+    body: (saleOrder?.items || []).map((item, index) =>
+      itemColumns.map((column) => column.value(item, index))
+    ),
+    foot: [footerRow],
     footStyles: {
       fillColor: [241, 245, 249],
       textColor: [15, 23, 42],
@@ -396,10 +510,10 @@ export async function generateSaleOrderPdf({
   const summaryValueX = pageWidth - margin;
   const summaryRows = [
     ["Subtotal", formatAmount(saleOrder?.totals?.sub_total)],
-    ["Total Tax", formatAmount(saleOrder?.totals?.total_tax_amount)],
   ];
 
   if (resolvedConfigurations.showTaxAmount) {
+    summaryRows.push(["Total Tax", formatAmount(saleOrder?.totals?.total_tax_amount)]);
     if (Number(saleOrder?.totals?.total_cess_amt || 0) > 0) {
       summaryRows.push(["Cess", formatAmount(saleOrder?.totals?.total_cess_amt)]);
     }
@@ -431,17 +545,19 @@ export async function generateSaleOrderPdf({
   });
   currentY += summaryRows.length * 5 + 8;
 
-  currentY = ensureSpace(doc, currentY, 18);
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(9);
-  const amountInWords = `Net Amount (in words): ${amountToWords(
-    saleOrder?.totals?.final_amount
-  ).toUpperCase()}`;
-  const amountWordsWidth = 90;
-  const amountWordsX = pageWidth - margin;
-  const amountLines = doc.splitTextToSize(amountInWords, amountWordsWidth);
-  doc.text(amountLines, amountWordsX, currentY, { align: "right" });
-  currentY += amountLines.length * 4.5 + 4;
+  if (resolvedConfigurations.showNetAmount) {
+    currentY = ensureSpace(doc, currentY, 18);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(9);
+    const amountInWords = `Net Amount (in words): ${amountToWords(
+      saleOrder?.totals?.final_amount
+    ).toUpperCase()}`;
+    const amountWordsWidth = 90;
+    const amountWordsX = pageWidth - margin;
+    const amountLines = doc.splitTextToSize(amountInWords, amountWordsWidth);
+    doc.text(amountLines, amountWordsX, currentY, { align: "right" });
+    currentY += amountLines.length * 4.5 + 4;
+  }
 
   if (resolvedConfigurations.showBankDetails) {
     const bankInfo = bankDetails || org || {};

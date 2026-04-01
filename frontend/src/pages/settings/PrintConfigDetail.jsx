@@ -81,12 +81,12 @@ const SALE_ORDER_FIELDS = [
   //   description: "Add a tax analysis block below the item table.",
   //   icon: Sigma,
   // },
-  // {
-  //   key: "enable_stock_wise_tax_amount",
-  //   label: "Stock-wise Tax Amount",
-  //   description: "Show tax amounts item by item.",
-  //   icon: ListChecks,
-  // },
+  {
+    key: "enable_stock_wise_tax_amount",
+    label: "Stock-wise Tax Amount",
+    description: "Show tax amounts item by item.",
+    icon: ListChecks,
+  },
   {
     key: "enable_tax_amount",
     label: "Tax Amount",
