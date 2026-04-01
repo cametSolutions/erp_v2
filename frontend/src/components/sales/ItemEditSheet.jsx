@@ -278,31 +278,31 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
               <div className="flex justify-between gap-4 px-3 py-2.5">
                 <span>IGST ({formatPercent(item?.igst)})</span>
                 <span className="font-medium text-slate-900">
-                  {formatMoney(summary?.igst_amount)}
+                  {formatMoney(summary?.igstAmount ?? summary?.igst_amount)}
                 </span>
               </div>
               <div className="flex justify-between gap-4 px-3 py-2.5">
                 <span>CGST ({formatPercent(item?.cgst)})</span>
                 <span className="font-medium text-slate-900">
-                  {formatMoney(summary?.cgst_amount)}
+                  {formatMoney(summary?.cgstAmount ?? summary?.cgst_amount)}
                 </span>
               </div>
               <div className="flex justify-between gap-4 px-3 py-2.5">
                 <span>SGST ({formatPercent(item?.sgst)})</span>
                 <span className="font-medium text-slate-900">
-                  {formatMoney(summary?.sgst_amount)}
+                  {formatMoney(summary?.sgstAmount ?? summary?.sgst_amount)}
                 </span>
               </div>
               <div className="flex justify-between gap-4 px-3 py-2.5">
                 <span>Cess ({formatPercent(item?.cess)})</span>
                 <span className="font-medium text-slate-900">
-                  {formatMoney(summary?.cess_amount)}
+                  {formatMoney(summary?.cessAmount ?? summary?.cess_amount)}
                 </span>
               </div>
               <div className="flex justify-between gap-4 px-3 py-2.5">
                 <span>Additional Cess ({formatMoney(item?.addl_cess)} / unit)</span>
                 <span className="font-medium text-slate-900">
-                  {formatMoney(summary?.addl_cess_amount)}
+                  {formatMoney(summary?.addlCessAmount ?? summary?.addl_cess_amount)}
                 </span>
               </div>
               <div className="flex justify-between gap-4 px-3 py-2.5">

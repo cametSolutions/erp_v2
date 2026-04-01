@@ -2,6 +2,7 @@ import { ArrowRight, FileText, Printer, SquarePen, Truck, User2 } from "lucide-r
 import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
+import { generateSaleOrderPdf } from "@/utils/pdf/generateSaleOrderPdf";
 
 function formatDate(value) {
   if (!value) return "--";
@@ -50,7 +51,12 @@ function SectionCard({ title, icon: Icon, children }) {
   );
 }
 
-export default function SaleOrderDetailView({ saleOrder }) {
+export default function SaleOrderDetailView({
+  saleOrder,
+  org,
+  configurations,
+  bankDetails,
+}) {
   const navigate = useNavigate();
   const totals = saleOrder?.totals || {};
   const items = saleOrder?.items || [];
@@ -68,6 +74,17 @@ export default function SaleOrderDetailView({ saleOrder }) {
     saleOrder?.party_snapshot?.mobile,
     saleOrder?.party_snapshot?.gst_no,
   ].filter(Boolean);
+
+  const handlePrint = () => {
+    if (!saleOrder || !org || !configurations) return;
+
+    generateSaleOrderPdf({
+      saleOrder,
+      org,
+      configurations,
+      bankDetails,
+    });
+  };
 
   return (
     <div className="mx-auto flex w-full  flex-col gap-3 py-4 px-1">
@@ -107,7 +124,7 @@ export default function SaleOrderDetailView({ saleOrder }) {
             type="button"
             size="sm"
             className="bg-white text-slate-900 hover:bg-slate-100"
-            onClick={() => window.print()}
+            onClick={handlePrint}
           >
             <Printer className="h-3.5 w-3.5" />
             Print

@@ -35,39 +35,42 @@ export function buildCreateSaleOrderPayload({
         }
       : null,
     items: items.map((item) => ({
-      _id: item?.id,
-      product_name: item?.name,
-      hsn_code: item?.hsn || "",
+      id: item?.id ?? item?._id,
+      name: item?.name ?? item?.product_name ?? "",
+      hsn: item?.hsn ?? item?.hsn_code ?? "",
       unit: item?.unit || "",
       rate: Number(item?.rate) || 0,
-      billedQty: Number(item?.billedQty) || 0,
-      actualQty: Number(item?.actualQty) || 0,
-      taxRate: Number(item?.taxRate) || 0,
+      billedQty: Number(item?.billedQty ?? item?.billed_qty) || 0,
+      actualQty: Number(item?.actualQty ?? item?.actual_qty) || 0,
+      taxRate: Number(item?.taxRate ?? item?.tax_rate) || 0,
       cgst: Number(item?.cgst) || 0,
       sgst: Number(item?.sgst) || 0,
       igst: Number(item?.igst) || 0,
-      cess: Number(item?.cess) || 0,
-      addl_cess: Number(item?.addl_cess ?? item?.addlCess) || 0,
-      tax_type: item?.taxType || "igst",
-      basePrice: Number(item?.basePrice) || 0,
+      cessRate: Number(item?.cessRate ?? item?.cess_rate ?? item?.cess) || 0,
+      addlCessRate:
+        Number(
+          item?.addlCessRate ??
+            item?.addl_cess_rate ??
+            item?.addl_cess ??
+            item?.addlCess
+        ) || 0,
+      taxType: item?.taxType || "igst",
+      basePrice: Number(item?.basePrice ?? item?.base_price) || 0,
       discountType: item?.discountType || "percentage",
-      discountPercentage: Number(item?.discountPercentage) || 0,
-      discountAmount: Number(item?.discountAmount) || 0,
-      taxableAmount: Number(item?.taxableAmount) || 0,
-      taxable_amount:
-        Number(item?.taxable_amount ?? item?.taxableAmount) || 0,
-      igst_amount: Number(item?.igst_amount) || 0,
-      cgst_amount: Number(item?.cgst_amount) || 0,
-      sgst_amount: Number(item?.sgst_amount) || 0,
-      taxAmount: Number(item?.taxAmount) || 0,
-      tax_amount: Number(item?.tax_amount ?? item?.taxAmount) || 0,
-      cess_amount: Number(item?.cess_amount) || 0,
-      addl_cess_amount: Number(item?.addl_cess_amount) || 0,
-      total: Number(item?.totalAmount) || 0,
-      totalAmount: Number(item?.totalAmount) || 0,
-      total_amount: Number(item?.total_amount ?? item?.totalAmount) || 0,
-      taxInclusive: Boolean(item?.taxInclusive),
-      isTaxInclusive: Boolean(item?.taxInclusive),
+      discountPercentage:
+        Number(item?.discountPercentage ?? item?.discount_percentage) || 0,
+      discountAmount:
+        Number(item?.discountAmount ?? item?.discount_amount) || 0,
+      taxableAmount: Number(item?.taxableAmount ?? item?.taxable_amount) || 0,
+      igstAmount: Number(item?.igstAmount ?? item?.igst_amount) || 0,
+      cgstAmount: Number(item?.cgstAmount ?? item?.cgst_amount) || 0,
+      sgstAmount: Number(item?.sgstAmount ?? item?.sgst_amount) || 0,
+      taxAmount: Number(item?.taxAmount ?? item?.tax_amount) || 0,
+      cessAmount: Number(item?.cessAmount ?? item?.cess_amount) || 0,
+      addlCessAmount:
+        Number(item?.addlCessAmount ?? item?.addl_cess_amount) || 0,
+      totalAmount: Number(item?.totalAmount ?? item?.total_amount) || 0,
+      taxInclusive: Boolean(item?.taxInclusive ?? item?.tax_inclusive),
       description: item?.description || "",
     })),
     despatchDetails,
@@ -92,9 +95,6 @@ export function buildCreateSaleOrderPayload({
 }
 
 export async function createSaleOrder(payload) {
-
-  console.log(payload);
-  
   const response = await api.post("/sUsers/createSaleOrder", payload, {
     headers: { "Content-Type": "application/json" },
     withCredentials: true,

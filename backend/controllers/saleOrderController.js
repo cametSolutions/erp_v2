@@ -130,6 +130,25 @@ function buildSaleOrderPayload(body, nextVoucher, serialNumbers, userId) {
       billed_qty: Number(firstDefined(row?.billedQty, row?.billed_qty)) || 0,
       rate: Number(row?.rate) || 0,
       tax_rate: Number(firstDefined(row?.taxRate, row?.tax_rate)) || 0,
+      cess_rate:
+        Number(
+          firstDefined(
+            row?.cessRate,
+            row?.cess_rate,
+            row?.cess,
+            row?.cess_percentage
+          )
+        ) || 0,
+      addl_cess_rate:
+        Number(
+          firstDefined(
+            row?.addlCessRate,
+            row?.addl_cess_rate,
+            row?.addl_cess,
+            row?.addlCess,
+            row?.addl_cess_percentage
+          )
+        ) || 0,
       tax_inclusive: Boolean(firstDefined(row?.taxInclusive, row?.tax_inclusive)),
       discount_type: row?.discountType || row?.discount_type || "amount",
       discount_percentage:

@@ -79,27 +79,23 @@ export function calculateItemAmounts(item, taxType = "igst") {
     ...item,
     taxType,
     billedQty,
-    billed_qty: billedQty,
     rate,
+    taxRate: roundMoney(applicableGstRate),
+    cessRate: roundMoney(cessRate),
+    addlCessRate: roundMoney(addlCessRate),
     taxInclusive,
-    tax_inclusive: taxInclusive,
     discountType,
     discountPercentage,
-    discount_percentage: discountPercentage,
     discountAmount: roundMoney(discountAmount),
-    discount_amount: roundMoney(discountAmount),
     basePrice: roundMoney(basePrice),
     taxableAmount: roundMoney(taxableAmount),
-    taxable_amount: roundMoney(taxableAmount),
-    igst_amount: roundMoney(igstAmount),
-    cgst_amount: roundMoney(cgstAmount),
-    sgst_amount: roundMoney(sgstAmount),
+    igstAmount: roundMoney(igstAmount),
+    cgstAmount: roundMoney(cgstAmount),
+    sgstAmount: roundMoney(sgstAmount),
     taxAmount: roundMoney(taxAmount),
-    tax_amount: roundMoney(taxAmount),
-    cess_amount: roundMoney(cessAmount),
-    addl_cess_amount: roundMoney(addlCessAmount),
+    cessAmount: roundMoney(cessAmount),
+    addlCessAmount: roundMoney(addlCessAmount),
     totalAmount: roundMoney(totalAmount),
-    total_amount: roundMoney(totalAmount),
   };
 }
 
@@ -110,12 +106,24 @@ export function calculateItemsWithTotals(items = [], taxType = "igst") {
     (accumulator, item) => {
       accumulator.sub_total += toNumber(item?.basePrice);
       accumulator.total_discount += toNumber(item?.discountAmount);
-      accumulator.taxable_amount += toNumber(item?.taxableAmount);
-      accumulator.total_igst_amt += toNumber(item?.igst_amount);
-      accumulator.total_cgst_amt += toNumber(item?.cgst_amount);
-      accumulator.total_sgst_amt += toNumber(item?.sgst_amount);
-      accumulator.total_cess_amt += toNumber(item?.cess_amount);
-      accumulator.total_addl_cess_amt += toNumber(item?.addl_cess_amount);
+      accumulator.taxable_amount += toNumber(
+        item?.taxableAmount ?? item?.taxable_amount,
+      );
+      accumulator.total_igst_amt += toNumber(
+        item?.igstAmount ?? item?.igst_amount,
+      );
+      accumulator.total_cgst_amt += toNumber(
+        item?.cgstAmount ?? item?.cgst_amount,
+      );
+      accumulator.total_sgst_amt += toNumber(
+        item?.sgstAmount ?? item?.sgst_amount,
+      );
+      accumulator.total_cess_amt += toNumber(
+        item?.cessAmount ?? item?.cess_amount,
+      );
+      accumulator.total_addl_cess_amt += toNumber(
+        item?.addlCessAmount ?? item?.addl_cess_amount,
+      );
       accumulator.item_total += toNumber(item?.totalAmount);
       return accumulator;
     },

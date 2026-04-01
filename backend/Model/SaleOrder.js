@@ -17,6 +17,8 @@ const ItemSchema = new Schema(
 
     rate: { type: Number, required: true },
     tax_rate: { type: Number, default: 0 },
+    cess_rate: { type: Number, default: 0 },
+    addl_cess_rate: { type: Number, default: 0 },
     tax_inclusive: { type: Boolean, default: false },
 
     discount_type: { type: String, enum: ["amount", "percentage"], default: "amount" },
@@ -29,6 +31,8 @@ const ItemSchema = new Schema(
     cgst_amount: { type: Number, default: 0 },
     sgst_amount: { type: Number, default: 0 },
     tax_amount: { type: Number, default: 0 },
+    cess_amount: { type: Number, default: 0 },
+    addl_cess_amount: { type: Number, default: 0 },
     total_amount: { type: Number, required: true },
 
     price_level_id: { type: Schema.Types.ObjectId, ref: "PriceLevel", default: null },
@@ -37,7 +41,7 @@ const ItemSchema = new Schema(
     description: { type: String, default: null },
     warranty_card_id: { type: Schema.Types.ObjectId, default: null },
   },
-  { _id: true } // row-level identity
+  { _id: true, strict: true } // row-level identity
 );
 
 const AdditionalChargeSchema = new Schema(
@@ -50,7 +54,7 @@ const AdditionalChargeSchema = new Schema(
     hsn: { type: String, default: null },
     final_value: { type: Number, required: true },
   },
-  { _id: true }
+  { _id: true, strict: true }
 );
 
 const DespatchSchema = new Schema(
@@ -64,7 +68,7 @@ const DespatchSchema = new Schema(
     terms_of_pay: { type: String, default: null },
     terms_of_delivery: { type: String, default: null },
   },
-  { _id: false }
+  { _id: false, strict: true }
 );
 
 const PartySnapshotSchema = new Schema(
@@ -76,7 +80,7 @@ const PartySnapshotSchema = new Schema(
     mobile: { type: String, default: null },
     state: { type: String, default: null },
   },
-  { _id: false }
+  { _id: false, strict: true }
 );
 
 const TotalsSchema = new Schema(
@@ -96,7 +100,7 @@ const TotalsSchema = new Schema(
     round_off: { type: Number, default: 0 },
     final_amount: { type: Number, required: true },
   },
-  { _id: false }
+  { _id: false, strict: true }
 );
 
 // ─── Main Schema ──────────────────────────────────────────────
@@ -152,6 +156,7 @@ const SaleOrderSchema = new Schema(
   },
   {
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
+    strict: true,
   }
 );
 

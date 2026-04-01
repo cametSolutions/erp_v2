@@ -6,6 +6,7 @@ import ErrorRetryState from "@/components/common/ErrorRetryState";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import SaleOrderDetailView from "@/components/transactions/details/SaleOrderDetailView";
 import TransactionTypePlaceholder from "@/components/transactions/details/TransactionTypePlaceholder";
+import { usePrintConfigQuery } from "@/hooks/queries/printConfigQueries";
 import { useSaleOrderDetailQuery } from "@/hooks/queries/saleOrderQueries";
 
 const ORDER_VOUCHER_TYPES = new Set([
@@ -23,6 +24,7 @@ export default function TransactionDetailPage({
   const params = useParams();
   const location = useLocation();
   const cmpId = useSelector((state) => state.company.selectedCompanyId);
+  const selectedCompany = useSelector((state) => state.company.selectedCompany);
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
 
   const fallbackTransaction =
@@ -44,6 +46,10 @@ export default function TransactionDetailPage({
     enabled: voucherType === "saleOrder" && Boolean(voucherId),
     initialData: voucherType === "saleOrder" ? fallbackTransaction : undefined,
   });
+  const saleOrderPrintConfigQuery = usePrintConfigQuery(
+    voucherType === "saleOrder" ? cmpId : null,
+    "sale_order"
+  );
 
   if (voucherType === "saleOrder") {
     const saleOrder = saleOrderQuery.data || fallbackTransaction;
@@ -78,7 +84,14 @@ export default function TransactionDetailPage({
       );
     }
 
-    return <SaleOrderDetailView saleOrder={saleOrder} />;
+    return (
+      <SaleOrderDetailView
+        saleOrder={saleOrder}
+        org={selectedCompany}
+        configurations={saleOrderPrintConfigQuery.data?.config || null}
+        bankDetails={selectedCompany?.bankDetails || null}
+      />
+    );
   }
 
   if (ORDER_VOUCHER_TYPES.has(voucherType)) {
