@@ -38,6 +38,15 @@ const OutstandingPartyDetailPage = lazy(
 const DataEntrySettingsPage = lazy(
   () => import("@/pages/settings/DataEntrySettings"),
 );
+const DataEntryVoucherSettingsPage = lazy(
+  () => import("@/pages/settings/DataEntryVoucherSettings"),
+);
+const DataEntryOrderSettingsPage = lazy(
+  () => import("@/pages/settings/DataEntryOrderSettings"),
+);
+const DataEntryReceiptSettingsPage = lazy(
+  () => import("@/pages/settings/DataEntryReceiptSettings"),
+);
 const VoucherSettingsPage = lazy(
   () => import("@/pages/settings/VoucherSettings"),
 );
@@ -95,6 +104,18 @@ export const appRoutes = (
     <Route
       path={ROUTES.settingsDataEntry}
       element={<DataEntrySettingsPage />}
+    />
+    <Route
+      path={ROUTES.settingsDataEntryVoucher}
+      element={<DataEntryVoucherSettingsPage />}
+    />
+    <Route
+      path={ROUTES.settingsDataEntryOrder}
+      element={<DataEntryOrderSettingsPage />}
+    />
+    <Route
+      path={ROUTES.settingsDataEntryReceipt}
+      element={<DataEntryReceiptSettingsPage />}
     />
     <Route path={ROUTES.settingsVoucher} element={<VoucherSettingsPage />} />
     <Route

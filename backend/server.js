@@ -25,6 +25,7 @@ import outstandingRoute from "./routes/outstanding/outstandingRoute.js";
 import tallyDataRoute from "./routes/tallyData/tallyDataRoutes.js";
 import { protect } from "./middleware/authMiddleware.js";
 import printConfigRoutes from "./routes/printConfig/printConfigRoutes.js";
+import companySettingsRoutes from "./routes/companySettings/companySettingsRoutes.js";
 // ----------------- App Init -----------------
 dotenv.config();
 const app = express();
@@ -92,6 +93,7 @@ app.use("/api/vouchers", voucherListRoute);
 app.use("/api/outstanding", outstandingRoute);
 app.use("/api/tally", tallyDataRoute);
 app.use("/api/print-config", protect, printConfigRoutes);
+app.use("/api/company-settings", companySettingsRoutes);
 
 // ----------------- Production Build Serving -----------------
 if (process.env.NODE_ENV === "production") {

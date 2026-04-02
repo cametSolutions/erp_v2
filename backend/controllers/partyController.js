@@ -6,9 +6,14 @@ import Outstanding from "../Model/oustandingShcema.js";
 
 const PARTY_LIST_PROJECTION = {
   partyName: 1,
+  partyType: 1,
   mobileNumber: 1,
   emailID: 1,
   gstNo: 1,
+  bank_name: 1,
+  ac_no: 1,
+  ifsc: 1,
+  openingBalanceAmount: 1,
 };
 
 const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
@@ -171,6 +176,7 @@ export const listParties = async (req, res) => {
       page = 1,
       limit = 20,
       search = "",
+      partyType = "",
       ledgerType = "all", // all | receivable | payable
     } = req.query;
 
@@ -190,6 +196,10 @@ export const listParties = async (req, res) => {
       Primary_user_id: owner,
       cmp_id: cmpObjectId,
     };
+
+    if (partyType) {
+      filter.partyType = partyType;
+    }
 
     const trimmedSearch = String(search || "").trim();
     if (trimmedSearch) {
@@ -215,6 +225,10 @@ export const listParties = async (req, res) => {
         .lean(),
       Party.countDocuments(filter),
     ]);
+
+    console.log(parties);
+    console.log(filter);
+    
 
     const hasMore = skip + parties.length < total;
 

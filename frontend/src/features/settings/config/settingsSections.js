@@ -3,6 +3,7 @@ import { FiFileText } from "react-icons/fi";
 import { SiSteelseries } from "react-icons/si";
 import { TbFileInvoice } from "react-icons/tb";
 import { LuPrinter } from "react-icons/lu";
+import { ScrollText, ReceiptText } from "lucide-react";
 
 import { ROUTES } from "@/routes/paths";
 
@@ -33,13 +34,35 @@ export const settingsRootItems = [
 
 export const dataEntrySettingsItems = [
   {
-    id: "data-entry-vouchers",
-    title: "Vouchers",
-    description: "Configure fields you would like to show in your voucher entry",
+    id: "data-entry-voucher-settings",
+    title: "Voucher",
+    description: "Select the default bank account used while entering vouchers",
     icon: FiFileText,
     action: {
       type: "route",
-      to: ROUTES.settingsVoucher,
+      to: ROUTES.settingsDataEntryVoucher,
+    },
+    active: true,
+  },
+  {
+    id: "data-entry-order-settings",
+    title: "Order",
+    description: "Manage terms and conditions for order entry",
+    icon: ScrollText,
+    action: {
+      type: "route",
+      to: ROUTES.settingsDataEntryOrder,
+    },
+    active: true,
+  },
+  {
+    id: "data-entry-receipt-settings",
+    title: "Receipt",
+    description: "Configure receipt-related data entry settings",
+    icon: ReceiptText,
+    action: {
+      type: "route",
+      to: ROUTES.settingsDataEntryReceipt,
     },
     active: true,
   },

@@ -1,7 +1,7 @@
 import SettingsList from "@/features/settings/components/SettingsList";
 import { dataEntrySettingsItems } from "@/features/settings/config/settingsSections";
 
-const DateEntrySettings = () => {
+const DataEntrySettings = () => {
   return (
     <div className="bg-white">
       <SettingsList items={dataEntrySettingsItems} />
@@ -9,4 +9,4 @@ const DateEntrySettings = () => {
   );
 };
 
-export default DateEntrySettings;
+export default DataEntrySettings;
