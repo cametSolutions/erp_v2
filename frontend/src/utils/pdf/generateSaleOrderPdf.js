@@ -1,6 +1,16 @@
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 
+const PDF_THEME = {
+  pageMargin: 14,
+  sectionGap: 8,
+  dividerColor: [226, 232, 240],
+  subtleTextColor: [71, 85, 105],
+  bodyTextColor: [31, 41, 55],
+  headingTextColor: [15, 23, 42],
+  headerFillColor: [245, 247, 250],
+};
+
 function formatDate(value) {
   if (!value) return "--";
   const parsed = new Date(value);
@@ -27,9 +37,7 @@ async function loadImageAsDataUrl(url) {
 
   try {
     const response = await fetch(url);
-    if (!response.ok) {
-      return null;
-    }
+    if (!response.ok) return null;
 
     const blob = await response.blob();
 
@@ -144,7 +152,9 @@ function integerToWords(num) {
     if (value === 0) return "";
     if (value < 20) return ones[value];
     if (value < 100) {
-      return `${tens[Math.floor(value / 10)]}${value % 10 ? ` ${ones[value % 10]}` : ""}`;
+      return `${tens[Math.floor(value / 10)]}${
+        value % 10 ? ` ${ones[value % 10]}` : ""
+      }`;
     }
 
     return `${ones[Math.floor(value / 100)]} Hundred${
@@ -190,27 +200,23 @@ function ensureSpace(doc, currentY, requiredHeight) {
   return 18;
 }
 
-function drawLabelValue(doc, label, value, x, y, width) {
-  doc.setFont("helvetica", "bold");
-  doc.text(`${label}:`, x, y);
-  doc.setFont("helvetica", "normal");
-  doc.text(String(value || "--"), x + width, y);
+function setTextStyle(
+  doc,
+  { font = "helvetica", weight = "normal", size = 9, color = PDF_THEME.bodyTextColor }
+) {
+  doc.setFont(font, weight);
+  doc.setFontSize(size);
+  doc.setTextColor(...color);
 }
 
-function drawRightAlignedLabelValue(doc, label, value, x, y, width) {
-  doc.setFont("helvetica", "bold");
-  doc.text(`${label}:`, x, y, { align: "right" });
-  doc.setFont("helvetica", "normal");
-  doc.text(String(value || "--"), x + width, y, { align: "right" });
+function drawDivider(doc, y, pageWidth, margin) {
+  doc.setDrawColor(...PDF_THEME.dividerColor);
+  doc.setLineWidth(0.2);
+  doc.line(margin, y, pageWidth - margin, y);
 }
 
 function getItemCessRate(item = {}) {
-  return Number(
-    item?.cess ??
-      item?.cess_rate ??
-      item?.cess_percentage ??
-      0
-  );
+  return Number(item?.cess ?? item?.cess_rate ?? item?.cess_percentage ?? 0);
 }
 
 function getItemAddlCessRate(item = {}) {
@@ -231,97 +237,143 @@ function getItemAddlCessAmount(item = {}) {
   return Number(item?.addl_cess_amount ?? item?.addlCessAmount ?? 0);
 }
 
-export async function generateSaleOrderPdf({
-  saleOrder,
+function getTerms(configurations, companySettings, org) {
+  return Array.isArray(org?.termsAndConditions)
+    ? org.termsAndConditions
+    : Array.isArray(companySettings?.dataEntry?.order?.termsAndConditions)
+      ? companySettings.dataEntry.order.termsAndConditions
+      : Array.isArray(configurations?.termsAndConditions)
+        ? configurations.termsAndConditions
+        : typeof configurations?.termsAndConditions === "string"
+          ? configurations.termsAndConditions
+              .split("\n")
+              .map((term) => term.trim())
+              .filter(Boolean)
+          : [];
+}
+
+function getFooterBankLines(bankDetails, org) {
+  const bankInfo = bankDetails || org || {};
+
+  return [
+    bankInfo?.partyName && bankInfo?.bank_name
+      ? `Bank Name: ${bankInfo.partyName} (${bankInfo.bank_name})`
+      : bankInfo?.bank_name
+        ? `Bank Name: ${bankInfo.bank_name}`
+        : bankInfo?.bankName
+          ? `Bank Name: ${bankInfo.bankName}`
+          : null,
+    bankInfo?.ifsc ? `IFSC Code: ${bankInfo.ifsc}` : null,
+    bankInfo?.ac_no
+      ? `Account Number: ${bankInfo.ac_no}`
+      : bankInfo?.accountNumber
+        ? `Account Number: ${bankInfo.accountNumber}`
+        : bankInfo?.account
+          ? `Account Number: ${bankInfo.account}`
+          : null,
+    bankInfo?.branch ? `Branch: ${bankInfo.branch}` : null,
+  ].filter(Boolean);
+}
+
+function renderHeader({
+  doc,
+  currentY,
+  pageWidth,
+  margin,
   org,
-  configurations,
-  bankDetails,
-  companySettings,
-  partyConfig,
+  saleOrder,
+  title,
+  companyLogo,
 }) {
-  const doc = new jsPDF({
-    orientation: "portrait",
-    unit: "mm",
-    format: "a4",
-  });
-  const resolvedConfigurations = normalizeConfigurations(configurations);
-  const pageWidth = doc.internal.pageSize.getWidth();
-  const pageHeight = doc.internal.pageSize.getHeight();
-  const margin = 14;
-  let currentY = 14;
-  const companyLogo = await loadImageAsDataUrl(org?.logo);
+  const rightColumnWidth = 54;
+  const leftColumnWidth = pageWidth - margin * 2 - rightColumnWidth - 10;
+  const logoSize = companyLogo ? 18 : 0;
+  const companyContentX = companyLogo ? margin + logoSize + 4 : margin;
+  const companyContentWidth = companyLogo
+    ? leftColumnWidth - logoSize - 4
+    : leftColumnWidth;
+  const companyLines = [
+    getCompanyAddress(org),
+    org?.gstNum ? `GST: ${org.gstNum}` : null,
+    org?.pan ? `PAN: ${org.pan}` : null,
+    org?.mobile ? `Mobile: ${org.mobile}` : null,
+    org?.email ? `Email: ${org.email}` : null,
+  ].filter(Boolean);
 
-  if (resolvedConfigurations.showPrintTitle && resolvedConfigurations.printTitle) {
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(16);
-    doc.text(
-      resolvedConfigurations.printTitle || "Sale Order",
-      pageWidth / 2,
-      currentY,
-      { align: "center" }
-    );
-    currentY += 8;
-  }
+  const startY = currentY;
+  let leftY = currentY;
 
-  if (resolvedConfigurations.showCompanyDetails) {
-    const companyLines = [
-      getCompanyAddress(org),
-      org?.gstNum ? `GST: ${org.gstNum}` : null,
-      org?.pan ? `PAN: ${org.pan}` : null,
-      org?.mobile ? `Mobile: ${org.mobile}` : null,
-      org?.email ? `Email: ${org.email}` : null,
-    ].filter(Boolean);
-    const logoSize = companyLogo ? 20 : 0;
-    const contentX = companyLogo ? margin + logoSize + 4 : margin;
-    const contentWidth = companyLogo ? 110 - logoSize - 4 : 110;
-    const companyStartY = currentY;
-    let companyTextY = currentY;
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(12);
-    doc.text(org?.name || "Company", contentX, companyTextY + 4);
-    companyTextY += 9;
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-    companyLines.forEach((line) => {
-      const wrappedLines = doc.splitTextToSize(line, contentWidth);
-      doc.text(wrappedLines, contentX, companyTextY);
-      companyTextY += wrappedLines.length * 4.2;
-    });
-
-    if (companyLogo) {
+  if (companyLogo) {
+    try {
+      doc.addImage(companyLogo, "PNG", margin, startY, logoSize, logoSize);
+    } catch {
       try {
-        doc.addImage(companyLogo, "PNG", margin, companyStartY, logoSize, logoSize);
+        doc.addImage(companyLogo, "JPEG", margin, startY, logoSize, logoSize);
       } catch {
-        try {
-          doc.addImage(companyLogo, "JPEG", margin, companyStartY, logoSize, logoSize);
-        } catch {
-          // Ignore logo rendering failures and continue with text layout.
-        }
+        // ignore
       }
     }
-
-    currentY = Math.max(companyTextY, companyStartY + logoSize) + 2;
   }
 
-  doc.setFillColor(241, 245, 249);
-  doc.roundedRect(margin, currentY, pageWidth - margin * 2, 10, 1.5, 1.5, "F");
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text(
-    `No: ${saleOrder?.voucher_number || "--"}`,
-    margin + 3,
-    currentY + 6.5
-  );
-  doc.text(
-    `Date: ${formatDate(saleOrder?.date)}`,
-    pageWidth - margin - 3,
-    currentY + 6.5,
-    { align: "right" }
-  );
-  currentY += 16;
+  setTextStyle(doc, {
+    weight: "bold",
+    size: 13,
+    color: PDF_THEME.headingTextColor,
+  });
+  doc.text(org?.name || "Company", companyContentX, leftY + 4);
+  leftY += 9;
 
+  setTextStyle(doc, {
+    size: 9.5,
+    color: PDF_THEME.subtleTextColor,
+  });
+  companyLines.forEach((line) => {
+    const wrapped = doc.splitTextToSize(line, companyContentWidth);
+    doc.text(wrapped, companyContentX, leftY);
+    leftY += wrapped.length * 4.5;
+  });
+
+  const rightX = pageWidth - margin;
+  setTextStyle(doc, {
+    weight: "bold",
+    size: 16,
+    color: PDF_THEME.headingTextColor,
+  });
+  doc.text(title || "Sale Order", rightX, startY + 5, { align: "right" });
+
+  setTextStyle(doc, {
+    weight: "bold",
+    size: 10,
+    color: PDF_THEME.headingTextColor,
+  });
+  doc.text(`Order No: ${saleOrder?.voucher_number || "--"}`, rightX, startY + 13, {
+    align: "right",
+  });
+
+  setTextStyle(doc, {
+    size: 9.5,
+    color: PDF_THEME.subtleTextColor,
+  });
+  doc.text(`Date: ${formatDate(saleOrder?.date)}`, rightX, startY + 19, {
+    align: "right",
+  });
+
+  const nextY = Math.max(leftY, startY + Math.max(logoSize, 22));
+  drawDivider(doc, nextY + 2, pageWidth, margin);
+
+  return nextY + PDF_THEME.sectionGap;
+}
+
+function renderPartySection({
+  doc,
+  currentY,
+  pageWidth,
+  margin,
+  saleOrder,
+  partyConfig,
+}) {
+  const columnGap = 8;
+  const boxWidth = (pageWidth - margin * 2 - columnGap) / 2;
   const billToLines = [
     saleOrder?.party_snapshot?.name,
     saleOrder?.party_snapshot?.billing_address,
@@ -341,28 +393,37 @@ export async function generateSaleOrderPdf({
       : null,
     partyConfig?.shippingNote || null,
   ].filter(Boolean);
+  const lineHeight = 4.5;
+  const boxHeight = Math.max(billToLines.length, shipToLines.length) * lineHeight + 10;
 
-  const billBoxHeight = Math.max(billToLines.length, shipToLines.length) * 4.5 + 10;
-  doc.setDrawColor(226, 232, 240);
-  doc.roundedRect(margin, currentY, 88, billBoxHeight, 1.5, 1.5);
-  doc.roundedRect(pageWidth - margin - 88, currentY, 88, billBoxHeight, 1.5, 1.5);
+  setTextStyle(doc, {
+    weight: "bold",
+    size: 10,
+    color: PDF_THEME.headingTextColor,
+  });
+  doc.text("Bill To", margin, currentY);
+  doc.text("Ship To", margin + boxWidth + columnGap, currentY);
 
-  doc.setFont("helvetica", "bold");
-  doc.setFontSize(10);
-  doc.text("Bill To", margin + 3, currentY + 5.5);
-  doc.text("Ship To", pageWidth - margin - 85, currentY + 5.5);
-
-  doc.setFont("helvetica", "normal");
-  doc.setFontSize(9);
+  setTextStyle(doc, {
+    size: 9.5,
+    color: PDF_THEME.bodyTextColor,
+  });
   billToLines.forEach((line, index) => {
-    doc.text(String(line), margin + 3, currentY + 11 + index * 4.5);
+    const wrapped = doc.splitTextToSize(String(line), boxWidth);
+    doc.text(wrapped, margin, currentY + 6 + index * lineHeight);
   });
   shipToLines.forEach((line, index) => {
-    doc.text(String(line), pageWidth - margin - 85, currentY + 11 + index * 4.5);
+    const wrapped = doc.splitTextToSize(String(line), boxWidth);
+    doc.text(wrapped, margin + boxWidth + columnGap, currentY + 6 + index * lineHeight);
   });
-  currentY += billBoxHeight + 8;
 
-  const itemColumns = [
+  drawDivider(doc, currentY + boxHeight + 2, pageWidth, margin);
+
+  return currentY + boxHeight + PDF_THEME.sectionGap;
+}
+
+function buildItemColumns(resolvedConfigurations) {
+  return [
     {
       key: "no",
       header: "No",
@@ -371,7 +432,7 @@ export async function generateSaleOrderPdf({
     },
     {
       key: "items",
-      header: "Items",
+      header: "Item",
       value: (item) => item?.item_name || "--",
       style: { cellWidth: 34, halign: "left" },
     },
@@ -413,7 +474,7 @@ export async function generateSaleOrderPdf({
           header: "Qty",
           value: (item) =>
             `${formatCompactAmount(item?.billed_qty)} ${item?.unit || ""}`.trim(),
-          style: { cellWidth: 11, halign: "right" },
+          style: { cellWidth: 11, halign: "center" },
         }
       : null,
     resolvedConfigurations.showRate
@@ -474,7 +535,17 @@ export async function generateSaleOrderPdf({
         }
       : null,
   ].filter(Boolean);
+}
 
+function renderItemsTable({
+  doc,
+  currentY,
+  pageWidth,
+  margin,
+  saleOrder,
+  resolvedConfigurations,
+}) {
+  const itemColumns = buildItemColumns(resolvedConfigurations);
   const availableTableWidth = pageWidth - margin * 2;
   const totalBaseWidth = itemColumns.reduce(
     (sum, column) => sum + (Number(column?.style?.cellWidth) || 0),
@@ -515,20 +586,28 @@ export async function generateSaleOrderPdf({
     startY: currentY,
     theme: "grid",
     styles: {
+      font: "helvetica",
       fontSize: 7.2,
       cellPadding: 1.6,
-      lineColor: [226, 232, 240],
-      lineWidth: 0.2,
+      textColor: PDF_THEME.bodyTextColor,
       valign: "top",
+      lineColor: PDF_THEME.dividerColor,
+      lineWidth: 0.2,
     },
     headStyles: {
-      fillColor: [241, 245, 249],
-      textColor: [15, 23, 42],
+      fillColor: PDF_THEME.headerFillColor,
+      textColor: PDF_THEME.headingTextColor,
       fontStyle: "bold",
       halign: "center",
     },
     bodyStyles: {
-      textColor: [51, 65, 85],
+      textColor: PDF_THEME.bodyTextColor,
+    },
+    footStyles: {
+      fillColor: [241, 245, 249],
+      textColor: PDF_THEME.headingTextColor,
+      fontStyle: "bold",
+      halign: "right",
     },
     columnStyles,
     head: [itemColumns.map((column) => column.header)],
@@ -536,22 +615,14 @@ export async function generateSaleOrderPdf({
       itemColumns.map((column) => column.value(item, index))
     ),
     foot: [footerRow],
-    footStyles: {
-      fillColor: [241, 245, 249],
-      textColor: [15, 23, 42],
-      fontStyle: "bold",
-      halign: "right",
-    },
     showFoot: "lastPage",
   });
 
-  currentY = doc.lastAutoTable?.finalY + 8 || currentY + 8;
+  return doc.lastAutoTable?.finalY + PDF_THEME.sectionGap || currentY + PDF_THEME.sectionGap;
+}
 
-  const summaryLabelX = pageWidth - margin - 28;
-  const summaryValueX = pageWidth - margin;
-  const summaryRows = [
-    ["Subtotal", formatAmount(saleOrder?.totals?.sub_total)],
-  ];
+function buildSummaryRows(saleOrder, resolvedConfigurations) {
+  const summaryRows = [["Subtotal", formatAmount(saleOrder?.totals?.sub_total)]];
 
   if (resolvedConfigurations.showTaxAmount) {
     summaryRows.push(["Total Tax", formatAmount(saleOrder?.totals?.total_tax_amount)]);
@@ -579,122 +650,231 @@ export async function generateSaleOrderPdf({
     summaryRows.push(["Grand Total", formatAmount(saleOrder?.totals?.final_amount)]);
   }
 
-  doc.setFontSize(9);
+  return summaryRows;
+}
+
+function renderTotalsSection({
+  doc,
+  currentY,
+  pageWidth,
+  margin,
+  saleOrder,
+  resolvedConfigurations,
+}) {
+  const summaryRows = buildSummaryRows(saleOrder, resolvedConfigurations);
+  const blockWidth = 58;
+  const startX = pageWidth - margin - blockWidth;
+  const dividerY = currentY + 1;
+  const rowsStartY = currentY + 8;
+
+  drawDivider(doc, dividerY, pageWidth, margin);
+
   summaryRows.forEach(([label, value], index) => {
-    const rowY = currentY + index * 5;
-    drawRightAlignedLabelValue(doc, label, value, summaryLabelX, rowY, 28);
+    const rowY = rowsStartY + index * 5.5;
+    const isGrandTotal = label === "Grand Total";
+
+    setTextStyle(doc, {
+      weight: isGrandTotal ? "bold" : "normal",
+      size: isGrandTotal ? 11 : 9.5,
+      color: isGrandTotal ? PDF_THEME.headingTextColor : PDF_THEME.subtleTextColor,
+    });
+    doc.text(label, startX, rowY);
+
+    setTextStyle(doc, {
+      weight: isGrandTotal ? "bold" : "normal",
+      size: isGrandTotal ? 11 : 9.5,
+      color: PDF_THEME.headingTextColor,
+    });
+    doc.text(value, pageWidth - margin, rowY, { align: "right" });
   });
-  currentY += summaryRows.length * 5 + 8;
+
+  let nextY = rowsStartY + summaryRows.length * 5.5 + PDF_THEME.sectionGap;
 
   if (resolvedConfigurations.showNetAmount) {
-    currentY = ensureSpace(doc, currentY, 18);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(9);
+    nextY = ensureSpace(doc, nextY, 16);
+    setTextStyle(doc, {
+      weight: "bold",
+      size: 9,
+      color: PDF_THEME.headingTextColor,
+    });
     const amountInWords = `Net Amount (in words): ${amountToWords(
       saleOrder?.totals?.final_amount
     ).toUpperCase()}`;
-    const amountWordsWidth = 90;
-    const amountWordsX = pageWidth - margin;
-    const amountLines = doc.splitTextToSize(amountInWords, amountWordsWidth);
-    doc.text(amountLines, amountWordsX, currentY, { align: "right" });
-    currentY += amountLines.length * 4.5 + 4;
+    const lines = doc.splitTextToSize(amountInWords, 92);
+    doc.text(lines, pageWidth - margin, nextY, { align: "right" });
+    nextY += lines.length * 4.5 + 4;
   }
 
-  const terms = Array.isArray(org?.termsAndConditions)
-    ? org.termsAndConditions
-    : Array.isArray(companySettings?.dataEntry?.order?.termsAndConditions)
-      ? companySettings.dataEntry.order.termsAndConditions
-      : Array.isArray(configurations?.termsAndConditions)
-        ? configurations.termsAndConditions
-        : typeof configurations?.termsAndConditions === "string"
-          ? configurations.termsAndConditions
-              .split("\n")
-              .map((term) => term.trim())
-              .filter(Boolean)
-          : [];
+  return nextY;
+}
 
-  const bankInfo = bankDetails || org || {};
-  const footerBankLines = [
-    bankInfo?.partyName && bankInfo?.bank_name
-      ? `Bank Name: ${bankInfo.partyName} (${bankInfo.bank_name})`
-      : bankInfo?.bank_name
-        ? `Bank Name: ${bankInfo.bank_name}`
-        : bankInfo?.bankName
-          ? `Bank Name: ${bankInfo.bankName}`
-          : null,
-    bankInfo?.ifsc ? `IFSC Code: ${bankInfo.ifsc}` : null,
-    bankInfo?.ac_no
-      ? `Account Number: ${bankInfo.ac_no}`
-      : bankInfo?.accountNumber
-        ? `Account Number: ${bankInfo.accountNumber}`
-        : bankInfo?.account
-          ? `Account Number: ${bankInfo.account}`
-          : null,
-    bankInfo?.branch ? `Branch: ${bankInfo.branch}` : null,
-  ].filter(Boolean);
-
-  if (resolvedConfigurations.showTermsAndConditions && terms.length) {
-    const estimatedTermsHeight =
-      9 +
-      terms.reduce((total, term, index) => {
-        const lines = doc.splitTextToSize(
-          `${index + 1}. ${term}`,
-          pageWidth - margin * 2
-        );
-
-        return total + lines.length * 4.5;
-      }, 0);
-
-    currentY = ensureSpace(doc, currentY, estimatedTermsHeight + 30);
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text("Terms & Conditions", margin, currentY);
-    currentY += 5;
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(9);
-
-    terms.forEach((term, index) => {
-      const lines = doc.splitTextToSize(
-        `${index + 1}. ${term}`,
-        pageWidth - margin * 2
-      );
-      doc.text(lines, margin, currentY);
-      currentY += lines.length * 4.5;
-    });
-
-    currentY += 4;
+function renderTermsSection({
+  doc,
+  currentY,
+  pageWidth,
+  margin,
+  terms,
+  resolvedConfigurations,
+}) {
+  if (!resolvedConfigurations.showTermsAndConditions || !terms.length) {
+    return currentY;
   }
 
+  const estimatedHeight =
+    10 +
+    terms.reduce((total, term, index) => {
+      const lines = doc.splitTextToSize(`${index + 1}. ${term}`, pageWidth - margin * 2);
+      return total + lines.length * 4.8;
+    }, 0);
+
+  let nextY = ensureSpace(doc, currentY + 2, estimatedHeight + 18);
+  drawDivider(doc, nextY - 2, pageWidth, margin);
+
+  setTextStyle(doc, {
+    weight: "bold",
+    size: 10,
+    color: PDF_THEME.headingTextColor,
+  });
+  doc.text("Terms & Conditions", margin, nextY + 3);
+  nextY += 8;
+
+  setTextStyle(doc, {
+    size: 8.25,
+    color: PDF_THEME.subtleTextColor,
+  });
+  terms.forEach((term, index) => {
+    const lines = doc.splitTextToSize(`${index + 1}. ${term}`, pageWidth - margin * 2);
+    doc.text(lines, margin, nextY);
+    nextY += lines.length * 4.8;
+  });
+
+  return nextY + PDF_THEME.sectionGap;
+}
+
+function renderFooter({
+  doc,
+  currentY,
+  pageWidth,
+  pageHeight,
+  margin,
+  org,
+  footerBankLines,
+  resolvedConfigurations,
+}) {
   const shouldShowBankDetails =
     resolvedConfigurations.showBankDetails && footerBankLines.length > 0;
-  const shouldShowFooter =
-    shouldShowBankDetails || Boolean(org?.name);
+  const shouldShowFooter = shouldShowBankDetails || Boolean(org?.name);
 
-  if (shouldShowFooter) {
-    const footerTopY = Math.max(currentY + 6, pageHeight - 36);
-    const dividerY = footerTopY - 4;
-    const rightBlockX = pageWidth - margin;
+  if (!shouldShowFooter) {
+    return;
+  }
 
-    doc.setDrawColor(226, 232, 240);
-    doc.line(margin, dividerY, pageWidth - margin, dividerY);
+  const footerTopY = Math.max(currentY + 10, pageHeight - 34);
+  drawDivider(doc, footerTopY - 5, pageWidth, margin);
 
-    if (shouldShowBankDetails) {
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(9);
-      footerBankLines.forEach((line, index) => {
-        doc.text(line, margin, footerTopY + index * 5);
-      });
-    }
-
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(10);
-    doc.text(org?.name || "Company", rightBlockX, footerTopY + 5, {
-      align: "right",
+  if (shouldShowBankDetails) {
+    setTextStyle(doc, {
+      size: 9.2,
+      weight: "bold",
+      color: PDF_THEME.subtleTextColor,
     });
-    doc.text("Authorized Signatory", rightBlockX, footerTopY + 25, {
-      align: "right",
+    footerBankLines.forEach((line, index) => {
+      doc.text(line, margin, footerTopY + index * 5);
     });
   }
+
+  const rightX = pageWidth - margin;
+  setTextStyle(doc, {
+    weight: "bold",
+    size: 10,
+    color: PDF_THEME.headingTextColor,
+  });
+  doc.text(org?.name || "Company", rightX, footerTopY + 4, { align: "right" });
+  doc.text("Authorized Signatory", rightX, footerTopY + 24, { align: "right" });
+}
+
+export async function generateSaleOrderPdf({
+  saleOrder,
+  org,
+  configurations,
+  bankDetails,
+  companySettings,
+  partyConfig,
+}) {
+  const doc = new jsPDF({
+    orientation: "portrait",
+    unit: "mm",
+    format: "a4",
+  });
+  const resolvedConfigurations = normalizeConfigurations(configurations);
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const pageHeight = doc.internal.pageSize.getHeight();
+  const margin = PDF_THEME.pageMargin;
+  let currentY = PDF_THEME.pageMargin;
+  const companyLogo = await loadImageAsDataUrl(org?.logo);
+
+  currentY = renderHeader({
+    doc,
+    currentY,
+    pageWidth,
+    margin,
+    org,
+    saleOrder,
+    title:
+      resolvedConfigurations.showPrintTitle && resolvedConfigurations.printTitle
+        ? resolvedConfigurations.printTitle
+        : "Sale Order",
+    companyLogo,
+  });
+
+  currentY = renderPartySection({
+    doc,
+    currentY,
+    pageWidth,
+    margin,
+    saleOrder,
+    partyConfig,
+  });
+
+  currentY = renderItemsTable({
+    doc,
+    currentY,
+    pageWidth,
+    margin,
+    saleOrder,
+    resolvedConfigurations,
+  });
+
+  currentY = renderTotalsSection({
+    doc,
+    currentY,
+    pageWidth,
+    margin,
+    saleOrder,
+    resolvedConfigurations,
+  });
+
+  const terms = getTerms(configurations, companySettings, org);
+  currentY = renderTermsSection({
+    doc,
+    currentY,
+    pageWidth,
+    margin,
+    terms,
+    resolvedConfigurations,
+  });
+
+  const footerBankLines = getFooterBankLines(bankDetails, org);
+  renderFooter({
+    doc,
+    currentY,
+    pageWidth,
+    pageHeight,
+    margin,
+    org,
+    footerBankLines,
+    resolvedConfigurations,
+  });
 
   const fileName = `SaleOrder-${saleOrder?.voucher_number || "document"}.pdf`;
   const blobUrl = doc.output("bloburl");
