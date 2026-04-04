@@ -6,15 +6,28 @@ const SALE_LOOKUP_STALE_TIME = 5 * 60_000;
 
 export const partyQueryKeys = {
   all: ["parties"],
-  infiniteList: (cmpId, limit = 20, search = "", ledgerType = "all") => [
+  infiniteList: (
+    cmp_id,
+    limit = 20,
+    search = "",
+    ledgerType = "all",
+    partyType = ""
+  ) => [
     ...partyQueryKeys.all,
     "infinite-list",
-    { cmpId, limit, search, ledgerType },
+    { cmp_id, limit, search, ledgerType, partyType },
   ],
-  list: (cmpId, page = 1, limit = 20, search = "", ledgerType = "all") => [
+  list: (
+    cmp_id,
+    page = 1,
+    limit = 20,
+    search = "",
+    ledgerType = "all",
+    partyType = ""
+  ) => [
     ...partyQueryKeys.all,
     "list",
-    { cmpId, page, limit, search, ledgerType },
+    { cmp_id, page, limit, search, ledgerType, partyType },
   ],
   detail: (partyId) => [...partyQueryKeys.all, "detail", partyId],
 };
@@ -24,6 +37,7 @@ export const useInfinitePartyListQuery = ({
   limit = 20,
   search = "",
   ledgerType = "all",
+  partyType = "",
   enabled = true,
 }) =>
   useInfiniteQuery({
@@ -32,6 +46,7 @@ export const useInfinitePartyListQuery = ({
       limit,
       search,
       ledgerType,
+      partyType
     ),
     queryFn: ({ pageParam = 1, signal }) =>
       partyService.getParties({
@@ -39,6 +54,7 @@ export const useInfinitePartyListQuery = ({
         limit,
         cmp_id,
         search,
+        partyType,
         ledgerType,
         signal,
         skipGlobalLoader: true,
@@ -56,16 +72,25 @@ export const usePartyListQuery = ({
   page = 1,
   limit = 20,
   search = "",
+  partyType = "",
   enabled = true,
 }) =>
   useQuery({
-    queryKey: partyQueryKeys.list(cmp_id || "", page, limit, search),
+    queryKey: partyQueryKeys.list(
+      cmp_id || "",
+      page,
+      limit,
+      search,
+      "all",
+      partyType
+    ),
     queryFn: ({ signal }) =>
       partyService.getParties({
         page,
         limit,
         cmp_id,
         search,
+        partyType,
         signal,
         skipGlobalLoader: true,
       }),

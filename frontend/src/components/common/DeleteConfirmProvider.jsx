@@ -1,8 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-
-const DeleteConfirmContext = createContext(null);
+import { DeleteConfirmContext } from "@/components/common/deleteConfirmContext";
 
 const DEFAULT_OPTIONS = {
   title: "Delete this item?",
@@ -64,13 +63,17 @@ export function DeleteConfirmProvider({ children }) {
       {children}
 
       {dialogState.open && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/55 px-4">
+        <div
+          className="fixed inset-0 z-[200] flex items-center justify-center bg-black/55 px-4"
+          onClick={() => closeDialog(false)}
+        >
           <div
             role="dialog"
             aria-modal="true"
             aria-labelledby="delete-confirm-title"
             aria-describedby="delete-confirm-description"
             className="w-full max-w-sm rounded-3xl border border-slate-200 bg-white p-5 shadow-2xl"
+            onClick={(event) => event.stopPropagation()}
           >
             <div className="space-y-2">
               <h2
@@ -110,14 +113,4 @@ export function DeleteConfirmProvider({ children }) {
       )}
     </DeleteConfirmContext.Provider>
   );
-}
-
-export function useDeleteConfirm() {
-  const context = useContext(DeleteConfirmContext);
-
-  if (!context) {
-    throw new Error("useDeleteConfirm must be used within DeleteConfirmProvider.");
-  }
-
-  return context;
 }

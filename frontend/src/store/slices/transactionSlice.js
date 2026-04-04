@@ -1,71 +1,48 @@
 import { createSlice } from "@reduxjs/toolkit";
+import { calculateItemAmounts, calculateItemsWithTotals } from "@/utils/salesCalculation";
+import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
 function normalizeAdditionalCharge(row) {
   const baseValue = Number(row?.value) || 0;
   const taxPercentage = Number(row?.taxPercentage) || 0;
   const taxAmt = (baseValue * taxPercentage) / 100;
-  const sign = row?.action === "substract" ? -1 : 1;
+  const sign = row?.action === "subtract" ? -1 : 1;
   const finalValue = (baseValue + taxAmt) * sign;
 
   return {
     ...row,
     value: row?.value ?? "",
-    action: row?.action === "substract" ? "substract" : "add",
+    action: row?.action === "subtract" ? "subtract" : "add",
     taxPercentage,
     taxAmt,
     finalValue,
   };
 }
 
-export function recalculateItem(item) {
-  const billedQty = Number(item?.billedQty) || 0;
-  const rate = Number(item?.rate) || 0;
-  const taxRate = Number(item?.taxRate) || 0;
-  const discountType = item?.discountType || "percentage";
-  const discountPercentage = Number(item?.discountPercentage) || 0;
-  const discountAmountValue = Number(item?.discountAmount) || 0;
-  const taxInclusive = Boolean(item?.taxInclusive);
+function enrichSelectedSeries(series) {
+  if (!series) return null;
 
-  const lineTotal = rate * billedQty;
-  let baseBeforeTax;
-  let effectiveDiscountAmount;
-  let taxableAmount;
-  let taxAmount;
-  let totalAmount;
-
-  if (taxInclusive) {
-    const divisor = 1 + taxRate / 100;
-    baseBeforeTax = divisor ? lineTotal / divisor : lineTotal;
-  } else {
-    baseBeforeTax = lineTotal;
-  }
-
-  if (discountType === "percentage") {
-    effectiveDiscountAmount = (baseBeforeTax * discountPercentage) / 100;
-  } else {
-    effectiveDiscountAmount = discountAmountValue;
-  }
-
-  effectiveDiscountAmount = Math.min(
-    Math.max(effectiveDiscountAmount, 0),
-    baseBeforeTax,
+  const currentNumber = Number(series?.currentNumber) || 0;
+  const voucherNumber = String(currentNumber).padStart(
+    Number(series?.widthOfNumericalPart) || 1,
+    "0",
   );
+  const prefix = series?.prefix || "";
+  const suffix = series?.suffix || "";
 
-  taxableAmount = baseBeforeTax - effectiveDiscountAmount;
-  if (taxableAmount < 0) taxableAmount = 0;
+  return {
+    _id: series?._id || null,
+    seriesName: series?.seriesName || "",
+    currentNumber,
+    prefix,
+    suffix,
+    widthOfNumericalPart: Number(series?.widthOfNumericalPart) || 1,
+    voucherNumber: formatVoucherNumber(prefix, voucherNumber, suffix),
+  };
+}
 
-  taxAmount = (taxableAmount * taxRate) / 100;
-  totalAmount = taxableAmount + taxAmount;
-
-  item.basePrice = baseBeforeTax;
-  item.discountType = discountType;
-  item.discountPercentage = discountPercentage;
-  item.discountAmount = effectiveDiscountAmount;
-  item.taxableAmount = taxableAmount;
-  item.taxAmount = taxAmount;
-  item.totalAmount = totalAmount;
-
-  return item;
+export function recalculateItem(item) {
+  return calculateItemAmounts(item, item?.taxType || "igst");
 }
 
 function resolveItemPriceLevelRate(item, nextPriceLevel) {
@@ -98,31 +75,11 @@ function repriceAllItemsInternal(state) {
 }
 
 function recalculateTotals(state) {
-  const itemTotals = state.items.reduce(
-    (accumulator, item) => {
-      accumulator.subTotal += Number(item?.basePrice) || 0;
-      accumulator.totalDiscount += Number(item?.discountAmount) || 0;
-      accumulator.taxableAmount += Number(item?.taxableAmount) || 0;
-      accumulator.totalTaxAmount += Number(item?.taxAmount) || 0;
-      accumulator.totalIgstAmt += Number(item?.taxAmount) || 0;
-      accumulator.itemTotal += Number(item?.totalAmount) || 0;
-      return accumulator;
-    },
-    {
-      subTotal: 0,
-      totalDiscount: 0,
-      taxableAmount: 0,
-      totalTaxAmount: 0,
-      totalIgstAmt: 0,
-      totalCessAmt: 0,
-      totalAddlCessAmt: 0,
-      itemTotal: 0,
-      totalAdditionalCharge: 0,
-      amountWithAdditionalCharge: 0,
-      finalAmount: 0,
-      roundOff: 0,
-    }
+  const { items, totals: itemTotals } = calculateItemsWithTotals(
+    state.items,
+    state.taxType,
   );
+  state.items = items;
 
   const totalAdditionalCharge = state.additionalCharges.reduce(
     (accumulator, charge) => accumulator + (Number(charge?.finalValue) || 0),
@@ -138,10 +95,11 @@ function recalculateTotals(state) {
 }
 
 const initialState = {
-  cmpId: null,
+  cmp_id: null,
   voucherType: "saleOrder",
   transactionDate: null,
   selectedSeries: null,
+  taxType: "igst",
   despatchDetails: {
     title: "Despatch Details",
     challanNo: "",
@@ -164,6 +122,8 @@ const initialState = {
     taxableAmount: 0,
     totalTaxAmount: 0,
     totalIgstAmt: 0,
+    totalCgstAmt: 0,
+    totalSgstAmt: 0,
     totalCessAmt: 0,
     totalAddlCessAmt: 0,
     itemTotal: 0,
@@ -174,35 +134,56 @@ const initialState = {
   },
 };
 
+function clearSaleOrderStorage(cmp_id) {
+  if (!cmp_id) return;
+
+  try {
+    localStorage.removeItem(`sale-order-product-filters-${cmp_id}`);
+  } catch (error) {
+    console.error("Failed to clear sale order local storage", error);
+  }
+}
+
 const transactionSlice = createSlice({
   name: "transaction",
   initialState,
   reducers: {
     setCompany(state, action) {
-      state.cmpId = action.payload?.cmpId ?? null;
+      state.cmp_id = action.payload?.cmp_id ?? null;
     },
     setTransactionDate(state, action) {
       state.transactionDate = action.payload?.transactionDate ?? null;
     },
     setSelectedSeries(state, action) {
-      const { series, cmpId } = action.payload || {};
-      state.selectedSeries = series || null;
+      const { series, cmp_id } = action.payload || {};
+      const enrichedSeries = enrichSelectedSeries(series);
+      state.selectedSeries = enrichedSeries;
 
-      if (!series?._id || !cmpId) return;
+      if (!enrichedSeries?._id || !cmp_id) return;
 
       try {
-        localStorage.setItem(`lastSeriesId_saleOrder_${cmpId}`, series._id);
+        localStorage.setItem(
+          `lastSeries_saleOrder_${cmp_id}`,
+          JSON.stringify(enrichedSeries),
+        );
       } catch (error) {
         console.error("Failed to persist last series id", error);
       }
     },
     hydrateSelectedSeries(state, action) {
-      const { cmpId } = action.payload || {};
-      if (!cmpId) return;
+      const { cmp_id } = action.payload || {};
+      if (!cmp_id) return;
 
       try {
-        const id = localStorage.getItem(`lastSeriesId_saleOrder_${cmpId}`);
-        state.selectedSeries = id ? { _id: id } : null;
+        const raw = localStorage.getItem(`lastSeries_saleOrder_${cmp_id}`);
+
+        if (raw) {
+          state.selectedSeries = enrichSelectedSeries(JSON.parse(raw));
+          return;
+        }
+
+        const legacyId = localStorage.getItem(`lastSeriesId_saleOrder_${cmp_id}`);
+        state.selectedSeries = legacyId ? { _id: legacyId } : null;
       } catch (error) {
         console.error("Failed to hydrate last series id", error);
       }
@@ -217,10 +198,23 @@ const transactionSlice = createSlice({
       state.despatchDetails = { ...initialState.despatchDetails };
     },
     setParty(state, action) {
-      state.party = action.payload || null;
+      const party = action.payload || null;
+      state.party = party;
+      state.taxType = party?.taxType || "igst";
+      state.items = state.items.map((item) => ({
+        ...item,
+        taxType: party?.taxType || "igst",
+      }));
+      recalculateTotals(state);
     },
     clearParty(state) {
       state.party = null;
+      state.taxType = "igst";
+      state.items = state.items.map((item) => ({
+        ...item,
+        taxType: "igst",
+      }));
+      recalculateTotals(state);
     },
     setAdditionalCharges(state, action) {
       const rows = Array.isArray(action.payload) ? action.payload : [];
@@ -242,11 +236,15 @@ const transactionSlice = createSlice({
         const incomingBilledQty = Number(incomingItem.billedQty) || 0;
 
         if (existingItem) {
-          existingItem.actualQty =
-            (Number(existingItem.actualQty) || 0) + incomingActualQty;
-          existingItem.billedQty =
-            (Number(existingItem.billedQty) || 0) + incomingBilledQty;
-          recalculateItem(existingItem);
+          Object.assign(
+            existingItem,
+            recalculateItem({
+              ...existingItem,
+              actualQty: (Number(existingItem.actualQty) || 0) + incomingActualQty,
+              billedQty: (Number(existingItem.billedQty) || 0) + incomingBilledQty,
+              taxType: existingItem.taxType || state.taxType,
+            }),
+          );
           return;
         }
 
@@ -254,6 +252,7 @@ const transactionSlice = createSlice({
           recalculateItem({
             ...incomingItem,
             priceLevel: state.priceLevel,
+            taxType: incomingItem?.taxType || state.taxType,
           })
         );
       });
@@ -267,8 +266,14 @@ const transactionSlice = createSlice({
       const existingItem = state.items.find((item) => item.id === id);
       if (!existingItem) return;
 
-      Object.assign(existingItem, changes);
-      recalculateItem(existingItem);
+      Object.assign(
+        existingItem,
+        recalculateItem({
+          ...existingItem,
+          ...changes,
+          taxType: changes?.taxType || existingItem.taxType || state.taxType,
+        }),
+      );
       recalculateTotals(state);
     },
     setPriceLevel(state, action) {
@@ -280,6 +285,24 @@ const transactionSlice = createSlice({
     repriceAllItems(state) {
       repriceAllItemsInternal(state);
       recalculateTotals(state);
+    },
+    resetSaleOrderDraft(state) {
+      const cmp_id = state.cmp_id;
+      const selectedSeries = state.selectedSeries;
+
+      state.transactionDate = null;
+      state.selectedSeries = selectedSeries;
+      state.taxType = initialState.taxType;
+      state.despatchDetails = { ...initialState.despatchDetails };
+      state.party = null;
+      state.priceLevel = null;
+      state.priceLevelObject = null;
+      state.items = [];
+      state.additionalCharges = [];
+      state.totals = { ...initialState.totals };
+      state.cmp_id = cmp_id;
+
+      clearSaleOrderStorage(cmp_id);
     },
   },
 });
@@ -300,6 +323,7 @@ export const {
   setPriceLevel,
   setPriceLevelObject,
   repriceAllItems,
+  resetSaleOrderDraft,
 } = transactionSlice.actions;
 
 export default transactionSlice.reducer;

@@ -1,0 +1,92 @@
+import VoucherSeries from "../Model/VoucherSeriesSchema.js";
+
+function normalizeVoucherPart(value) {
+  if (value == null) return "";
+  return String(value).trim();
+}
+
+function formatVoucherNumber(prefix, number, suffix) {
+  const normalizedPrefix = normalizeVoucherPart(prefix);
+  const normalizedNumber = normalizeVoucherPart(number);
+  const normalizedSuffix = normalizeVoucherPart(suffix);
+
+  if (normalizedPrefix && normalizedNumber && normalizedSuffix) {
+    return `${normalizedPrefix} / ${normalizedNumber} / ${normalizedSuffix}`;
+  }
+
+  if (normalizedPrefix && normalizedNumber) {
+    return `${normalizedPrefix} / ${normalizedNumber}`;
+  }
+
+  if (normalizedNumber && normalizedSuffix) {
+    return `${normalizedNumber} / ${normalizedSuffix}`;
+  }
+
+  return normalizedNumber || normalizedPrefix || normalizedSuffix;
+}
+
+export async function getNextVoucherNumber({
+  cmpId,
+  voucherType,
+  seriesId,
+  session,
+}) {
+  const filter = {
+    cmp_id: cmpId,
+    voucherType,
+    "series._id": seriesId,
+  };
+
+  const seriesDocument = await VoucherSeries.findOne(filter).session(session);
+  const existingSeries = seriesDocument?.series?.find(
+    (series) => String(series?._id) === String(seriesId)
+  );
+
+  if (!existingSeries) {
+    throw new Error("Series not found");
+  }
+
+  const currentNumber = Number(existingSeries.currentNumber) || 1;
+  const widthOfNumericalPart = Number(existingSeries.widthOfNumericalPart) || 1;
+  const paddedNumber = String(currentNumber).padStart(
+    widthOfNumericalPart,
+    "0"
+  );
+  const voucherNumber = formatVoucherNumber(
+    existingSeries.prefix,
+    paddedNumber,
+    existingSeries.suffix
+  );
+
+  const updatedVoucherSeries = await VoucherSeries.findOneAndUpdate(
+    filter,
+    {
+      $set: {
+        "series.$.lastUsedNumber": currentNumber,
+      },
+      $inc: { "series.$.currentNumber": 1 },
+    },
+    { new: true, session }
+  );
+
+  if (!updatedVoucherSeries) {
+    throw new Error("Failed to update series");
+  }
+
+  const updatedSeries = updatedVoucherSeries.series?.find(
+    (series) => String(series?._id) === String(seriesId)
+  );
+
+  if (!updatedSeries) {
+    throw new Error("Series not found");
+  }
+
+  return {
+    series: updatedSeries,
+    nextNumber: currentNumber,
+    nextAvailableNumber: updatedSeries.currentNumber,
+    voucherNumber,
+  };
+}
+
+export default getNextVoucherNumber;

@@ -2,7 +2,7 @@
 import { createSlice } from "@reduxjs/toolkit";
 
 const initialState = {
-  // key: `${cmpId}-${voucherType}` -> series object
+  // key: `${cmp_id}-${voucherType}` -> series object
   selectedByCompanyAndType: {},
 };
 
@@ -11,8 +11,8 @@ const voucherSeriesSlice = createSlice({
   initialState,
   reducers: {
     setSelectedSeries(state, action) {
-      const { cmpId, voucherType, series } = action.payload;
-      const key = `${cmpId}-${voucherType}`;
+      const { cmp_id, voucherType, series } = action.payload;
+      const key = `${cmp_id}-${voucherType}`;
       state.selectedByCompanyAndType[key] = series;
     },
   },

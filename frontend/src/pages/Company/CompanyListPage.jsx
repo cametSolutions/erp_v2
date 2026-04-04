@@ -5,7 +5,7 @@ import { toast } from "sonner";
 import { Building2, Pencil, Trash2 } from "lucide-react";
 
 import { deleteCompany } from "../../api/client/companyApi";
-import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
+import { useDeleteConfirm } from "@/components/common/deleteConfirmContext";
 import { Card, CardContent } from "@/components/ui/card";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import {
@@ -91,6 +91,8 @@ const CompanyListPage = () => {
     data: companies = [],
     isLoading,
     error,
+     isError,
+    refetch,
   } = useCompanyListQuery();
 
   useEffect(() => {
@@ -143,7 +145,34 @@ const CompanyListPage = () => {
       return haystack.includes(q);
     });
   }, [companies, searchText]);
+ 
+ 
+   if (isError) {
+    const msg =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to load companies";
 
+    return (
+      <div className="w-full font-[sans-serif]">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <p className="font-semibold">Something went wrong</p>
+          <p className="mt-1">{msg}</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-3 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+          >
+            Retry
+          </button>
+          {/* Debug view (optional, only while developing) */}
+          {/* <pre className="mt-2 max-h-40 overflow-auto rounded bg-white/70 p-2 text-[10px] text-slate-800">
+            {JSON.stringify(error, null, 2)}
+          </pre> */}
+        </div>
+      </div>
+    );
+  }
   return (
     <div className="w-full font-[sans-serif]">
       <div className="mx-auto w-full max-w-md space-y-3">

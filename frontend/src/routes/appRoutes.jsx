@@ -17,12 +17,16 @@ const SettingsPage = lazy(() => import("@/pages/settings/settings"));
 const OutstandingsPage = lazy(
   () => import("@/pages/oustanding/OutstandingPartyListPage"),
 );
-const StatementsPage = lazy(() => import("@/pages/Home/StatementsPage"));
+const DaybookPage = lazy(() => import("@/pages/Home/DaybookPage"));
 const StockRegisterPage = lazy(() => import("@/pages/Home/StockRegisterPage"));
 const CashBankBalancePage = lazy(
   () => import("@/pages/party/CashBankBalancePage"),
 );
+const TransactionDetailPage = lazy(
+  () => import("@/pages/transactions/TransactionDetailPage"),
+);
 const CreateOrderPage = lazy(() => import("@/pages/sales/SalesCreatePage"));
+const SaleOrderDetailPage = lazy(() => import("@/pages/sales/SaleOrderDetailPage"));
 const ProductSelectPage = lazy(() => import("@/pages/sales/ProductSelectPage"));
 const CreateReceiptPage = lazy(() => import("@/pages/Home/CreateReceiptPage"));
 const UserCreatePage = lazy(() => import("@/pages/users/UserCreatePage"));
@@ -32,16 +36,31 @@ const OutstandingPartyDetailPage = lazy(
 );
 
 const DataEntrySettingsPage = lazy(
-  () => import("@/pages/settings/DataEntrySettings "),
+  () => import("@/pages/settings/DataEntrySettings"),
+);
+const DataEntryVoucherSettingsPage = lazy(
+  () => import("@/pages/settings/DataEntryVoucherSettings"),
+);
+const DataEntryOrderSettingsPage = lazy(
+  () => import("@/pages/settings/DataEntryOrderSettings"),
+);
+const DataEntryReceiptSettingsPage = lazy(
+  () => import("@/pages/settings/DataEntryReceiptSettings"),
 );
 const VoucherSettingsPage = lazy(
-  () => import("@/pages/settings/VoucherSettings "),
+  () => import("@/pages/settings/VoucherSettings"),
 );
 const VoucherSeriesSettingsPage = lazy(
   () => import("@/pages/settings/VoucherSeriesSettings"),
 );
 const VoucherSeriesListPage = lazy(
   () => import("@/pages/settings/VoucherSeriesList"),
+);
+const PrintConfigurationsPage = lazy(
+  () => import("@/pages/settings/PrintConfigurations"),
+);
+const PrintConfigDetailPage = lazy(
+  () => import("@/pages/settings/PrintConfigDetail"),
 );
 
 const CreateVoucherSeriesPage = lazy(
@@ -64,13 +83,15 @@ export const appRoutes = (
       path={ROUTES.outstandingPartyDetail}
       element={<OutstandingPartyDetailPage />}
     />
-    <Route path={ROUTES.statements} element={<StatementsPage />} />
+    <Route path={ROUTES.daybook} element={<DaybookPage />} />
     <Route path={ROUTES.stockRegister} element={<StockRegisterPage />} />
     <Route
       path={ROUTES.CashBankBalancePage}
       element={<CashBankBalancePage />}
     />
     <Route path={ROUTES.createOrder} element={<CreateOrderPage />} />
+    <Route path={ROUTES.transactionDetail} element={<TransactionDetailPage />} />
+    <Route path={ROUTES.saleOrderDetail} element={<SaleOrderDetailPage />} />
     <Route path={ROUTES.salesSelectItems} element={<ProductSelectPage />} />
     <Route path={ROUTES.createReceipt} element={<CreateReceiptPage />} />
     <Route path={ROUTES.usersCreate} element={<UserCreatePage />} />
@@ -84,6 +105,18 @@ export const appRoutes = (
       path={ROUTES.settingsDataEntry}
       element={<DataEntrySettingsPage />}
     />
+    <Route
+      path={ROUTES.settingsDataEntryVoucher}
+      element={<DataEntryVoucherSettingsPage />}
+    />
+    <Route
+      path={ROUTES.settingsDataEntryOrder}
+      element={<DataEntryOrderSettingsPage />}
+    />
+    <Route
+      path={ROUTES.settingsDataEntryReceipt}
+      element={<DataEntryReceiptSettingsPage />}
+    />
     <Route path={ROUTES.settingsVoucher} element={<VoucherSettingsPage />} />
     <Route
       path={ROUTES.settingsVoucherSeries}
@@ -96,6 +129,18 @@ export const appRoutes = (
     <Route
       path={ROUTES.settingsVoucherSeriesCreate}
       element={<CreateVoucherSeriesPage />}
+    />
+    <Route
+      path={ROUTES.settingsPrintConfigurations}
+      element={<PrintConfigurationsPage />}
+    />
+    <Route
+      path={ROUTES.settingsPrintConfigurationsSaleOrder}
+      element={<PrintConfigDetailPage voucherType="sale_order" />}
+    />
+    <Route
+      path={ROUTES.settingsPrintConfigurationsReceipt}
+      element={<PrintConfigDetailPage voucherType="receipt" />}
     />
   </Route>
 );

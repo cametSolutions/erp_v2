@@ -31,7 +31,7 @@ const partySchema = new mongoose.Schema(
     },
     cmp_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Organization",
+      ref: "Company",
       required: true,
     },
 

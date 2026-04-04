@@ -12,6 +12,14 @@ import {
 } from "@/components/ui/sheet";
 import { recalculateItem } from "@/store/slices/transactionSlice";
 
+function formatMoney(value) {
+  return (Number(value) || 0).toFixed(2);
+}
+
+function formatPercent(value) {
+  return `${(Number(value) || 0).toFixed(2)}%`;
+}
+
 function buildDraft(item, form) {
   const discountType = form.discountType || "percentage";
   const billedQty = Number(form.billedQty) || 0;
@@ -222,32 +230,93 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
           </div>
         </div>
 
-        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 text-xs text-slate-600">
-          <div className="grid gap-1.5 md:grid-cols-2">
-            <div className="flex justify-between gap-4">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-xs text-slate-600">
+          <div className="mb-2 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+              Summary
+            </span>
+            {/* <span className="text-sm font-semibold text-slate-900">
+              {formatMoney(summary?.totalAmount)}
+            </span> */}
+          </div>
+
+          <div className="divide-y divide-slate-200 rounded-lg border border-slate-200 bg-white">
+            <div className="flex justify-between gap-4 px-3 py-2.5">
               <span>Base Price</span>
-              <span>{summary?.basePrice?.toFixed(2) || "0.00"}</span>
+              <span className="font-medium text-slate-900">
+                {formatMoney(summary?.basePrice)}
+              </span>
             </div>
-            <div className="flex justify-between gap-4">
+            <div className="flex justify-between gap-4 px-3 py-2.5">
               <span>Discount %</span>
-              <span>{(Number(summary?.discountPercentage) || 0).toFixed(2)}%</span>
+              <span className="font-medium text-slate-900">
+                {formatPercent(summary?.discountPercentage)}
+              </span>
             </div>
-            <div className="flex justify-between gap-4">
+            <div className="flex justify-between gap-4 px-3 py-2.5">
               <span>Discount Amount</span>
-              <span>{summary?.discountAmount?.toFixed(2) || "0.00"}</span>
+              <span className="font-medium text-slate-900">
+                {formatMoney(summary?.discountAmount)}
+              </span>
             </div>
-            <div className="flex justify-between gap-4">
+            <div className="flex justify-between gap-4 px-3 py-2.5">
               <span>Taxable</span>
-              <span>{summary?.taxableAmount?.toFixed(2) || "0.00"}</span>
+              <span className="font-medium text-slate-900">
+                {formatMoney(summary?.taxableAmount)}
+              </span>
             </div>
-            <div className="flex justify-between gap-4">
-              <span>Tax</span>
-              <span>{summary?.taxAmount?.toFixed(2) || "0.00"}</span>
+          </div>
+
+          <div className="mt-3 rounded-lg border border-slate-200 bg-white">
+            <div className="border-b border-slate-200 px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-[0.14em] text-slate-500">
+                Tax Details
+              </p>
             </div>
-            <div className="flex justify-between gap-4 font-semibold text-slate-900 md:col-span-2">
-              <span>Total</span>
-              <span>{summary?.totalAmount?.toFixed(2) || "0.00"}</span>
+
+            <div className="divide-y divide-slate-200">
+              <div className="flex justify-between gap-4 px-3 py-2.5">
+                <span>IGST ({formatPercent(item?.igst)})</span>
+                <span className="font-medium text-slate-900">
+                  {formatMoney(summary?.igstAmount ?? summary?.igst_amount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 px-3 py-2.5">
+                <span>CGST ({formatPercent(item?.cgst)})</span>
+                <span className="font-medium text-slate-900">
+                  {formatMoney(summary?.cgstAmount ?? summary?.cgst_amount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 px-3 py-2.5">
+                <span>SGST ({formatPercent(item?.sgst)})</span>
+                <span className="font-medium text-slate-900">
+                  {formatMoney(summary?.sgstAmount ?? summary?.sgst_amount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 px-3 py-2.5">
+                <span>Cess ({formatPercent(item?.cess)})</span>
+                <span className="font-medium text-slate-900">
+                  {formatMoney(summary?.cessAmount ?? summary?.cess_amount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 px-3 py-2.5">
+                <span>Additional Cess ({formatMoney(item?.addl_cess)} / unit)</span>
+                <span className="font-medium text-slate-900">
+                  {formatMoney(summary?.addlCessAmount ?? summary?.addl_cess_amount)}
+                </span>
+              </div>
+              <div className="flex justify-between gap-4 px-3 py-2.5">
+                <span>GST Total</span>
+                <span className="font-medium text-slate-900">
+                  {formatMoney(summary?.taxAmount)}
+                </span>
+              </div>
             </div>
+          </div>
+
+          <div className="mt-3 flex items-center justify-between border-t border-slate-300 pt-3 text-sm font-semibold text-slate-900">
+            <span>Total</span>
+            <span>{formatMoney(summary?.totalAmount)}</span>
           </div>
         </div>
 

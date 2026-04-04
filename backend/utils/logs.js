@@ -11,7 +11,7 @@
  * You can later replace console.log with a proper logger (Winston, Pino, etc.).
  */
 
-export const getApiLogs = (cmpId, label = "API Call") => {
+export const getApiLogs = (cmp_id, label = "API Call") => {
   try {
     const timestamp = new Date().toISOString();
 
@@ -21,7 +21,7 @@ export const getApiLogs = (cmpId, label = "API Call") => {
         {
           type: "SYNC_API",
           label,             // e.g. "Account Groups Data"
-          cmpId,             // company id
+          cmp_id,             // company id
           timestamp,
         },
         null,

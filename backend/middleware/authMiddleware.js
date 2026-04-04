@@ -31,6 +31,11 @@ export const protect = async (req, res, next) => {
       email: user.email,
       userName: user.userName,
       owner: user.owner ? user.owner.toString() : null, // <-- add this
+      cmp_id:
+        req.headers["x-company-id"] ||
+        req.query?.cmp_id ||
+        req.body?.cmp_id ||
+        null,
     };
 
     next();

@@ -46,12 +46,12 @@ import {
 const PAGE_SIZE = 20;
 const PRODUCT_FILTERS_STORAGE_KEY = "sale-order-product-filters";
 
-function getStoredProductFilters(cmpId) {
-  if (!cmpId) return null;
+function getStoredProductFilters(cmp_id) {
+  if (!cmp_id) return null;
 
   try {
     const raw = localStorage.getItem(
-      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmpId}`,
+      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`,
     );
     if (!raw) return null;
 
@@ -69,12 +69,12 @@ function getStoredProductFilters(cmpId) {
   }
 }
 
-function persistProductFilters(cmpId, filters) {
-  if (!cmpId) return;
+function persistProductFilters(cmp_id, filters) {
+  if (!cmp_id) return;
 
   try {
     localStorage.setItem(
-      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmpId}`,
+      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`,
       JSON.stringify(filters),
     );
   } catch (error) {
@@ -131,6 +131,19 @@ function buildCalcItemFromStaged(stagedItem) {
       ) || 0,
     taxRate:
       Number(stagedItem.productDetail?.taxRate ?? stagedItem.taxRate ?? 0) || 0,
+    cgst: Number(stagedItem.productDetail?.cgst ?? stagedItem?.cgst ?? 0) || 0,
+    sgst: Number(stagedItem.productDetail?.sgst ?? stagedItem?.sgst ?? 0) || 0,
+    igst: Number(stagedItem.productDetail?.igst ?? stagedItem?.igst ?? 0) || 0,
+    cess: Number(stagedItem.productDetail?.cess ?? stagedItem?.cess ?? 0) || 0,
+    addl_cess:
+      Number(
+        stagedItem.productDetail?.addl_cess ??
+          stagedItem.productDetail?.addlCess ??
+          stagedItem?.addl_cess ??
+          stagedItem?.addlCess ??
+          0,
+      ) || 0,
+    taxType: stagedItem?.taxType || "igst",
     taxInclusive: Boolean(stagedItem.taxInclusive),
     discountType: stagedItem.discountType || "percentage",
     discountPercentage: Number(stagedItem.discountPercentage) || 0,
@@ -159,6 +172,11 @@ function buildProductDetail(product) {
     product_name: detail?.product_name || detail?.name || "Untitled Product",
     hsn: detail?.hsn || detail?.hsn_code || "",
     unit: detail?.unit || "",
+    cgst: Number(detail?.cgst) || 0,
+    sgst: Number(detail?.sgst) || 0,
+    igst: Number(detail?.igst) || 0,
+    cess: Number(detail?.cess) || 0,
+    addl_cess: Number(detail?.addl_cess ?? detail?.addlCess) || 0,
     taxRate:
       detail?.taxRate != null
         ? Number(detail.taxRate) || 0
@@ -176,6 +194,11 @@ function createStagedItemFromTransactionItem(item) {
     hsn: item?.hsn,
     unit: item?.unit,
     taxRate: item?.taxRate,
+    cgst: item?.cgst,
+    sgst: item?.sgst,
+    igst: item?.igst,
+    cess: item?.cess,
+    addl_cess: item?.addl_cess ?? item?.addlCess,
     priceLevels: item?.priceLevels,
   });
 
@@ -184,6 +207,7 @@ function createStagedItemFromTransactionItem(item) {
     originalQuantity: billedQty,
     productDetail: detail,
     rate: Number(item?.rate) || 0,
+    taxType: item?.taxType || "igst",
     initialPriceSource: item?.initialPriceSource || "manual",
     taxInclusive: Boolean(item?.taxInclusive),
     actualQty,
@@ -216,8 +240,14 @@ function buildEditableItem(productId, stagedItem) {
     hsn: detail?.hsn || "",
     unit: detail?.unit || "",
     taxRate: getProductTaxRate(detail),
+    cgst: Number(detail?.cgst) || 0,
+    sgst: Number(detail?.sgst) || 0,
+    igst: Number(detail?.igst) || 0,
+    cess: Number(detail?.cess) || 0,
+    addl_cess: Number(detail?.addl_cess ?? detail?.addlCess) || 0,
     priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
     rate: Number(stagedItem?.rate) || 0,
+    taxType: stagedItem?.taxType || "igst",
     initialPriceSource: stagedItem?.initialPriceSource || "manual",
     actualQty: Number(stagedItem?.actualQty ?? stagedItem?.quantity) || 0,
     billedQty: Number(stagedItem?.billedQty ?? stagedItem?.quantity) || 0,
@@ -623,12 +653,13 @@ export default function ProductSelectPage() {
   const loadMoreRef = useRef(null);
   const didSeedRef = useRef(false);
   const reduxPriceLevel = useSelector((state) => state.transaction.priceLevel);
+  const taxType = useSelector((state) => state.transaction.taxType);
   const transactionItems = useSelector((state) => state.transaction.items);
   const party = useSelector((state) => state.transaction.party);
-  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const storedFilters = useMemo(
-    () => getStoredProductFilters(cmpId),
-    [cmpId],
+    () => getStoredProductFilters(cmp_id),
+    [cmp_id],
   );
   const [search, setSearch] = useState(() => storedFilters?.search || "");
   const [appliedPriceLevel, setAppliedPriceLevel] = useState(
@@ -657,7 +688,7 @@ export default function ProductSelectPage() {
     fetchNextPage,
     hasNextPage,
   } = useInfiniteProductListQuery({
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
     limit: PAGE_SIZE,
     search: debouncedSearch,
     brand: brandId,
@@ -665,17 +696,17 @@ export default function ProductSelectPage() {
     subcategory: subcategoryId,
   });
 
-  const { data: brandsData = [] } = useBrandsQuery({ cmp_id: cmpId });
-  const { data: priceLevelsData = [] } = usePriceLevelsQuery({ cmp_id: cmpId });
-  const { data: categoriesData = [] } = useCategoriesQuery({ cmp_id: cmpId });
+  const { data: brandsData = [] } = useBrandsQuery({ cmp_id: cmp_id });
+  const { data: priceLevelsData = [] } = usePriceLevelsQuery({ cmp_id: cmp_id });
+  const { data: categoriesData = [] } = useCategoriesQuery({ cmp_id: cmp_id });
   const { data: subcategoriesData = [] } = useSubcategoriesQuery({
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
   });
 
   useEffect(() => {
-    if (!cmpId) return;
+    if (!cmp_id) return;
 
-    const nextFilters = getStoredProductFilters(cmpId);
+    const nextFilters = getStoredProductFilters(cmp_id);
     if (!nextFilters) return;
 
     setSearch(nextFilters.search || "");
@@ -683,17 +714,17 @@ export default function ProductSelectPage() {
     setBrandId(nextFilters.brandId || "");
     setCategoryId(nextFilters.categoryId || "");
     setSubcategoryId(nextFilters.subcategoryId || "");
-  }, [cmpId, reduxPriceLevel]);
+  }, [cmp_id, reduxPriceLevel]);
 
   useEffect(() => {
-    persistProductFilters(cmpId, {
+    persistProductFilters(cmp_id, {
       search,
       priceLevel: appliedPriceLevel,
       brandId,
       categoryId,
       subcategoryId,
     });
-  }, [appliedPriceLevel, brandId, categoryId, cmpId, search, subcategoryId]);
+  }, [appliedPriceLevel, brandId, categoryId, cmp_id, search, subcategoryId]);
 
   useEffect(() => {
     if (didSeedRef.current) return;
@@ -741,10 +772,34 @@ export default function ProductSelectPage() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, data]);
 
-  const products = useMemo(
-    () => data?.pages?.flatMap((page) => page?.items || []) || [],
-    [data],
+  const filterSignature = useMemo(
+    () =>
+      [
+        cmp_id,
+        debouncedSearch,
+        appliedPriceLevel,
+        brandId,
+        categoryId,
+        subcategoryId,
+      ].join("|"),
+    [
+      appliedPriceLevel,
+      brandId,
+      categoryId,
+      cmp_id,
+      debouncedSearch,
+      subcategoryId,
+    ],
   );
+  const [products, setProducts] = useState([]);
+
+  useEffect(() => {
+    setProducts([]);
+  }, [filterSignature]);
+
+  useEffect(() => {
+    setProducts(data?.pages?.flatMap((page) => page?.items || []) || []);
+  }, [data, filterSignature]);
 
   const editingStagedItem = editingProductId
     ? stagedItems[editingProductId] || null
@@ -857,6 +912,7 @@ export default function ProductSelectPage() {
           originalQuantity: 0,
           productDetail,
           rate,
+          taxType: taxType || "igst",
           initialPriceSource: source,
           taxInclusive: false,
           actualQty: 1,
@@ -1075,6 +1131,12 @@ export default function ProductSelectPage() {
         priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
         priceLevel: appliedPriceLevel || null,
         rate: Number(staged?.rate) || 0,
+        cgst: Number(detail?.cgst) || 0,
+        sgst: Number(detail?.sgst) || 0,
+        igst: Number(detail?.igst) || 0,
+        cess: Number(detail?.cess) || 0,
+        addl_cess: Number(detail?.addl_cess ?? detail?.addlCess) || 0,
+        taxType: staged?.taxType || taxType || "igst",
         initialPriceSource: staged?.initialPriceSource || "manual",
         actualQty: deltaQuantity,
         billedQty: deltaQuantity,
@@ -1096,7 +1158,7 @@ export default function ProductSelectPage() {
     }
 
     navigate(ROUTES.createOrder);
-  }, [appliedPriceLevel, dispatch, navigate, stagedItems]);
+  }, [appliedPriceLevel, dispatch, navigate, stagedItems, taxType]);
 
   useEffect(() => {
     setHeaderOptions({
@@ -1145,7 +1207,7 @@ export default function ProductSelectPage() {
     setHeaderOptions,
   ]);
 
-  if (!cmpId) {
+  if (!cmp_id) {
     return (
       <div className="flex h-full items-center justify-center px-4">
         <div className="w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
@@ -1212,7 +1274,7 @@ export default function ProductSelectPage() {
 
         <div className=" mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden py-1 sm:py-4">
           <div className="min-h-0 flex-1 overflow-hidden rounded-sm border border-slate-200 bg-white">
-            <ScrollArea className="h-full">
+            <ScrollArea key={filterSignature} className="h-full">
               <div className="space-y-3 p-3 sm:p-4">
                 {isLoading && (
                   <div className="space-y-2">

@@ -2,6 +2,7 @@
 import mongoose from "mongoose";
 import Company from "../Model/CompanySchema.js";
 import { createDefaultVoucherSeries } from "../helpers/createDefaultVoucherSeries.js";
+import { seedDefaultPrintConfigs } from "../utils/seedPrintConfigs.js";
 
 const escapeRegex = (value) =>
   String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
@@ -134,6 +135,15 @@ export const registerCompany = async (req, res) => {
     await session.commitTransaction();
     session.endSession();
 
+    try {
+      await seedDefaultPrintConfigs(company._id);
+    } catch (seedError) {
+      console.error(
+        `Failed to seed print configs for cmp_id: ${company._id}`,
+        seedError
+      );
+    }
+
     return res.status(201).json({
       message: "Company registered successfully",
       company,
@@ -171,6 +181,7 @@ export const getCompanies = async (req, res) => {
     return res.status(500).json({ message: "Failed to fetch companies" });
   }
 };
+
 
 export const updateCompany = async (req, res) => {
   try {

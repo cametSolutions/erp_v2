@@ -1,14 +1,19 @@
 // controllers/partyController.js
 import mongoose from "mongoose";
-import Party from "../Model/partySchema.js"
+import Party from "../Model/partySchema.js";
 import AccountGroup from "../Model/AccountGroup.js";
 import Outstanding from "../Model/oustandingShcema.js";
 
 const PARTY_LIST_PROJECTION = {
   partyName: 1,
+  partyType: 1,
   mobileNumber: 1,
   emailID: 1,
   gstNo: 1,
+  bank_name: 1,
+  ac_no: 1,
+  ifsc: 1,
+  openingBalanceAmount: 1,
 };
 
 const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
@@ -47,20 +52,12 @@ const getOutstandingTotalsMap = async ({ owner, cmpObjectId, partyIds }) => {
         _id: "$party_id",
         totalDr: {
           $sum: {
-            $cond: [
-              { $eq: ["$classification", "dr"] },
-              "$bill_pending_amt",
-              0,
-            ],
+            $cond: [{ $eq: ["$classification", "dr"] }, "$bill_pending_amt", 0],
           },
         },
         totalCr: {
           $sum: {
-            $cond: [
-              { $eq: ["$classification", "cr"] },
-              "$bill_pending_amt",
-              0,
-            ],
+            $cond: [{ $eq: ["$classification", "cr"] }, "$bill_pending_amt", 0],
           },
         },
       },
@@ -171,13 +168,12 @@ export const listParties = async (req, res) => {
       page = 1,
       limit = 20,
       search = "",
+      partyType = "",
       ledgerType = "all", // all | receivable | payable
     } = req.query;
 
     if (!cmp_id) {
-      return res
-        .status(400)
-        .json({ message: "cmp_id (company) is required" });
+      return res.status(400).json({ message: "cmp_id (company) is required" });
     }
 
     const cmpObjectId = new mongoose.Types.ObjectId(cmp_id);
@@ -190,6 +186,10 @@ export const listParties = async (req, res) => {
       Primary_user_id: owner,
       cmp_id: cmpObjectId,
     };
+
+    if (partyType) {
+      filter.partyType = partyType;
+    }
 
     const trimmedSearch = String(search || "").trim();
     if (trimmedSearch) {
@@ -321,7 +321,10 @@ export const getPartyById = async (req, res) => {
   try {
     const owner = req.user.id;
     const { id } = req.params;
-    const party = await Party.findOne({ _id: id, Primary_user_id: owner }).lean();
+    const party = await Party.findOne({
+      _id: id,
+      Primary_user_id: owner,
+    }).lean();
     if (!party) {
       return res.status(404).json({ message: "Party not found" });
     }
@@ -343,7 +346,10 @@ export const updateParty = async (req, res) => {
   try {
     const owner = req.user.id;
     const { id } = req.params;
-    const existingParty = await Party.findOne({ _id: id, Primary_user_id: owner });
+    const existingParty = await Party.findOne({
+      _id: id,
+      Primary_user_id: owner,
+    });
 
     if (!existingParty) {
       return res.status(404).json({ message: "Party not found" });
@@ -355,7 +361,9 @@ export const updateParty = async (req, res) => {
     });
 
     if (!accountGroup) {
-      return res.status(400).json({ message: "Default account group not found" });
+      return res
+        .status(400)
+        .json({ message: "Default account group not found" });
     }
 
     const updatePayload = {
@@ -370,7 +378,7 @@ export const updateParty = async (req, res) => {
     const party = await Party.findOneAndUpdate(
       { _id: id, Primary_user_id: owner },
       updatePayload,
-      { new: true, runValidators: true }
+      { new: true, runValidators: true },
     );
 
     res.json({ message: "Party updated", party });
@@ -398,7 +406,6 @@ export const deleteParty = async (req, res) => {
     res.status(500).json({ message: "Failed to delete party" });
   }
 };
-
 
 export const getParties = async (req, res) => {
   try {

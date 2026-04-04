@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/dialog";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Button } from "@/components/ui/button";
+import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
 export default function VoucherSeriesModal({
   isOpen,
@@ -37,9 +38,13 @@ export default function VoucherSeriesModal({
 
   const nextNumber =
     currentSeries?.currentNumber != null
-      ? String(currentSeries.currentNumber).padStart(
-          currentSeries.widthOfNumericalPart || 1,
-          "0"
+      ? formatVoucherNumber(
+          currentSeries.prefix || "",
+          String(currentSeries.currentNumber).padStart(
+            currentSeries.widthOfNumericalPart || 1,
+            "0"
+          ),
+          currentSeries.suffix || "",
         )
       : "--";
 
@@ -48,7 +53,7 @@ export default function VoucherSeriesModal({
       s.widthOfNumericalPart || 1,
       "0"
     );
-    return `${s.prefix || ""}${num}${s.suffix || ""}`;
+    return formatVoucherNumber(s.prefix || "", num, s.suffix || "");
   };
 
   const handleConfirm = () => {

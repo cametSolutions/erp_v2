@@ -11,6 +11,7 @@ import { addGodowns } from "../../controllers/tallyDataController.js/tallyGodown
 import { addProducts } from "../../controllers/tallyDataController.js/tallyProductController.js";
 import { saveAdditionalChargesFromTally } from "../../controllers/tallyDataController.js/additionalChargeController.js";
 import { importOutstandingFromTally } from "../../controllers/tallyDataController.js/outstandingController.js";
+import { getSaleOrdersForTally } from "../../controllers/tallyDataController.js/tallyExportController.js";
 
 const router = express.Router();
 
@@ -41,5 +42,9 @@ router.post("/godowns", addGodowns);
 router.post("/products", addProducts);
 router.post("/additional-charge", saveAdditionalChargesFromTally);
 router.post("/outstanding", importOutstandingFromTally);
+
+/// tally export routes 
+// Sale Order export to Tally
+router.get("/get-sale-orders/:cmp_id/:sno", getSaleOrdersForTally);
 
 export default router;

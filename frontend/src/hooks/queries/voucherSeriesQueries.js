@@ -4,23 +4,53 @@ import api from "@/api/client/apiClient";
 
 export const voucherSeriesKeys = {
   all: ["voucherSeries"],
-  list: (cmpId, voucherType) => ["voucherSeries", cmpId, voucherType],
+  list: (cmp_id, voucherType) => ["voucherSeries", cmp_id, voucherType],
+  nextNumber: (cmp_id, voucherType) => [
+    "voucherSeries",
+    "nextNumber",
+    cmp_id,
+    voucherType,
+  ],
 };
 
-async function fetchVoucherSeries({ cmpId, voucherType }) {
+async function fetchVoucherSeries({ cmp_id, voucherType }) {
   const res = await api.get(
-    `/sUsers/getSeriesByVoucher/${cmpId}?voucherType=${voucherType}&restrict=true`,
+    `/sUsers/getSeriesByVoucher/${cmp_id}?voucherType=${voucherType}&restrict=true`,
     { withCredentials: true },
   );
   return res.data; // { series: [...] }
 }
 
-export function useVoucherSeries({ cmpId, voucherType, enabled = true }) {
+async function fetchNextVoucherSeriesNumber({ cmp_id, voucherType }) {
+  const res = await api.get(`/sUsers/nextVoucherSeriesNumber/${cmp_id}`, {
+    params: { voucherType },
+    withCredentials: true,
+  });
+  return res.data; // { nextCurrentNumber: number }
+}
+
+export function useVoucherSeries({ cmp_id, voucherType, enabled = true }) {
   return useQuery({
-    queryKey: voucherSeriesKeys.list(cmpId, voucherType),
-    queryFn: () => fetchVoucherSeries({ cmpId, voucherType }),
-    enabled: !!cmpId && !!voucherType && enabled,
+    queryKey: voucherSeriesKeys.list(cmp_id, voucherType),
+    queryFn: () => fetchVoucherSeries({ cmp_id, voucherType }),
+    enabled: !!cmp_id && !!voucherType && enabled,
     staleTime: 5 * 60 * 1000, // 5 minutes
+    refetchOnMount: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+export function useNextVoucherSeriesNumber({
+  cmp_id,
+  voucherType,
+  enabled = true,
+}) {
+  return useQuery({
+    queryKey: voucherSeriesKeys.nextNumber(cmp_id, voucherType),
+    queryFn: () => fetchNextVoucherSeriesNumber({ cmp_id, voucherType }),
+    enabled: !!cmp_id && !!voucherType && enabled,
+    staleTime: 5 * 60 * 1000,
+    gcTime: 10 * 60 * 1000,
     refetchOnMount: false,
     refetchOnWindowFocus: false,
   });

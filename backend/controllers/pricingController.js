@@ -1,6 +1,6 @@
 import mongoose from "mongoose";
 
-import SaleOrder from "../Model/saleOrderSchema.js";
+import SaleOrder from "../Model/SaleOrder.js";
 
 function toObjectId(value) {
   if (!value || !mongoose.Types.ObjectId.isValid(value)) return null;
@@ -10,30 +10,52 @@ function toObjectId(value) {
 async function getLatestPrice({ owner, partyId, productId }) {
   const productObjectId = toObjectId(productId);
   const partyObjectId = partyId ? toObjectId(partyId) : null;
+  const ownerObjectId = toObjectId(owner);
 
-  if (!productObjectId || (partyId && !partyObjectId)) {
+  if (!productObjectId || (partyId && !partyObjectId) || !ownerObjectId) {
     return null;
   }
 
   const matchStage = {
-    Primary_user_id: new mongoose.Types.ObjectId(owner),
-    "items._id": productObjectId,
+    $and: [
+      {
+        $or: [
+          { Primary_user_id: ownerObjectId },
+          { created_by: ownerObjectId },
+        ],
+      },
+      {
+        $or: [
+          { "items._id": productObjectId },
+          { "items.item_id": productObjectId },
+        ],
+      },
+    ],
   };
 
   if (partyObjectId) {
-    matchStage["party._id"] = partyObjectId;
+    matchStage.$and.push({
+      $or: [{ "party._id": partyObjectId }, { party_id: partyObjectId }],
+    });
   }
 
   const records = await SaleOrder.aggregate([
     { $match: matchStage },
     { $sort: { _id: -1 } },
     { $unwind: "$items" },
-    { $match: { "items._id": productObjectId } },
+    {
+      $match: {
+        $or: [
+          { "items._id": productObjectId },
+          { "items.item_id": productObjectId },
+        ],
+      },
+    },
     {
       $project: {
-        partyId: "$party._id",
-        productId: "$items._id",
-        transactionDate: "$transactionDate",
+        partyId: { $ifNull: ["$party._id", "$party_id"] },
+        productId: { $ifNull: ["$items._id", "$items.item_id"] },
+        transactionDate: { $ifNull: ["$transactionDate", "$date"] },
         price: {
           $ifNull: [
             "$items.rate",
@@ -65,7 +87,7 @@ export const getPartyLsp = async (req, res) => {
     }
 
     const latest = await getLatestPrice({
-      owner: req.user.id,
+      owner: req.user.owner || req.user.id,
       partyId,
       productId,
     });
@@ -90,7 +112,7 @@ export const getGlobalLsp = async (req, res) => {
     }
 
     const latest = await getLatestPrice({
-      owner: req.user.id,
+      owner: req.user.owner || req.user.id,
       productId,
     });
 

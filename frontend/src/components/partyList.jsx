@@ -6,7 +6,7 @@ import { Pencil, Trash2, Users } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 
-import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
+import { useDeleteConfirm } from "@/components/common/deleteConfirmContext";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,6 +17,7 @@ import {
   useInfinitePartyListQuery,
 } from "@/hooks/queries/partyQueries";
 import { ROUTES } from "@/routes/paths";
+import { MdErrorOutline } from "react-icons/md";
 
 const PAGE_SIZE = 20;
 const LEDGER_TYPE_LABELS = {
@@ -34,7 +35,8 @@ function getOutstandingTone(classification) {
       }
     : {
         amountClass: "text-emerald-600",
-        badgeClass: "border border-emerald-200 bg-emerald-50 text-emerald-700",
+        badgeClass:
+          "border border-emerald-200 bg-emerald-50 text-emerald-700",
         dotClass: "bg-emerald-500",
       };
 }
@@ -55,7 +57,9 @@ function PartyRow({ party, rightContent, onClick, className = "" }) {
               {party?.partyName || "Untitled Party"}
             </p>
             <p className="truncate text-xs text-slate-500">
-              {party?.mobileNumber || party?.emailID || "No contact details"}
+              {party?.mobileNumber ||
+                party?.emailID ||
+                "No contact details"}
             </p>
           </div>
         </div>
@@ -71,20 +75,34 @@ function PartyRow({ party, rightContent, onClick, className = "" }) {
   );
 }
 
+function ErrorRetryState({ message, onRetry }) {
+  return (
+    <div className="flex h-40 flex-col items-center justify-center gap-2 text-center">
+      <MdErrorOutline className="text-rose-500" size={28} />
+      <p className="text-sm font-semibold text-slate-800">
+        {message || "Something went wrong"}
+      </p>
+      <button
+        type="button"
+        onClick={onRetry}
+        className="mt-1 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+      >
+        Retry
+      </button>
+    </div>
+  );
+}
+
 /**
  * PartyList component
  *
  * Props:
  * - mode: "master" | "outstanding" | "select"
- *   - master: used in Party masters screen (edit/delete actions).
- *   - outstanding: used in Outstanding screen (shows total outstanding, navigates on click).
- *   - select: used in transaction flows (Sale Order, Receipt) inside a sheet to pick a party.
  * - onSelect?: function(party)
  */
 export function PartyList({ mode = "master", onSelect }) {
   const [searchText, setSearchText] = useState("");
-  // ledger | receivable | payable (for outstanding screen)
-  const [ledgerType, setLedgerType] = useState("ledger");
+  const [ledgerType, setLedgerType] = useState("ledger"); // ledger | receivable | payable
   const loadMoreRef = useRef(null);
 
   const navigate = useNavigate();
@@ -92,9 +110,13 @@ export function PartyList({ mode = "master", onSelect }) {
   const queryClient = useQueryClient();
   const confirmDelete = useDeleteConfirm();
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
-  const cmpId = useSelector((state) => state.company.selectedCompanyId) || "";
+  const cmp_id =
+    useSelector((state) => state.company.selectedCompanyId) || "";
 
-  const debouncedSearchText = useDebouncedValue(searchText.trim(), 500);
+  const debouncedSearchText = useDebouncedValue(
+    searchText.trim(),
+    500,
+  );
   const isCustomersRoute = location.pathname === ROUTES.mastersCustomers;
   const pageLabel = isCustomersRoute ? "Customers" : "Parties";
   const emptyLabel = isCustomersRoute ? "customers" : "parties";
@@ -107,8 +129,9 @@ export function PartyList({ mode = "master", onSelect }) {
     isFetchingNextPage,
     fetchNextPage,
     hasNextPage,
+    refetch,
   } = useInfinitePartyListQuery({
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
     limit: PAGE_SIZE,
     search: debouncedSearchText,
     ledgerType: mode === "outstanding" ? ledgerType : undefined,
@@ -128,7 +151,8 @@ export function PartyList({ mode = "master", onSelect }) {
           ? [
               {
                 label: isCustomersRoute ? "Add Customer" : "Add Party",
-                onSelect: () => navigate(ROUTES.mastersPartyRegister),
+                onSelect: () =>
+                  navigate(ROUTES.mastersPartyRegister),
               },
             ]
           : [],
@@ -136,7 +160,9 @@ export function PartyList({ mode = "master", onSelect }) {
         show: true,
         value: searchText,
         placeholder:
-          mode === "master" ? `Search ${emptyLabel}` : "Search parties",
+          mode === "master"
+            ? `Search ${emptyLabel}`
+            : "Search parties",
         onChange: setSearchText,
       },
     });
@@ -162,7 +188,8 @@ export function PartyList({ mode = "master", onSelect }) {
     toast.error(message);
   }, [emptyLabel, error, isError]);
 
-  const parties = data?.pages?.flatMap((page) => page?.items || []) || [];
+  const parties =
+    data?.pages?.flatMap((page) => page?.items || []) || [];
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {
@@ -188,7 +215,9 @@ export function PartyList({ mode = "master", onSelect }) {
 
   const handleDelete = async (party) => {
     const ok = await confirmDelete({
-      title: `Delete this ${isCustomersRoute ? "customer" : "party"}?`,
+      title: `Delete this ${
+        isCustomersRoute ? "customer" : "party"
+      }?`,
       description:
         "This record will be removed permanently. This action cannot be undone.",
       confirmLabel: "Delete",
@@ -197,25 +226,49 @@ export function PartyList({ mode = "master", onSelect }) {
 
     try {
       const res = await partyService.deleteParty(party._id);
-      toast.success(res?.message || `${pageLabel.slice(0, -1)} deleted`);
+      toast.success(
+        res?.message || `${pageLabel.slice(0, -1)} deleted`,
+      );
 
       queryClient.removeQueries({
         queryKey: partyQueryKeys.detail(party._id),
         exact: true,
       });
-      queryClient.invalidateQueries({ queryKey: partyQueryKeys.all });
+      queryClient.invalidateQueries({
+        queryKey: partyQueryKeys.all,
+      });
     } catch (err) {
       const message =
-        err?.response?.data?.message || err?.message || "Delete failed";
+        err?.response?.data?.message ||
+        err?.message ||
+        "Delete failed";
       toast.error(message);
     }
   };
 
-  if (!cmpId) {
+  if (!cmp_id) {
     return (
       <div className="w-full font-[sans-serif]">
         <div className="mx-auto w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
           Select a company first to view {emptyLabel}.
+        </div>
+      </div>
+    );
+  }
+
+  // Inline error UI with Retry
+  if (isError) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      `Failed to load ${emptyLabel}`;
+    return (
+      <div className="w-full font-[sans-serif]">
+        <div className="mx-auto w-full max-w-md">
+          <ErrorRetryState
+            message={message}
+            onRetry={() => refetch()}
+          />
         </div>
       </div>
     );
@@ -275,11 +328,12 @@ export function PartyList({ mode = "master", onSelect }) {
       <div className="text-sm font-semibold text-emerald-600">
         {party.totalOutstanding?.toFixed(2) ?? "0.00"}
       </div>
-      <div className="text-[10px] text-slate-500">Tap to select</div>
+      <div className="text-[10px] text-slate-500">
+        Tap to select
+      </div>
     </div>
   );
 
-  // Header total based on current filter & current page parties
   // eslint-disable-next-line react-hooks/rules-of-hooks
   const { headerBalance, headerClassification } = useMemo(() => {
     if (ledgerType === "receivable") {
@@ -302,7 +356,10 @@ export function PartyList({ mode = "master", onSelect }) {
       };
     }
 
-    const sum = parties.reduce((acc, p) => acc + (p.totalOutstanding || 0), 0);
+    const sum = parties.reduce(
+      (acc, p) => acc + (p.totalOutstanding || 0),
+      0,
+    );
 
     return {
       headerBalance: sum,
@@ -346,26 +403,26 @@ export function PartyList({ mode = "master", onSelect }) {
                 mode === "master"
                   ? renderRightMaster(party)
                   : mode === "outstanding"
-                    ? renderRightOutstanding(party)
-                    : renderRightSelect(party)
+                  ? renderRightOutstanding(party)
+                  : renderRightSelect(party)
               }
               onClick={
                 mode === "master"
                   ? undefined
                   : mode === "outstanding"
-                    ? () =>
-                        navigate(
-                          ROUTES.outstandingPartyDetail.replace(
-                            ":partyId",
-                            party._id,
-                          ),
-                          {
-                            state: {
-                              partyName: party?.partyName || "",
-                            },
+                  ? () =>
+                      navigate(
+                        ROUTES.outstandingPartyDetail.replace(
+                          ":partyId",
+                          party._id,
+                        ),
+                        {
+                          state: {
+                            partyName: party?.partyName || "",
                           },
-                        )
-                    : () => onSelect && onSelect(party)
+                        },
+                      )
+                  : () => onSelect && onSelect(party)
               }
             />
           ))}
@@ -379,12 +436,16 @@ export function PartyList({ mode = "master", onSelect }) {
   return (
     <div
       className={`w-full font-[sans-serif] ${
-        mode === "select" ? "flex h-full min-h-0 flex-col" : ""
+        mode === "select"
+          ? "flex h-full min-h-0 flex-col"
+          : ""
       }`}
     >
       <div
         className={`mx-auto w-full max-w-md ${
-          mode === "select" ? "flex h-full min-h-0 flex-col" : "space-y-3"
+          mode === "select"
+            ? "flex h-full min-h-0 flex-col"
+            : "space-y-3"
         }`}
       >
         {mode === "outstanding" && (
@@ -403,7 +464,9 @@ export function PartyList({ mode = "master", onSelect }) {
                 <select
                   className="rounded-full border border-blue-100/20 bg-white/12 px-3 py-1.5 text-xs font-medium text-white outline-none backdrop-blur-sm transition focus:border-blue-100/50"
                   value={ledgerType}
-                  onChange={(e) => setLedgerType(e.target.value)}
+                  onChange={(e) =>
+                    setLedgerType(e.target.value)
+                  }
                 >
                   <option value="ledger">Ledger</option>
                   <option value="payable">Payables</option>
@@ -450,7 +513,9 @@ export function PartyList({ mode = "master", onSelect }) {
             <input
               type="text"
               value={searchText}
-              onChange={(e) => setSearchText(e.target.value)}
+              onChange={(e) =>
+                setSearchText(e.target.value)
+              }
               placeholder="Search parties"
               className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-200"
             />
@@ -459,7 +524,9 @@ export function PartyList({ mode = "master", onSelect }) {
 
         {mode === "select" ? (
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-3 py-3">{listContent}</div>
+            <div className="space-y-3 py-3">
+              {listContent}
+            </div>
           </ScrollArea>
         ) : (
           listContent

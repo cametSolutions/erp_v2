@@ -6,7 +6,7 @@ import { useNavigate } from "react-router-dom";
 
 import { deleteUser } from "../../api/client/userApi";
 import { useUserOptionsQuery, userQueryKeys } from "@/hooks/queries/userQueries";
-import { useDeleteConfirm } from "@/components/common/DeleteConfirmProvider";
+import { useDeleteConfirm } from "@/components/common/deleteConfirmContext";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import { Card, CardContent } from "@/components/ui/card";
 import { ROUTES } from "@/routes/paths";
@@ -95,6 +95,7 @@ export default function UserListPage() {
     isLoading,
     isError,
     error,
+     refetch,
   } = useUserOptionsQuery(true);
 
   const [searchText, setSearchText] = useState("");
@@ -138,6 +139,36 @@ export default function UserListPage() {
       return haystack.includes(q);
     });
   }, [searchText, users]);
+
+
+if (isError) {
+    const msg =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to load users";
+
+    return (
+      <div className="w-full font-[sans-serif]">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-rose-200 bg-rose-50 p-4 text-sm text-rose-700">
+          <p className="font-semibold">Something went wrong</p>
+          <p className="mt-1">{msg}</p>
+          <button
+            type="button"
+            onClick={() => refetch()}
+            className="mt-3 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+          >
+            Retry
+          </button>
+          {/* Debug view (optional while developing) */}
+          {/* <pre className="mt-2 max-h-40 overflow-auto rounded bg-white/70 p-2 text-[10px] text-slate-800">
+            {JSON.stringify(error, null, 2)}
+          </pre> */}
+        </div>
+      </div>
+    );
+  }
+
+
 
   return (
     <div className="w-full font-[sans-serif]">

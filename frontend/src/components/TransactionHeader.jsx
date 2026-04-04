@@ -9,6 +9,7 @@ import {
 import { useDispatch, useSelector } from "react-redux";
 import { useVoucherSeries } from "@/hooks/queries/voucherSeriesQueries";
 import VoucherSeriesModal from "@/components/VoucherSeriesModal";
+import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 import {
   hydrateSelectedSeries,
   setTransactionDate,
@@ -54,10 +55,10 @@ const getVoucherParts = (series) => {
 
 // only for UI (PREFIX / NUMBER / SUFFIX)
 const formatVoucherForUi = ({ prefix, number, suffix }) =>
-  [prefix, number, suffix].filter(Boolean).join(" / ");
+  formatVoucherNumber(prefix, number, suffix);
 
 export default function TransactionHeader({
-  cmpId,
+  cmp_id,
   numberField,
   onHeaderReady,
 }) {
@@ -79,7 +80,7 @@ export default function TransactionHeader({
     isError,
     error,
     refetch,
-  } = useVoucherSeries({ cmpId, voucherType });
+  } = useVoucherSeries({ cmp_id, voucherType });
 
   const seriesList = data?.series || [];
   const hydratedSeries =
@@ -95,12 +96,12 @@ export default function TransactionHeader({
 
   const selectedDate = getSafeDate(transactionDate);
   const voucherParts = getVoucherParts(effectiveSeries);
-  const voucherNumberUi = formatVoucherForUi(voucherParts);
+  const voucherNumber = formatVoucherForUi(voucherParts);
 
   useEffect(() => {
-    if (!cmpId) return;
-    dispatch(hydrateSelectedSeries({ cmpId }));
-  }, [cmpId, voucherType, dispatch]);
+    if (!cmp_id) return;
+    dispatch(hydrateSelectedSeries({ cmp_id }));
+  }, [cmp_id, voucherType, dispatch]);
 
   useEffect(() => {
     if (transactionDate) return;
@@ -112,31 +113,34 @@ export default function TransactionHeader({
   }, [transactionDate, dispatch]);
 
   useEffect(() => {
-    if (!cmpId || !effectiveSeries) return;
+    if (!cmp_id || !effectiveSeries) return;
     if (hydratedSeries?._id === effectiveSeries._id) return;
 
     dispatch(
       setSelectedSeries({
-        cmpId,
+        cmp_id,
         series: effectiveSeries,
       })
     );
-  }, [cmpId, dispatch, effectiveSeries, hydratedSeries]);
+  }, [cmp_id, dispatch, effectiveSeries, hydratedSeries]);
 
   // expose clean data to parent (separated prefix/number/suffix)
   useEffect(() => {
     if (!onHeaderReady || !effectiveSeries || !transactionDate) return;
+
+    const voucherPrefix = voucherParts.prefix || undefined;
+    const voucherSuffix = voucherParts.suffix || undefined;
 
     onHeaderReady(() => () => ({
       transactionDate,
       voucherType,
       series_id: effectiveSeries._id,
       usedSeriesNumber: effectiveSeries.currentNumber,
-      voucherPrefix: voucherParts.prefix,
+      voucherPrefix,
       voucherNumber: voucherParts.number,
-      voucherSuffix: voucherParts.suffix,
+      voucherSuffix,
       // if backend still expects combined number, keep this:
-      [numberField]: voucherNumberUi,
+      [numberField]: voucherNumber,
     }));
   }, [
     numberField,
@@ -147,11 +151,11 @@ export default function TransactionHeader({
     voucherParts.prefix,
     voucherParts.number,
     voucherParts.suffix,
-    voucherNumberUi,
+    voucherNumber,
   ]);
 
   const handleSelectSeries = (series) => {
-    dispatch(setSelectedSeries({ cmpId, series }));
+    dispatch(setSelectedSeries({ cmp_id, series }));
   };
 
   const handleDateChange = (date) => {
@@ -163,7 +167,7 @@ export default function TransactionHeader({
     );
   };
 
-  const headerMessage = !cmpId
+  const headerMessage = !cmp_id
     ? "Select a company to load transaction series."
     : isError
     ? error?.response?.data?.message ||
@@ -180,14 +184,14 @@ export default function TransactionHeader({
               <button
                 type="button"
                 onClick={() => setIsSeriesModalOpen(true)}
-                disabled={!cmpId || isError || seriesList.length === 0}
+                disabled={!cmp_id || isError || seriesList.length === 0}
                 className="mt-0.5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700 hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <span className="font-semibold">
                   {effectiveSeries?.seriesName || "Series"}
                 </span>
                 <span className="text-[10px] text-slate-500">
-                  {isLoading ? "Loading..." : `No: #${voucherNumberUi}`}
+                  {isLoading ? "Loading..." : `No: #${voucherNumber}`}
                 </span>
               </button>
             </div>
@@ -220,7 +224,7 @@ export default function TransactionHeader({
               <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
               <span>{headerMessage}</span>
             </div>
-            {cmpId && isError && (
+            {cmp_id && isError && (
               <button
                 type="button"
                 onClick={() => refetch()}
@@ -234,7 +238,7 @@ export default function TransactionHeader({
       </header>
 
       <VoucherSeriesModal
-        key={`${cmpId || "transaction"}-${effectiveSeries?._id || "empty"}`}
+        key={`${cmp_id || "transaction"}-${effectiveSeries?._id || "empty"}`}
         isOpen={isSeriesModalOpen}
         onClose={() => setIsSeriesModalOpen(false)}
         seriesList={seriesList}

@@ -1,118 +1,82 @@
-// src/pages/settings/CreateVoucherSeriesPage.jsx
 import { useEffect, useState } from "react";
-import { useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
-import api from "@/api/client/apiClient";
-import { formatVoucherType } from "@/utils/formatVoucherType";
+import { useQueryClient } from "@tanstack/react-query";
+import { useForm } from "react-hook-form";
 import { ROUTES } from "@/routes/paths";
+import api from "@/api/client/apiClient";
+import { voucherSeriesKeys } from "@/hooks/queries/voucherSeriesQueries";
+import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
+
+const middleSeparatorPattern = /^[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)*$/;
 
 const CreateVoucherSeriesPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const queryClient = useQueryClient();
 
-  const voucherType = location?.state?.from;        // "saleOrder"
-  const editingSeries = location?.state?.series;    // object when editing
-  const mode = location?.state?.mode || "create";   // "edit" | "create"
+  const voucherType =
+    location?.state?.from || searchParams.get("voucherType") || "";
+  const editingSeries = location?.state?.series;
+  const mode = location?.state?.mode || "create";
   const isEdit = mode === "edit";
 
   const cmp_id =
     useSelector((state) => state.company.selectedCompanyId) || "";
 
-  const [form, setForm] = useState({
-    seriesName: "",
-    prefix: "",
-    suffix: "",
-    currentNumber: 1,
-    widthOfNumericalPart: 1,
-  });
   const [loading, setLoading] = useState(false);
+  const {
+    register,
+    handleSubmit,
+    reset,
+    watch,
+    formState: { errors },
+  } = useForm({
+    defaultValues: {
+      seriesName: "",
+      prefix: "",
+      suffix: "",
+      currentNumber: "1",
+      widthOfNumericalPart: "1",
+    },
+    mode: "onChange",
+  });
 
   // PREFILL WHEN EDIT
   useEffect(() => {
     if (mode === "edit" && editingSeries) {
-      setForm({
+      reset({
         seriesName: editingSeries.seriesName || "",
         prefix: editingSeries.prefix || "",
         suffix: editingSeries.suffix || "",
-        currentNumber: editingSeries.currentNumber ?? 1,
-        widthOfNumericalPart: editingSeries.widthOfNumericalPart ?? 1,
+        currentNumber: String(editingSeries.currentNumber ?? 1),
+        widthOfNumericalPart: String(
+          editingSeries.widthOfNumericalPart ?? 1,
+        ),
       });
-    }
-  }, [mode, editingSeries]);
-
-  // ON CREATE: fetch latest current number and set next value
-  useEffect(() => {
-    const fetchNextNumber = async () => {
-      if (!cmp_id || !voucherType || isEdit) return;
-
-      try {
-        const res = await api.get(
-          `/sUsers/nextVoucherSeriesNumber/${cmp_id}`,
-          {
-            params: { voucherType },
-            withCredentials: true,
-          }
-        );
-
-        const next = res.data?.nextCurrentNumber ?? 1;
-
-        setForm((prev) => ({
-          ...prev,
-          currentNumber: next,
-        }));
-      } catch (error) {
-        console.error("Error fetching next current number:", error);
-        // fallback: keep default 1
-      }
-    };
-
-    fetchNextNumber();
-  }, [cmp_id, voucherType, isEdit]);
-
-  const handleChange = (field) => (e) => {
-    const raw = e.target.value;
-
-    // allow letters/numbers, and - or / only BETWEEN them
-    const middleDashOrSlash = /^[A-Za-z0-9]+(?:[-\/][A-Za-z0-9]+)*$/;
-
-    // apply this rule to prefix & suffix
-    if (field === "prefix" || field === "suffix") {
-      if (raw === "" || middleDashOrSlash.test(raw)) {
-        setForm((prev) => ({
-          ...prev,
-          [field]: raw,
-        }));
-      }
       return;
     }
 
-    const value =
-      field === "currentNumber" || field === "widthOfNumericalPart"
-        ? Number(raw || 0)
-        : raw;
+    reset({
+      seriesName: "",
+      prefix: "",
+      suffix: "",
+      currentNumber: "1",
+      widthOfNumericalPart: "1",
+    });
+  }, [mode, editingSeries, reset]);
 
-    setForm((prev) => ({
-      ...prev,
-      [field]: value,
-    }));
-  };
+  const formValues = watch();
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const onSubmit = async (form) => {
     if (!voucherType || !cmp_id) {
       toast.error("Missing voucher type or company");
       return;
     }
-
-    if (!form.seriesName.trim()) {
-      toast.error("Series Name is required");
-      return;
-    }
-    if (!form.widthOfNumericalPart || form.widthOfNumericalPart < 1) {
-      toast.error("Width of Numerical Part must be at least 1");
-      return;
-    }
+    const currentNumberValue = Number(form.currentNumber || 0);
+    const widthValue = Number(form.widthOfNumericalPart || 0);
 
     try {
       setLoading(true);
@@ -122,24 +86,26 @@ const CreateVoucherSeriesPage = () => {
         seriesName: form.seriesName.trim(),
         prefix: form.prefix.trim(),
         suffix: form.suffix.trim(),
-        widthOfNumericalPart: form.widthOfNumericalPart,
+        widthOfNumericalPart: widthValue,
       };
 
       // only send currentNumber when creating new series
+      let responseData;
       const payload =
         mode === "edit"
           ? basePayload
           : {
               ...basePayload,
-              currentNumber: form.currentNumber || 1,
+              currentNumber: currentNumberValue,
             };
 
       if (mode === "edit" && editingSeries?._id) {
-        await api.put(
+        const res = await api.put(
           `/sUsers/updateVoucherSeries/${cmp_id}/${editingSeries._id}`,
           payload,
           { withCredentials: true }
         );
+        responseData = res?.data;
         toast.success("Series updated successfully");
       } else {
         const res = await api.post(
@@ -147,10 +113,25 @@ const CreateVoucherSeriesPage = () => {
           payload,
           { withCredentials: true }
         );
+        responseData = res?.data;
         toast.success(res.data?.message || "Series created successfully");
       }
 
-      navigate(ROUTES.settingsVoucherSeriesList, {
+      queryClient.setQueryData(voucherSeriesKeys.list(cmp_id, voucherType), {
+        voucherSeriesId: responseData?.voucherSeriesId,
+        series: responseData?.series || [],
+      });
+      await queryClient.invalidateQueries({
+        queryKey: voucherSeriesKeys.list(cmp_id, voucherType),
+      });
+      await queryClient.invalidateQueries({
+        queryKey: voucherSeriesKeys.nextNumber(cmp_id, voucherType),
+      });
+
+      navigate({
+        pathname: ROUTES.settingsVoucherSeriesList,
+        search: `?voucherType=${voucherType}`,
+      }, {
         state: { from: voucherType },
         replace: true,
       });
@@ -167,19 +148,25 @@ const CreateVoucherSeriesPage = () => {
   };
 
   const livePreview = () => {
-    const num = String(form.currentNumber || 1).padStart(
-      form.widthOfNumericalPart || 1,
+    const rawNumber = formValues.currentNumber || "1";
+    const widthValue = Number(formValues.widthOfNumericalPart || 1);
+    const num = rawNumber.padStart(
+      widthValue || 1,
       "0"
     );
-    return `${form.prefix || ""}${num}${form.suffix || ""}`;
+    return formatVoucherNumber(
+      formValues.prefix || "",
+      num,
+      formValues.suffix || "",
+    );
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 flex flex-col">
+    <div className="min-h-screen bg-white flex flex-col">
       <main className="flex-1">
-        <div className="mx-auto max-w-3xl px-4 py-6">
-          <div className="rounded-lg border border-slate-200 bg-white shadow-sm">
-            <form onSubmit={handleSubmit} className="space-y-6 px-6 py-5">
+        <div className="mx-auto max-w-5xl px-2 py-6">
+          <div className="rounded-sm border border-slate-200 bg-white shadow-sm">
+            <form onSubmit={handleSubmit(onSubmit)} className="space-y-6 px-6 py-5">
               {/* Series Name */}
               <div className="space-y-1.5">
                 <label className="flex items-center justify-between text-[11px] font-medium text-slate-700">
@@ -192,11 +179,17 @@ const CreateVoucherSeriesPage = () => {
                 </label>
                 <input
                   type="text"
-                  value={form.seriesName}
-                  onChange={handleChange("seriesName")}
                   placeholder="E.g. Sales Invoice 2025"
+                  {...register("seriesName", {
+                    required: "Series Name is required",
+                  })}
                   className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
                 />
+                {errors.seriesName && (
+                  <p className="text-[11px] text-rose-500">
+                    {errors.seriesName.message}
+                  </p>
+                )}
               </div>
 
               {/* Prefix / Suffix */}
@@ -207,11 +200,24 @@ const CreateVoucherSeriesPage = () => {
                   </label>
                   <input
                     type="text"
-                    value={form.prefix}
-                    onChange={handleChange("prefix")}
-                    placeholder="E.g. SO-"
+                    placeholder="E.g. FY2025/2026"
+                    {...register("prefix", {
+                      validate: (value) =>
+                        value === "" ||
+                        middleSeparatorPattern.test(value) ||
+                        'Use "/" or "-" only in the middle.',
+                    })}
                     className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
                   />
+                  {errors.prefix && (
+                    <p className="text-[11px] text-rose-500">
+                      {errors.prefix.message}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Letters and numbers only at the start or end. Use "/" or
+                    "-" only in the middle.
+                  </p>
                 </div>
 
                 <div className="space-y-1.5">
@@ -220,11 +226,24 @@ const CreateVoucherSeriesPage = () => {
                   </label>
                   <input
                     type="text"
-                    value={form.suffix}
-                    onChange={handleChange("suffix")}
-                    placeholder="E.g. -25"
+                    placeholder="E.g. 2025/2026"
+                    {...register("suffix", {
+                      validate: (value) =>
+                        value === "" ||
+                        middleSeparatorPattern.test(value) ||
+                        'Use "/" or "-" only in the middle.',
+                    })}
                     className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
                   />
+                  {errors.suffix && (
+                    <p className="text-[11px] text-rose-500">
+                      {errors.suffix.message}
+                    </p>
+                  )}
+                  <p className="mt-1 text-[10px] text-slate-400">
+                    Letters and numbers only at the start or end. Use "/" or
+                    "-" only in the middle.
+                  </p>
                 </div>
               </div>
 
@@ -235,17 +254,33 @@ const CreateVoucherSeriesPage = () => {
                     Current number<span className="text-rose-500">*</span>
                   </label>
                   <input
-                    type="number"
-                    min={1}
-                    value={form.currentNumber}
-                    onChange={handleChange("currentNumber")}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
                     disabled={isEdit}
+                    {...register("currentNumber", {
+                      required: "Current Number is required",
+                      validate: (value) => {
+                        if (!/^\d+$/.test(value || "")) {
+                          return "Enter digits only";
+                        }
+                        if (Number(value) < 1) {
+                          return "Current Number must be at least 1";
+                        }
+                        return true;
+                      },
+                    })}
                     className={`w-full rounded-md border px-3 py-2 text-xs outline-none ${
                       isEdit
                         ? "bg-slate-100 border-slate-200 text-slate-500"
                         : "bg-slate-50 border-slate-300 focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
                     }`}
                   />
+                  {errors.currentNumber && (
+                    <p className="text-[11px] text-rose-500">
+                      {errors.currentNumber.message}
+                    </p>
+                  )}
                 </div>
 
                 <div className="space-y-1.5">
@@ -253,14 +288,33 @@ const CreateVoucherSeriesPage = () => {
                     Width of numerical part<span className="text-rose-500">*</span>
                   </label>
                   <input
-                    type="number"
-                    min={1}
-                    value={form.widthOfNumericalPart}
-                    onChange={handleChange("widthOfNumericalPart")}
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    {...register("widthOfNumericalPart", {
+                      required: "Width of Numerical Part is required",
+                      validate: (value) => {
+                        if (!/^\d+$/.test(value || "")) {
+                          return "Enter digits only";
+                        }
+                        if (Number(value) < 1) {
+                          return "Width of Numerical Part must be at least 1";
+                        }
+                        if (Number(value) > 5) {
+                          return "Width of Numerical Part cannot exceed 5";
+                        }
+                        return true;
+                      },
+                    })}
                     className="w-full rounded-md border border-slate-300 bg-slate-50 px-3 py-2 text-xs text-slate-900 outline-none transition focus:border-sky-500 focus:bg-white focus:ring-1 focus:ring-sky-500"
                   />
+                  {errors.widthOfNumericalPart && (
+                    <p className="text-[11px] text-rose-500">
+                      {errors.widthOfNumericalPart.message}
+                    </p>
+                  )}
                   <p className="mt-1 text-[10px] text-slate-400">
-                    Controls zero padding. Width 4 with value 12 → 0012.
+                    Controls zero padding. Width 4 with value 12 → 0012. Max 5.
                   </p>
                 </div>
               </div>
@@ -280,7 +334,10 @@ const CreateVoucherSeriesPage = () => {
                 <button
                   type="button"
                   onClick={() =>
-                    navigate(ROUTES.settingsVoucherSeriesList, {
+                    navigate({
+                      pathname: ROUTES.settingsVoucherSeriesList,
+                      search: `?voucherType=${voucherType}`,
+                    }, {
                       state: { from: voucherType },
                     })
                   }

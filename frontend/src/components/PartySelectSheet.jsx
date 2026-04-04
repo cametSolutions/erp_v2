@@ -1,6 +1,6 @@
 // src/components/PartySelectSheet.jsx
 import { useState } from "react";
-import { useDispatch } from "react-redux";
+import { useDispatch, useSelector } from "react-redux";
 import { LoaderCircle } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -12,9 +12,11 @@ import {
 import { partyService } from "@/api/services/party.service";
 import { PartyList } from "@/components/partyList";
 import { setParty } from "@/store/slices/transactionSlice";
+import { resolveTaxType } from "@/utils/salesCalculation";
 
 export default function PartySelectSheet({ open, onOpenChange }) {
   const dispatch = useDispatch();
+  const selectedCompany = useSelector((state) => state.company.selectedCompany);
   const [selectedPartyId, setSelectedPartyId] = useState(null);
 
   const handleSelect = async (party) => {
@@ -29,6 +31,10 @@ export default function PartySelectSheet({ open, onOpenChange }) {
       dispatch(
         setParty({
           ...fullParty,
+          taxType: resolveTaxType(
+            selectedCompany?.state ?? null,
+            fullParty?.state ?? party?.state ?? null,
+          ),
           totalOutstanding:
             fullParty?.totalOutstanding ?? party?.totalOutstanding ?? 0,
           classification:

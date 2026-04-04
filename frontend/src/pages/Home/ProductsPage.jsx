@@ -43,7 +43,7 @@ export default function ProductsPage() {
   const [searchText, setSearchText] = useState("");
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
   const loadMoreRef = useRef(null);
-  const cmpId = localStorage.getItem("activeCompanyId") || "";
+  const cmp_id = localStorage.getItem("activeCompanyId") || "";
   const debouncedSearchText = useDebouncedValue(searchText.trim(), 500);
 
   const {
@@ -55,7 +55,7 @@ export default function ProductsPage() {
     fetchNextPage,
     hasNextPage,
   } = useInfiniteProductListQuery({
-    cmp_id: cmpId,
+    cmp_id: cmp_id,
     limit: PAGE_SIZE,
     search: debouncedSearchText,
   });
@@ -104,7 +104,7 @@ export default function ProductsPage() {
 
   const products = data?.pages?.flatMap((page) => page?.items || []) || [];
 
-  if (!cmpId) {
+  if (!cmp_id) {
     return (
       <div className="w-full font-[sans-serif]">
         <div className="mx-auto w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
