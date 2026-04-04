@@ -422,6 +422,87 @@ function renderPartySection({
   return currentY + boxHeight + PDF_THEME.sectionGap;
 }
 
+function getDespatchRows(saleOrder) {
+  const despatchDetails = saleOrder?.despatch_details || {};
+
+  return [
+    ["Challan No", despatchDetails?.challan_no],
+    ["Container No", despatchDetails?.container_no],
+    ["Despatch Through", despatchDetails?.despatch_through],
+    ["Destination", despatchDetails?.destination],
+    ["Vehicle No", despatchDetails?.vehicle_no],
+    ["Order No", despatchDetails?.order_no],
+    ["Terms Of Pay", despatchDetails?.terms_of_pay],
+    ["Terms Of Delivery", despatchDetails?.terms_of_delivery],
+  ].filter(([, value]) => value);
+}
+
+function renderDespatchSection({
+  doc,
+  currentY,
+  pageWidth,
+  margin,
+  saleOrder,
+}) {
+  const despatchRows = getDespatchRows(saleOrder);
+  if (!despatchRows.length) {
+    return currentY;
+  }
+
+  const columnGap = 8;
+  const columnWidth = (pageWidth - margin * 2 - columnGap) / 2;
+  const leftColumn = despatchRows.filter((_, index) => index % 2 === 0);
+  const rightColumn = despatchRows.filter((_, index) => index % 2 === 1);
+  const headerOffset = 8;
+  const getWrappedValueLines = (value) =>
+    doc.splitTextToSize(String(value), columnWidth);
+  const getColumnHeight = (rows) =>
+    rows.reduce(
+      (total, [, value]) => total + 4.2 + getWrappedValueLines(value).length * 4.2 + 3.5,
+      0
+    );
+  const estimatedHeight =
+    headerOffset + Math.max(getColumnHeight(leftColumn), getColumnHeight(rightColumn)) + 2;
+
+  let nextY = ensureSpace(doc, currentY, estimatedHeight + 4);
+
+  setTextStyle(doc, {
+    weight: "bold",
+    size: 10,
+    color: PDF_THEME.headingTextColor,
+  });
+  doc.text("Despatch Details", margin, nextY);
+
+  const renderColumn = (rows, startX) => {
+    let rowY = nextY + headerOffset;
+
+    rows.forEach(([label, value]) => {
+      const lines = getWrappedValueLines(value);
+
+      setTextStyle(doc, {
+        size: 8.5,
+        color: PDF_THEME.subtleTextColor,
+      });
+      doc.text(label, startX, rowY);
+
+      setTextStyle(doc, {
+        size: 9.2,
+        color: PDF_THEME.bodyTextColor,
+      });
+      doc.text(lines, startX, rowY + 4.2);
+
+      rowY += 4.2 + lines.length * 4.2 + 3.5;
+    });
+  };
+
+  renderColumn(leftColumn, margin);
+  renderColumn(rightColumn, margin + columnWidth + columnGap);
+
+  drawDivider(doc, nextY + estimatedHeight, pageWidth, margin);
+
+  return nextY + estimatedHeight + PDF_THEME.sectionGap;
+}
+
 function buildItemColumns(resolvedConfigurations) {
   return [
     {
@@ -834,6 +915,14 @@ export async function generateSaleOrderPdf({
     margin,
     saleOrder,
     partyConfig,
+  });
+
+  currentY = renderDespatchSection({
+    doc,
+    currentY,
+    pageWidth,
+    margin,
+    saleOrder,
   });
 
   currentY = renderItemsTable({
