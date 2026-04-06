@@ -27,6 +27,7 @@ export const ROUTES = {
   createOrder: "/create-order",
   transactionDetail: "/transactions/:voucherType/:voucherId",
   saleOrderDetail: "/sale-orders/:saleOrderId",
+  saleOrderEdit: "/sale-orders/:id/edit",
   salesSelectItems: "/sales/create/select-items",
   createReceipt: "/create-receipt",
   mastersUserRegister: "/users/create",

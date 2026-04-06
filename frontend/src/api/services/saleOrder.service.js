@@ -26,6 +26,7 @@ export function buildCreateSaleOrderPayload({
   return {
     ...sanitizedHeaderPayload,
     cmp_id,
+    cmpId: cmp_id,
     party,
     selectedPriceLevel: selectedPriceLevel
       ? {
@@ -35,6 +36,7 @@ export function buildCreateSaleOrderPayload({
         }
       : null,
     items: items.map((item) => ({
+      _id: item?._id ?? null,
       id: item?.id ?? item?._id,
       name: item?.name ?? item?.product_name ?? "",
       hsn: item?.hsn ?? item?.hsn_code ?? "",
@@ -94,6 +96,40 @@ export function buildCreateSaleOrderPayload({
   };
 }
 
+export function buildUpdateSaleOrderPayload({
+  cmp_id,
+  party,
+  items = [],
+  despatchDetails,
+  additionalCharges,
+  totals,
+  selectedPriceLevel,
+  selectedSeries,
+  headerPayload = {},
+}) {
+  const basePayload = buildCreateSaleOrderPayload({
+    cmp_id,
+    party,
+    items,
+    despatchDetails,
+    additionalCharges,
+    totals,
+    selectedPriceLevel,
+    headerPayload,
+  });
+
+  return {
+    ...basePayload,
+    selectedSeries: selectedSeries
+      ? {
+          _id: selectedSeries?._id,
+          seriesName: selectedSeries?.seriesName || "",
+          voucherNumber: selectedSeries?.voucherNumber || "",
+        }
+      : null,
+  };
+}
+
 export async function createSaleOrder(payload) {
   const response = await api.post("/sUsers/createSaleOrder", payload, {
     headers: { "Content-Type": "application/json" },
@@ -115,8 +151,19 @@ export async function getSaleOrderById(saleOrderId, { cmpId, ...options } = {}) 
   return response.data?.data?.saleOrder || null;
 }
 
+export async function updateSaleOrder(saleOrderId, payload) {
+  const response = await api.put(`/sUsers/saleOrders/${saleOrderId}`, payload, {
+    headers: { "Content-Type": "application/json" },
+    withCredentials: true,
+  });
+
+  return response.data;
+}
+
 export const saleOrderService = {
   buildCreateSaleOrderPayload,
+  buildUpdateSaleOrderPayload,
   createSaleOrder,
   getSaleOrderById,
+  updateSaleOrder,
 };

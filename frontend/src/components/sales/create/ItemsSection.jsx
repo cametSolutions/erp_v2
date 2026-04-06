@@ -16,7 +16,7 @@ import {
 import { ROUTES } from "@/routes/paths";
 import { updateItem } from "@/store/slices/transactionSlice";
 
-export default function ItemsSection() {
+export default function ItemsSection({ returnTo = ROUTES.createOrder }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const items = useSelector((state) => state.transaction.items);
@@ -39,7 +39,11 @@ export default function ItemsSection() {
         <div className="space-y-4">
           <button
             type="button"
-            onClick={() => navigate(ROUTES.salesSelectItems)}
+            onClick={() =>
+              navigate(ROUTES.salesSelectItems, {
+                state: { returnTo },
+              })
+            }
             disabled={!hasParty}
             className="inline-flex w-full items-center justify-between rounded-xl border border-teal-600 bg-teal-600 px-3 py-3 text-xs font-medium text-white transition hover:border-teal-700 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
           >

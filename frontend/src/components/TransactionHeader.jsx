@@ -61,6 +61,8 @@ export default function TransactionHeader({
   cmp_id,
   numberField,
   onHeaderReady,
+  editMode = false,
+  lockedSeries = null,
 }) {
   const dispatch = useDispatch();
   const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
@@ -80,28 +82,35 @@ export default function TransactionHeader({
     isError,
     error,
     refetch,
-  } = useVoucherSeries({ cmp_id, voucherType });
+  } = useVoucherSeries({ cmp_id, voucherType, enabled: !editMode });
 
   const seriesList = data?.series || [];
   const hydratedSeries =
-    selectedSeries?._id
+    !editMode && selectedSeries?._id
       ? seriesList.find((series) => series._id === selectedSeries._id) ||
         selectedSeries
       : null;
   const apiDefault =
-    seriesList.find((series) => series.currentlySelected) ||
-    seriesList[0] ||
-    null;
-  const effectiveSeries = hydratedSeries || apiDefault;
+    !editMode
+      ? seriesList.find((series) => series.currentlySelected) ||
+        seriesList[0] ||
+        null
+      : null;
+  const effectiveSeries = editMode ? lockedSeries || selectedSeries : hydratedSeries || apiDefault;
 
   const selectedDate = getSafeDate(transactionDate);
-  const voucherParts = getVoucherParts(effectiveSeries);
-  const voucherNumber = formatVoucherForUi(voucherParts);
+  const voucherParts = editMode
+    ? { prefix: "", number: "", suffix: "" }
+    : getVoucherParts(effectiveSeries);
+  const voucherNumber = editMode
+    ? effectiveSeries?.voucherNumber || ""
+    : formatVoucherForUi(voucherParts);
 
   useEffect(() => {
+    if (editMode) return;
     if (!cmp_id) return;
     dispatch(hydrateSelectedSeries({ cmp_id }));
-  }, [cmp_id, voucherType, dispatch]);
+  }, [cmp_id, editMode, voucherType, dispatch]);
 
   useEffect(() => {
     if (transactionDate) return;
@@ -113,6 +122,7 @@ export default function TransactionHeader({
   }, [transactionDate, dispatch]);
 
   useEffect(() => {
+    if (editMode) return;
     if (!cmp_id || !effectiveSeries) return;
     if (hydratedSeries?._id === effectiveSeries._id) return;
 
@@ -122,7 +132,7 @@ export default function TransactionHeader({
         series: effectiveSeries,
       })
     );
-  }, [cmp_id, dispatch, effectiveSeries, hydratedSeries]);
+  }, [cmp_id, dispatch, editMode, effectiveSeries, hydratedSeries]);
 
   // expose clean data to parent (separated prefix/number/suffix)
   useEffect(() => {
@@ -134,15 +144,16 @@ export default function TransactionHeader({
     onHeaderReady(() => () => ({
       transactionDate,
       voucherType,
-      series_id: effectiveSeries._id,
-      usedSeriesNumber: effectiveSeries.currentNumber,
-      voucherPrefix,
-      voucherNumber: voucherParts.number,
-      voucherSuffix,
+      series_id: effectiveSeries?._id || null,
+      usedSeriesNumber: effectiveSeries?.currentNumber,
+      voucherPrefix: editMode ? undefined : voucherPrefix,
+      voucherNumber: editMode ? voucherNumber : voucherParts.number,
+      voucherSuffix: editMode ? undefined : voucherSuffix,
       // if backend still expects combined number, keep this:
       [numberField]: voucherNumber,
     }));
   }, [
+    editMode,
     numberField,
     effectiveSeries,
     onHeaderReady,
@@ -155,6 +166,7 @@ export default function TransactionHeader({
   ]);
 
   const handleSelectSeries = (series) => {
+    if (editMode) return;
     dispatch(setSelectedSeries({ cmp_id, series }));
   };
 
@@ -167,7 +179,9 @@ export default function TransactionHeader({
     );
   };
 
-  const headerMessage = !cmp_id
+  const headerMessage = editMode
+    ? null
+    : !cmp_id
     ? "Select a company to load transaction series."
     : isError
     ? error?.response?.data?.message ||
@@ -181,25 +195,36 @@ export default function TransactionHeader({
         <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
           <div className="flex items-center gap-2">
             <div className="flex flex-col">
-              <button
-                type="button"
-                onClick={() => setIsSeriesModalOpen(true)}
-                disabled={!cmp_id || isError || seriesList.length === 0}
-                className="mt-0.5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700 hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
-              >
-                <span className="font-semibold">
-                  {effectiveSeries?.seriesName || "Series"}
-                </span>
-                <span className="text-[10px] text-slate-500">
-                  {isLoading ? "Loading..." : `No: #${voucherNumber}`}
-                </span>
-              </button>
+              {editMode ? (
+                <div className="mt-0.5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700">
+                  <span className="font-semibold">
+                    {effectiveSeries?.seriesName || "Series"}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {voucherNumber ? `No: #${voucherNumber}` : "Locked"}
+                  </span>
+                </div>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setIsSeriesModalOpen(true)}
+                  disabled={!cmp_id || isError || seriesList.length === 0}
+                  className="mt-0.5 inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-700 hover:border-slate-300 hover:bg-white disabled:cursor-not-allowed disabled:opacity-60"
+                >
+                  <span className="font-semibold">
+                    {effectiveSeries?.seriesName || "Series"}
+                  </span>
+                  <span className="text-[10px] text-slate-500">
+                    {isLoading ? "Loading..." : `No: #${voucherNumber}`}
+                  </span>
+                </button>
+              )}
             </div>
           </div>
 
           <div className="flex items-center gap-1.5">
             <div className="inline-flex items-center gap-1.5 rounded-full border border-slate-200 bg-slate-50 px-2.5 py-1 text-[11px] text-slate-600">
-              {(isLoading || isFetching) && (
+              {!editMode && (isLoading || isFetching) && (
                 <LoaderCircle className="h-3 w-3 animate-spin text-slate-400" />
               )}
               <span className="truncate max-w-[140px]">
@@ -237,14 +262,16 @@ export default function TransactionHeader({
         )}
       </header>
 
-      <VoucherSeriesModal
-        key={`${cmp_id || "transaction"}-${effectiveSeries?._id || "empty"}`}
-        isOpen={isSeriesModalOpen}
-        onClose={() => setIsSeriesModalOpen(false)}
-        seriesList={seriesList}
-        selectedSeriesId={effectiveSeries?._id}
-        onSelectSeries={handleSelectSeries}
-      />
+      {!editMode && (
+        <VoucherSeriesModal
+          key={`${cmp_id || "transaction"}-${effectiveSeries?._id || "empty"}`}
+          isOpen={isSeriesModalOpen}
+          onClose={() => setIsSeriesModalOpen(false)}
+          seriesList={seriesList}
+          selectedSeriesId={effectiveSeries?._id}
+          onSelectSeries={handleSelectSeries}
+        />
+      )}
     </>
   );
 }

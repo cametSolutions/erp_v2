@@ -27,6 +27,7 @@ const TransactionDetailPage = lazy(
 );
 const CreateOrderPage = lazy(() => import("@/pages/sales/SalesCreatePage"));
 const SaleOrderDetailPage = lazy(() => import("@/pages/sales/SaleOrderDetailPage"));
+const SaleOrderEditPage = lazy(() => import("@/pages/sales/SaleOrderEditPage"));
 const ProductSelectPage = lazy(() => import("@/pages/sales/ProductSelectPage"));
 const CreateReceiptPage = lazy(() => import("@/pages/Home/CreateReceiptPage"));
 const UserCreatePage = lazy(() => import("@/pages/users/UserCreatePage"));
@@ -92,6 +93,7 @@ export const appRoutes = (
     <Route path={ROUTES.createOrder} element={<CreateOrderPage />} />
     <Route path={ROUTES.transactionDetail} element={<TransactionDetailPage />} />
     <Route path={ROUTES.saleOrderDetail} element={<SaleOrderDetailPage />} />
+    <Route path={ROUTES.saleOrderEdit} element={<SaleOrderEditPage />} />
     <Route path={ROUTES.salesSelectItems} element={<ProductSelectPage />} />
     <Route path={ROUTES.createReceipt} element={<CreateReceiptPage />} />
     <Route path={ROUTES.usersCreate} element={<UserCreatePage />} />

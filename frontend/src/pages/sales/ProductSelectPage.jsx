@@ -2,8 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   Barcode,
   ChevronDown,
-  ChevronLeft,
-  LoaderCircle,
   Package,
   Pencil,
   Search,
@@ -11,7 +9,7 @@ import {
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { toast } from "sonner";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 
 import { getProductById, productService } from "@/api/services/product.service";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
@@ -46,15 +44,15 @@ import {
 const PAGE_SIZE = 20;
 const PRODUCT_FILTERS_STORAGE_KEY = "sale-order-product-filters";
 
+// ---------------------------------------------------------------------------
+// Pure helpers
+// ---------------------------------------------------------------------------
+
 function getStoredProductFilters(cmp_id) {
   if (!cmp_id) return null;
-
   try {
-    const raw = localStorage.getItem(
-      `${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`,
-    );
+    const raw = localStorage.getItem(`${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`);
     if (!raw) return null;
-
     const parsed = JSON.parse(raw);
     return {
       search: parsed?.search || "",
@@ -63,23 +61,19 @@ function getStoredProductFilters(cmp_id) {
       categoryId: parsed?.categoryId || "",
       subcategoryId: parsed?.subcategoryId || "",
     };
-  } catch (error) {
-    console.error("Failed to read stored product filters", error);
+  } catch {
     return null;
   }
 }
 
 function persistProductFilters(cmp_id, filters) {
   if (!cmp_id) return;
-
   try {
     localStorage.setItem(
       `${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`,
       JSON.stringify(filters),
     );
-  } catch (error) {
-    console.error("Failed to persist product filters", error);
-  }
+  } catch {}
 }
 
 function getProductId(product) {
@@ -118,19 +112,46 @@ function getSubcategoryCategoryId(subcategory) {
   );
 }
 
+function getProductTaxRate(productDetail) {
+  if (productDetail?.taxRate != null) return Number(productDetail.taxRate) || 0;
+  if (productDetail?.igst != null) return Number(productDetail.igst) || 0;
+  return (Number(productDetail?.cgst) || 0) + (Number(productDetail?.sgst) || 0);
+}
+
+function buildProductDetail(product) {
+  const { rate: _ignored, ...detail } = product || {};
+  return {
+    ...detail,
+    _id: getProductId(detail),
+    product_name: detail?.product_name || detail?.name || "Untitled Product",
+    hsn: detail?.hsn || detail?.hsn_code || "",
+    unit: detail?.unit || "",
+    cgst: Number(detail?.cgst) || 0,
+    sgst: Number(detail?.sgst) || 0,
+    igst: Number(detail?.igst) || 0,
+    cess: Number(detail?.cess) || 0,
+    addl_cess: Number(detail?.addl_cess ?? detail?.addlCess) || 0,
+    taxRate:
+      detail?.taxRate != null ? Number(detail.taxRate) || 0 : getProductTaxRate(detail),
+    priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
+  };
+}
+
+function getPriceLevelRate(productDetail, priceLevelId) {
+  if (!priceLevelId || !Array.isArray(productDetail?.priceLevels)) return null;
+  const match = productDetail.priceLevels.find(
+    (l) => l?.priceLevel?.toString() === priceLevelId?.toString(),
+  );
+  return match?.priceRate ?? null;
+}
+
 function buildCalcItemFromStaged(stagedItem) {
   if (!stagedItem) return null;
-
   return {
     rate: Number(stagedItem.rate) || 0,
     billedQty:
-      Number(
-        stagedItem.billedQty != null
-          ? stagedItem.billedQty
-          : stagedItem.quantity,
-      ) || 0,
-    taxRate:
-      Number(stagedItem.productDetail?.taxRate ?? stagedItem.taxRate ?? 0) || 0,
+      Number(stagedItem.billedQty != null ? stagedItem.billedQty : stagedItem.quantity) || 0,
+    taxRate: Number(stagedItem.productDetail?.taxRate ?? stagedItem.taxRate ?? 0) || 0,
     cgst: Number(stagedItem.productDetail?.cgst ?? stagedItem?.cgst ?? 0) || 0,
     sgst: Number(stagedItem.productDetail?.sgst ?? stagedItem?.sgst ?? 0) || 0,
     igst: Number(stagedItem.productDetail?.igst ?? stagedItem?.igst ?? 0) || 0,
@@ -151,40 +172,6 @@ function buildCalcItemFromStaged(stagedItem) {
   };
 }
 
-function getProductTaxRate(productDetail) {
-  const directTaxRate = productDetail?.taxRate;
-  if (directTaxRate != null) return Number(directTaxRate) || 0;
-
-  const igst = productDetail?.igst;
-  if (igst != null) return Number(igst) || 0;
-
-  const cgst = Number(productDetail?.cgst) || 0;
-  const sgst = Number(productDetail?.sgst) || 0;
-  return cgst + sgst;
-}
-
-function buildProductDetail(product) {
-  const { rate: _ignoredRate, ...detail } = product || {};
-
-  return {
-    ...detail,
-    _id: getProductId(detail),
-    product_name: detail?.product_name || detail?.name || "Untitled Product",
-    hsn: detail?.hsn || detail?.hsn_code || "",
-    unit: detail?.unit || "",
-    cgst: Number(detail?.cgst) || 0,
-    sgst: Number(detail?.sgst) || 0,
-    igst: Number(detail?.igst) || 0,
-    cess: Number(detail?.cess) || 0,
-    addl_cess: Number(detail?.addl_cess ?? detail?.addlCess) || 0,
-    taxRate:
-      detail?.taxRate != null
-        ? Number(detail.taxRate) || 0
-        : getProductTaxRate(detail),
-    priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
-  };
-}
-
 function createStagedItemFromTransactionItem(item) {
   const billedQty = Number(item?.billedQty) || 0;
   const actualQty = Number(item?.actualQty ?? item?.billedQty) || 0;
@@ -201,7 +188,6 @@ function createStagedItemFromTransactionItem(item) {
     addl_cess: item?.addl_cess ?? item?.addlCess,
     priceLevels: item?.priceLevels,
   });
-
   return {
     quantity: billedQty,
     originalQuantity: billedQty,
@@ -233,7 +219,6 @@ function createStagedItemFromTransactionItem(item) {
 
 function buildEditableItem(productId, stagedItem) {
   const detail = buildProductDetail(stagedItem?.productDetail);
-
   return {
     id: productId,
     name: detail?.product_name || "Untitled Product",
@@ -264,62 +249,33 @@ function buildEditableItem(productId, stagedItem) {
   };
 }
 
-function getPriceLevelRate(productDetail, priceLevelId) {
-  if (!priceLevelId || !Array.isArray(productDetail?.priceLevels)) return null;
-
-  const match = productDetail.priceLevels.find(
-    (level) => level?.priceLevel?.toString() === priceLevelId?.toString(),
-  );
-
-  return match?.priceRate ?? null;
-}
-
 async function fetchPartyLsp(partyId, productId) {
-  return productService.fetchPartyLsp(partyId, productId, {
-    skipGlobalLoader: true,
-  });
+  return productService.fetchPartyLsp(partyId, productId, { skipGlobalLoader: true });
 }
 
 async function fetchGlobalLsp(productId) {
-  return productService.fetchGlobalLsp(productId, {
-    skipGlobalLoader: true,
-  });
+  return productService.fetchGlobalLsp(productId, { skipGlobalLoader: true });
 }
 
-async function resolveInitialRate({
-  partyId,
-  productId,
-  productDetail,
-  priceLevel,
-}) {
-  const partyLsp = await fetchPartyLsp(partyId, productId);
-  if (partyLsp != null && Number(partyLsp) > 0) {
-    return { source: "partyLsp", rate: Number(partyLsp) || 0 };
-  }
-
-  const globalLsp = await fetchGlobalLsp(productId);
-  if (globalLsp != null && Number(globalLsp) > 0) {
-    return { source: "globalLsp", rate: Number(globalLsp) || 0 };
-  }
-
+async function resolveInitialRate({ partyId, productId, productDetail, priceLevel }) {
   if (priceLevel) {
     const levelRate = getPriceLevelRate(productDetail, priceLevel);
-    if (levelRate != null) {
-      return { source: "priceLevel", rate: Number(levelRate) || 0 };
-    }
+    return { source: "priceLevel", rate: levelRate != null ? Number(levelRate) || 0 : 0 };
   }
-
+  const partyLsp = await fetchPartyLsp(partyId, productId);
+  if (partyLsp != null && Number(partyLsp) > 0)
+    return { source: "lsp", rate: Number(partyLsp) || 0 };
+  const globalLsp = await fetchGlobalLsp(productId);
+  if (globalLsp != null && Number(globalLsp) > 0)
+    return { source: "gsp", rate: Number(globalLsp) || 0 };
   return { source: "manual", rate: 0 };
 }
 
-function FilterDropdown({
-  label,
-  value,
-  onChange,
-  options,
-  placeholder,
-  disabled = false,
-}) {
+// ---------------------------------------------------------------------------
+// FilterDropdown
+// ---------------------------------------------------------------------------
+
+function FilterDropdown({ label, value, onChange, options, placeholder, disabled = false }) {
   return (
     <div className="space-y-2">
       <label className="text-[11px] font-semibold uppercase tracking-[0.12em] text-slate-500">
@@ -328,16 +284,15 @@ function FilterDropdown({
       <div className="relative">
         <select
           value={value}
-          onChange={(event) => onChange(event.target.value)}
+          onChange={(e) => onChange(e.target.value)}
           disabled={disabled}
           className="h-12 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100 disabled:cursor-not-allowed disabled:bg-slate-100 disabled:text-slate-400"
         >
           <option value="">{placeholder}</option>
           {options.map((option) => {
-            const optionValue = getMasterOptionId(option);
-
+            const v = getMasterOptionId(option);
             return (
-              <option key={optionValue} value={optionValue}>
+              <option key={v} value={v}>
                 {getMasterOptionLabel(option)}
               </option>
             );
@@ -348,6 +303,10 @@ function FilterDropdown({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// FilterSheet
+// ---------------------------------------------------------------------------
 
 function FilterSheet({
   open,
@@ -362,55 +321,33 @@ function FilterSheet({
   subcategories,
   onApply,
 }) {
-  const [draftPriceLevel, setDraftPriceLevel] = useState(
-    appliedPriceLevel || "",
-  );
+  const [draftPriceLevel, setDraftPriceLevel] = useState(appliedPriceLevel || "");
   const [draftBrandId, setDraftBrandId] = useState(appliedBrandId || "");
-  const [draftCategoryId, setDraftCategoryId] = useState(
-    appliedCategoryId || "",
-  );
-  const [draftSubcategoryId, setDraftSubcategoryId] = useState(
-    appliedSubcategoryId || "",
-  );
+  const [draftCategoryId, setDraftCategoryId] = useState(appliedCategoryId || "");
+  const [draftSubcategoryId, setDraftSubcategoryId] = useState(appliedSubcategoryId || "");
 
+  // Reset drafts to the current applied values every time the sheet opens.
   useEffect(() => {
     if (!open) return;
-
     setDraftPriceLevel(appliedPriceLevel || "");
     setDraftBrandId(appliedBrandId || "");
     setDraftCategoryId(appliedCategoryId || "");
     setDraftSubcategoryId(appliedSubcategoryId || "");
-  }, [
-    appliedBrandId,
-    appliedCategoryId,
-    appliedPriceLevel,
-    appliedSubcategoryId,
-    open,
-  ]);
-
-  useEffect(() => {
-    if (!draftCategoryId) return;
-
-    const isVisible = subcategories.some((subcategory) => {
-      const categoryId = getSubcategoryCategoryId(subcategory);
-      if (!categoryId) return false;
-      return categoryId === draftCategoryId;
-    });
-
-    if (!isVisible) {
-      setDraftSubcategoryId("");
-    }
-  }, [draftCategoryId, draftSubcategoryId, subcategories]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
 
   const visibleSubcategories = useMemo(() => {
     if (!draftCategoryId) return [];
-
-    return subcategories.filter((subcategory) => {
-      const categoryId = getSubcategoryCategoryId(subcategory);
-      if (!categoryId) return false;
-      return categoryId === draftCategoryId;
-    });
+    return subcategories.filter(
+      (s) => getSubcategoryCategoryId(s) === draftCategoryId,
+    );
   }, [draftCategoryId, subcategories]);
+
+  const effectiveDraftSubcategoryId = visibleSubcategories.some(
+    (s) => getMasterOptionId(s)?.toString() === draftSubcategoryId?.toString(),
+  )
+    ? draftSubcategoryId
+    : "";
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -425,9 +362,7 @@ function FilterSheet({
         <ScrollArea className="min-h-0 flex-1">
           <div className="space-y-5 px-4 py-4">
             <div className="rounded-3xl border border-slate-200 bg-slate-50 p-4">
-              <p className="text-sm font-semibold text-slate-900">
-                Filter products
-              </p>
+              <p className="text-sm font-semibold text-slate-900">Filter products</p>
               <p className="mt-1 text-xs text-slate-500">
                 Use the dropdowns below to narrow the product list.
               </p>
@@ -440,13 +375,13 @@ function FilterSheet({
               <div className="relative">
                 <select
                   value={draftPriceLevel}
-                  onChange={(event) => setDraftPriceLevel(event.target.value)}
+                  onChange={(e) => setDraftPriceLevel(e.target.value)}
                   className="h-12 w-full appearance-none rounded-2xl border border-slate-200 bg-white px-4 pr-10 text-sm text-slate-800 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 >
                   <option value="">Default (no price level)</option>
-                  {priceLevels.map((priceLevel) => (
-                    <option key={priceLevel?._id} value={priceLevel?._id}>
-                      {priceLevel?.pricelevel || "Unnamed"}
+                  {priceLevels.map((pl) => (
+                    <option key={pl?._id} value={pl?._id}>
+                      {pl?.pricelevel || "Unnamed"}
                     </option>
                   ))}
                 </select>
@@ -461,28 +396,19 @@ function FilterSheet({
               options={brands}
               placeholder="All brands"
             />
-
             <FilterDropdown
               label="Category"
               value={draftCategoryId}
-              onChange={(value) => {
-                setDraftCategoryId(value);
-                setDraftSubcategoryId("");
-              }}
+              onChange={(v) => { setDraftCategoryId(v); setDraftSubcategoryId(""); }}
               options={categories}
               placeholder="All categories"
             />
-
             <FilterDropdown
               label="Subcategory"
-              value={draftSubcategoryId}
+              value={effectiveDraftSubcategoryId}
               onChange={setDraftSubcategoryId}
               options={visibleSubcategories}
-              placeholder={
-                draftCategoryId
-                  ? "All subcategories"
-                  : "Select category first"
-              }
+              placeholder={draftCategoryId ? "All subcategories" : "Select category first"}
               disabled={!draftCategoryId}
             />
           </div>
@@ -510,7 +436,7 @@ function FilterSheet({
                 priceLevel: draftPriceLevel || "",
                 brandId: draftBrandId || "",
                 categoryId: draftCategoryId || "",
-                subcategoryId: draftSubcategoryId || "",
+                subcategoryId: effectiveDraftSubcategoryId || "",
               });
               onOpenChange(false);
             }}
@@ -523,21 +449,17 @@ function FilterSheet({
   );
 }
 
-function ProductRow({
-  product,
-  stagedItem,
-  loading,
-  priceLevel,
-  onAdd,
-  onEdit,
-  onIncrement,
-  onDecrement,
-}) {
+// ---------------------------------------------------------------------------
+// ProductRow
+// ---------------------------------------------------------------------------
+
+function ProductRow({ product, stagedItem, loading, priceLevel, onAdd, onEdit, onIncrement, onDecrement }) {
   const quantity = Number(stagedItem?.quantity) || 0;
   const displayRate =
     (stagedItem?.rate > 0 ? stagedItem.rate : null) ??
     getPriceLevelRate(buildProductDetail(product), priceLevel) ??
     0;
+
   let totalAmount = null;
   if (stagedItem && quantity > 0) {
     const calcItem = buildCalcItemFromStaged(stagedItem);
@@ -550,63 +472,40 @@ function ProductRow({
   const subtitle = [
     product?.brand?.brand || product?.brandName || product?.brand,
     product?.category?.category || product?.categoryName || product?.category,
-    product?.sub_category?.subcategory ||
-      product?.subcategoryName ||
-      product?.subcategory,
+    product?.sub_category?.subcategory || product?.subcategoryName || product?.subcategory,
   ]
     .filter(Boolean)
     .join(", ");
 
   return (
-    <div className="border-b border-slate-200 bg-white  py-3 ">
+    <div className="border-b border-slate-200 bg-white py-3">
       <div className="flex items-stretch gap-3">
         <div className="flex w-16 shrink-0 items-center justify-center rounded-sm bg-indigo-50 px-3">
-          <div className="flex items-center justify-center">
-            <Package className="h-5 w-5 text-indigo-400" />
-          </div>
+          <Package className="h-5 w-5 text-indigo-400" />
         </div>
-
         <div className="min-w-0 flex-1">
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-slate-900">
-              {product?.product_name || "Untitled Product"}
-            </p>
-            {subtitle && (
-              <p className="mt-0.5 truncate text-xs text-slate-500">
-                {subtitle}
-              </p>
-            )}
-          </div>
+          <p className="truncate text-sm font-medium text-slate-900">
+            {product?.product_name || "Untitled Product"}
+          </p>
+          {subtitle && (
+            <p className="mt-0.5 truncate text-xs text-slate-500">{subtitle}</p>
+          )}
 
           <div className="mt-2 flex items-center gap-1.5">
             <button
               type="button"
-              className="
-                flex h-7 w-7 items-center justify-center rounded
-                border border-rose-200 bg-rose-50
-                text-sm text-rose-500
-                hover:bg-rose-100 hover:border-rose-300
-                disabled:opacity-40
-              "
+              className="flex h-7 w-7 items-center justify-center rounded border border-rose-200 bg-rose-50 text-sm text-rose-500 hover:bg-rose-100 hover:border-rose-300 disabled:opacity-40"
               disabled={loading || quantity <= 0}
               onClick={() => onDecrement(product)}
             >
               −
             </button>
-
             <span className="min-w-[1.75rem] text-center text-xs font-semibold text-slate-900">
               {quantity}
             </span>
-
             <button
               type="button"
-              className="
-                flex h-7 w-7 items-center justify-center rounded
-                border border-emerald-200 bg-emerald-50
-                text-sm text-emerald-600
-                hover:bg-emerald-100 hover:border-emerald-300
-                disabled:opacity-40
-              "
+              className="flex h-7 w-7 items-center justify-center rounded border border-emerald-200 bg-emerald-50 text-sm text-emerald-600 hover:bg-emerald-100 hover:border-emerald-300 disabled:opacity-40"
               disabled={loading}
               onClick={() => (quantity > 0 ? onIncrement(product) : onAdd(product))}
             >
@@ -620,17 +519,12 @@ function ProductRow({
                 {(Number(displayRate) || 0).toFixed(2)}
               </p>
               {totalAmount != null && (
-                <p className="text-[11px] text-slate-600">
-                  Total: ₹{totalAmount.toFixed(2)}
-                </p>
+                <p className="text-[11px] text-slate-600">Total: ₹{totalAmount.toFixed(2)}</p>
               )}
               <p className="text-[11px] text-slate-500">
-                {quantity > 0
-                  ? stagedItem?.initialPriceSource || "manual"
-                  : "Tap + to add"}
+                {quantity > 0 ? stagedItem?.initialPriceSource || "manual" : "Tap + to add"}
               </p>
             </div>
-
             <button
               type="button"
               className="inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-[11px] font-medium text-slate-600 hover:bg-slate-100 disabled:opacity-40"
@@ -646,75 +540,91 @@ function ProductRow({
     </div>
   );
 }
+
+// ---------------------------------------------------------------------------
+// ProductSelectPage
+// ---------------------------------------------------------------------------
+
 export default function ProductSelectPage() {
+  const location = useLocation();
   const navigate = useNavigate();
   const dispatch = useDispatch();
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
   const loadMoreRef = useRef(null);
   const didSeedRef = useRef(false);
+
   const reduxPriceLevel = useSelector((state) => state.transaction.priceLevel);
   const taxType = useSelector((state) => state.transaction.taxType);
   const transactionItems = useSelector((state) => state.transaction.items);
   const party = useSelector((state) => state.transaction.party);
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
-  const storedFilters = useMemo(
-    () => getStoredProductFilters(cmp_id),
-    [cmp_id],
-  );
+
+  const storedFilters = useMemo(() => getStoredProductFilters(cmp_id), [cmp_id]);
+
   const [search, setSearch] = useState(() => storedFilters?.search || "");
   const [appliedPriceLevel, setAppliedPriceLevel] = useState(
     () => reduxPriceLevel || storedFilters?.priceLevel || "",
   );
   const [brandId, setBrandId] = useState(() => storedFilters?.brandId || "");
-  const [categoryId, setCategoryId] = useState(
-    () => storedFilters?.categoryId || "",
-  );
-  const [subcategoryId, setSubcategoryId] = useState(
-    () => storedFilters?.subcategoryId || "",
-  );
+  const [categoryId, setCategoryId] = useState(() => storedFilters?.categoryId || "");
+  const [subcategoryId, setSubcategoryId] = useState(() => storedFilters?.subcategoryId || "");
   const [isFilterSheetOpen, setIsFilterSheetOpen] = useState(false);
   const [stagedItems, setStagedItems] = useState({});
   const [loadingProductIds, setLoadingProductIds] = useState({});
   const [editingProductId, setEditingProductId] = useState(null);
   const [pendingPriceLevelChange, setPendingPriceLevelChange] = useState(null);
+
+  // ─── THE KEY REF ────────────────────────────────────────────────────────────
+  // Tracks the price level last explicitly committed by the user via applyFilters.
+  // NEVER auto-synced to state/Redux on every render — written ONLY inside
+  // applyFilters. This eliminates all timing ambiguity: when handleFilterApply
+  // reads it synchronously, it always reflects the last confirmed commit.
+  const committedPriceLevelRef = useRef(
+    reduxPriceLevel || storedFilters?.priceLevel || "",
+  );
+
+  // Kept in sync every render so async callbacks always see fresh staged items.
+  const stagedItemsRef = useRef(stagedItems);
+  stagedItemsRef.current = stagedItems;
+
   const debouncedSearch = useDebouncedValue(search.trim(), 500);
+  const returnTo = location.state?.returnTo || ROUTES.createOrder;
 
-  const {
-    data,
-    error,
-    isError,
-    isLoading,
-    isFetchingNextPage,
-    fetchNextPage,
-    hasNextPage,
-  } = useInfiniteProductListQuery({
-    cmp_id: cmp_id,
-    limit: PAGE_SIZE,
-    search: debouncedSearch,
-    brand: brandId,
-    category: categoryId,
-    subcategory: subcategoryId,
-  });
+  // ---------------------------------------------------------------------------
+  // Queries
+  // ---------------------------------------------------------------------------
 
-  const { data: brandsData = [] } = useBrandsQuery({ cmp_id: cmp_id });
-  const { data: priceLevelsData = [] } = usePriceLevelsQuery({ cmp_id: cmp_id });
-  const { data: categoriesData = [] } = useCategoriesQuery({ cmp_id: cmp_id });
-  const { data: subcategoriesData = [] } = useSubcategoriesQuery({
-    cmp_id: cmp_id,
-  });
+  const { data, error, isError, isLoading, isFetchingNextPage, fetchNextPage, hasNextPage } =
+    useInfiniteProductListQuery({
+      cmp_id,
+      limit: PAGE_SIZE,
+      search: debouncedSearch,
+      brand: brandId,
+      category: categoryId,
+      subcategory: subcategoryId,
+    });
+
+  const { data: brandsData = [] } = useBrandsQuery({ cmp_id });
+  const { data: priceLevelsData = [] } = usePriceLevelsQuery({ cmp_id });
+  const { data: categoriesData = [] } = useCategoriesQuery({ cmp_id });
+  const { data: subcategoriesData = [] } = useSubcategoriesQuery({ cmp_id });
+
+  // ---------------------------------------------------------------------------
+  // Effects
+  // ---------------------------------------------------------------------------
 
   useEffect(() => {
     if (!cmp_id) return;
-
     const nextFilters = getStoredProductFilters(cmp_id);
     if (!nextFilters) return;
-
+    const pl = reduxPriceLevel || nextFilters.priceLevel || "";
     setSearch(nextFilters.search || "");
-    setAppliedPriceLevel(reduxPriceLevel || nextFilters.priceLevel || "");
+    setAppliedPriceLevel(pl);
+    committedPriceLevelRef.current = pl; // keep the committed ref in sync on company change
     setBrandId(nextFilters.brandId || "");
     setCategoryId(nextFilters.categoryId || "");
     setSubcategoryId(nextFilters.subcategoryId || "");
-  }, [cmp_id, reduxPriceLevel]);
+  }, [cmp_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => {
     persistProductFilters(cmp_id, {
@@ -728,122 +638,148 @@ export default function ProductSelectPage() {
 
   useEffect(() => {
     if (didSeedRef.current) return;
-
-    const seededItems = (transactionItems || []).reduce((accumulator, item) => {
-      if (!item?.id) return accumulator;
-      accumulator[item.id] = createStagedItemFromTransactionItem(item);
-      return accumulator;
+    if (!Array.isArray(transactionItems) || transactionItems.length === 0) return;
+    const seeded = transactionItems.reduce((acc, item) => {
+      if (!item?.id) return acc;
+      acc[item.id] = createStagedItemFromTransactionItem(item);
+      return acc;
     }, {});
-
-    setStagedItems(seededItems);
+    setStagedItems(seeded);
     didSeedRef.current = true;
   }, [transactionItems]);
 
   useEffect(() => {
-    if (!reduxPriceLevel) return;
-    if (reduxPriceLevel === appliedPriceLevel) return;
-    setAppliedPriceLevel(reduxPriceLevel);
-  }, [appliedPriceLevel, reduxPriceLevel]);
-
-  useEffect(() => {
     if (!isError) return;
-
-    const message =
-      error?.response?.data?.message ||
-      error?.message ||
-      "Failed to load products";
-    toast.error(message);
+    toast.error(
+      error?.response?.data?.message || error?.message || "Failed to load products",
+    );
   }, [error, isError]);
 
   useEffect(() => {
     const node = loadMoreRef.current;
-    if (!node || !hasNextPage) return undefined;
-
+    if (!node || !hasNextPage) return;
     const observer = new IntersectionObserver(
       (entries) => {
-        if (entries[0]?.isIntersecting && !isFetchingNextPage) {
-          fetchNextPage();
-        }
+        if (entries[0]?.isIntersecting && !isFetchingNextPage) fetchNextPage();
       },
       { rootMargin: "180px 0px" },
     );
-
     observer.observe(node);
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage, data]);
 
   const filterSignature = useMemo(
     () =>
-      [
-        cmp_id,
-        debouncedSearch,
-        appliedPriceLevel,
-        brandId,
-        categoryId,
-        subcategoryId,
-      ].join("|"),
-    [
-      appliedPriceLevel,
-      brandId,
-      categoryId,
-      cmp_id,
-      debouncedSearch,
-      subcategoryId,
-    ],
+      [cmp_id, debouncedSearch, appliedPriceLevel, brandId, categoryId, subcategoryId].join("|"),
+    [appliedPriceLevel, brandId, categoryId, cmp_id, debouncedSearch, subcategoryId],
   );
+
   const [products, setProducts] = useState([]);
-
-  useEffect(() => {
-    setProducts([]);
-  }, [filterSignature]);
-
+  useEffect(() => { setProducts([]); }, [filterSignature]);
   useEffect(() => {
     setProducts(data?.pages?.flatMap((page) => page?.items || []) || []);
   }, [data, filterSignature]);
 
-  const editingStagedItem = editingProductId
-    ? stagedItems[editingProductId] || null
-    : null;
-
-  const stagedItemCount = useMemo(
-    () =>
-      Object.values(stagedItems).filter(
-        (item) => (Number(item?.quantity) || 0) > 0,
-      ).length,
-    [stagedItems],
-  );
-
-  const filterCount = useMemo(() => {
-    return [appliedPriceLevel, brandId, categoryId, subcategoryId].filter(
-      Boolean,
-    ).length;
-  }, [appliedPriceLevel, brandId, categoryId, subcategoryId]);
+  // ---------------------------------------------------------------------------
+  // applyFilters — THE ONLY PLACE committedPriceLevelRef IS WRITTEN
+  // ---------------------------------------------------------------------------
 
   const applyFilters = useCallback(
-    ({
-      priceLevel,
-      brandId: nextBrandId,
-      categoryId: nextCategoryId,
-      subcategoryId: nextSubcategoryId,
-    }) => {
-      const matchedPriceLevel = priceLevelsData.find(
-        (level) => level?._id?.toString() === priceLevel?.toString(),
-      );
+    ({ priceLevel, brandId: nb, categoryId: nc, subcategoryId: ns }) => {
+      const pl = priceLevel || "";
 
-      setAppliedPriceLevel(priceLevel || "");
-      setBrandId(nextBrandId || "");
-      setCategoryId(nextCategoryId || "");
-      setSubcategoryId(nextSubcategoryId || "");
-      dispatch(setPriceLevel(priceLevel || null));
-      dispatch(setPriceLevelObject(matchedPriceLevel || null));
+      // Write ref BEFORE state updates so any synchronous reader after this
+      // call sees the new value immediately.
+      committedPriceLevelRef.current = pl;
+
+      setAppliedPriceLevel(pl);
+      setBrandId(nb || "");
+      setCategoryId(nc || "");
+      setSubcategoryId(ns || "");
+
+      const matchedPriceLevel = priceLevelsData.find(
+        (level) => (level?._id || level?.id)?.toString() === pl,
+      );
+      dispatch(setPriceLevel(pl || null));
+      dispatch(setPriceLevelObject(matchedPriceLevel ?? null));
     },
     [dispatch, priceLevelsData],
   );
 
+  // ---------------------------------------------------------------------------
+  // handleFilterApply — passed as onApply to FilterSheet
+  //
+  // Reads committedPriceLevelRef and stagedItemsRef synchronously at call time.
+  // No closures over stale state, no useEffect timing gaps.
+  // ---------------------------------------------------------------------------
+
+  const handleFilterApply = useCallback(
+    (candidate) => {
+      // Read the ref directly — this always reflects the last committed value
+      // because applyFilters writes it before any async/state work.
+      const committed = committedPriceLevelRef.current;
+
+      const hasPriceLevelChanged =
+        (candidate.priceLevel || "") !== (committed || "");
+
+      const hasStagedItems = Object.values(stagedItemsRef.current).some(
+        (item) => (Number(item?.quantity) || 0) > 0,
+      );
+
+      if (hasPriceLevelChanged && hasStagedItems) {
+        setPendingPriceLevelChange(candidate);
+      } else {
+        applyFilters(candidate);
+      }
+    },
+    [applyFilters],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Confirm / cancel price level change
+  // ---------------------------------------------------------------------------
+
+  const confirmPriceLevelChange = useCallback(async () => {
+    if (!pendingPriceLevelChange) return;
+    const { priceLevel } = pendingPriceLevelChange;
+
+    try {
+      const repricedEntries = await Promise.all(
+        Object.entries(stagedItemsRef.current).map(async ([productId, staged]) => {
+          const productDetail = await ensureProductDetail(staged?.productDetail, staged);
+          const nextRate = getPriceLevelRate(productDetail, priceLevel);
+          return [
+            productId,
+            {
+              ...staged,
+              productDetail,
+              rate: nextRate != null ? Number(nextRate) || 0 : 0,
+              initialPriceSource: "priceLevel",
+            },
+          ];
+        }),
+      );
+      setStagedItems(Object.fromEntries(repricedEntries));
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e?.message || "Failed to re-price items");
+      return;
+    }
+
+    applyFilters(pendingPriceLevelChange);
+    setPendingPriceLevelChange(null);
+  }, [applyFilters, pendingPriceLevelChange]);
+
+  const cancelPriceLevelChange = useCallback(() => {
+    setPendingPriceLevelChange(null);
+  }, []);
+
+  // ---------------------------------------------------------------------------
+  // Product detail helpers
+  // ---------------------------------------------------------------------------
+
   const ensureProductDetail = async (product, stagedItem) => {
     const productId = getProductId(product) || stagedItem?.productDetail?._id;
     const existingDetail = stagedItem?.productDetail;
-
     if (
       existingDetail?.unit &&
       Array.isArray(existingDetail?.priceLevels) &&
@@ -851,62 +787,57 @@ export default function ProductSelectPage() {
     ) {
       return buildProductDetail(existingDetail);
     }
-
-    const fetchedDetail = await getProductById(productId, {
-      skipGlobalLoader: true,
-    });
-
+    const fetched = await getProductById(productId, { skipGlobalLoader: true });
     return buildProductDetail({
       ...(product || {}),
       ...(existingDetail || {}),
-      ...(fetchedDetail || {}),
+      ...(fetched || {}),
     });
   };
 
-  const setLoading = (productId, isLoadingValue) => {
-    setLoadingProductIds((current) => {
-      const next = { ...current };
-      if (isLoadingValue) {
-        next[productId] = true;
-      } else {
-        delete next[productId];
-      }
+  const setLoading = (productId, val) => {
+    setLoadingProductIds((cur) => {
+      const next = { ...cur };
+      if (val) next[productId] = true;
+      else delete next[productId];
       return next;
     });
   };
+
+  // ---------------------------------------------------------------------------
+  // Add / increment / decrement
+  // ---------------------------------------------------------------------------
 
   const handleAddOrIncrement = async (product) => {
     const productId = getProductId(product);
     if (!productId) return;
 
-    const existingItem = stagedItems[productId];
+    const existingItem = stagedItemsRef.current[productId];
     if (existingItem) {
-      const nextQuantity = (Number(existingItem?.quantity) || 0) + 1;
-      setStagedItems((current) => ({
-        ...current,
+      const nextQty = (Number(existingItem?.quantity) || 0) + 1;
+      setStagedItems((cur) => ({
+        ...cur,
         [productId]: {
-          ...current[productId],
-          quantity: nextQuantity,
-          billedQty: nextQuantity,
-          actualQty: nextQuantity,
+          ...cur[productId],
+          quantity: nextQty,
+          billedQty: nextQty,
+          actualQty: nextQty,
         },
       }));
       return;
     }
 
     setLoading(productId, true);
-
     try {
-      const productDetail = await ensureProductDetail(product, existingItem);
+      const productDetail = await ensureProductDetail(product, null);
       const { rate, source } = await resolveInitialRate({
         partyId: party?._id || party?.id || null,
         productId,
         productDetail,
-        priceLevel: appliedPriceLevel || "",
+        priceLevel: committedPriceLevelRef.current || "",
       });
-
-      setStagedItems((current) => ({
-        ...current,
+      setStagedItems((cur) => ({
+        ...cur,
         [productId]: {
           quantity: 1,
           originalQuantity: 0,
@@ -925,12 +856,8 @@ export default function ProductSelectPage() {
           originalSnapshot: null,
         },
       }));
-    } catch (incrementError) {
-      const message =
-        incrementError?.response?.data?.message ||
-        incrementError?.message ||
-        "Failed to add this product";
-      toast.error(message);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e?.message || "Failed to add product");
     } finally {
       setLoading(productId, false);
     }
@@ -938,77 +865,59 @@ export default function ProductSelectPage() {
 
   const handleDecrement = (product) => {
     const productId = getProductId(product);
-    if (!productId || !stagedItems[productId]) return;
-
-    setStagedItems((current) => {
-      const existingItem = current[productId];
-      const nextQuantity = (Number(existingItem?.quantity) || 0) - 1;
-
-      if (nextQuantity <= 0) {
-        const next = { ...current };
+    if (!productId || !stagedItemsRef.current[productId]) return;
+    setStagedItems((cur) => {
+      const existing = cur[productId];
+      const nextQty = (Number(existing?.quantity) || 0) - 1;
+      if (nextQty <= 0) {
+        const next = { ...cur };
         delete next[productId];
         return next;
       }
-
       return {
-        ...current,
-        [productId]: {
-          ...existingItem,
-          quantity: nextQuantity,
-          billedQty: nextQuantity,
-          actualQty: nextQuantity,
-        },
+        ...cur,
+        [productId]: { ...existing, quantity: nextQty, billedQty: nextQty, actualQty: nextQty },
       };
     });
   };
 
+  // ---------------------------------------------------------------------------
+  // Edit sheet
+  // ---------------------------------------------------------------------------
+
   const openEditSheet = async (product) => {
     const productId = getProductId(product);
-    const stagedItem = stagedItems[productId];
+    const stagedItem = stagedItemsRef.current[productId];
     if (!productId || !stagedItem) return;
-
     try {
       const productDetail = await ensureProductDetail(product, stagedItem);
-      setStagedItems((current) => ({
-        ...current,
-        [productId]: {
-          ...current[productId],
-          productDetail,
-        },
+      setStagedItems((cur) => ({
+        ...cur,
+        [productId]: { ...cur[productId], productDetail },
       }));
       setEditingProductId(productId);
-    } catch (editError) {
-      const message =
-        editError?.response?.data?.message ||
-        editError?.message ||
-        "Failed to load item details";
-      toast.error(message);
+    } catch (e) {
+      toast.error(e?.response?.data?.message || e?.message || "Failed to load item details");
     }
   };
 
   const handleStagedSave = (changes) => {
     if (!editingProductId) return;
-
-    setStagedItems((current) => {
-      const existingItem = current[editingProductId];
-      if (!existingItem) return current;
-
+    setStagedItems((cur) => {
+      const existing = cur[editingProductId];
+      if (!existing) return cur;
       const nextBilledQty = Number(changes?.billedQty) || 0;
       const nextActualQty = Number(changes?.actualQty) || nextBilledQty;
-
       return {
-        ...current,
+        ...cur,
         [editingProductId]: {
-          ...existingItem,
+          ...existing,
           ...changes,
           quantity: nextBilledQty,
           billedQty: nextBilledQty,
           actualQty: nextActualQty,
           rate: Number(changes?.rate) || 0,
-          discountType:
-            changes?.discountType ||
-            existingItem?.discountType ||
-            "percentage",
+          discountType: changes?.discountType || existing?.discountType || "percentage",
           discountPercentage: Number(changes?.discountPercentage) || 0,
           discountAmount: Number(changes?.discountAmount) || 0,
         },
@@ -1016,58 +925,14 @@ export default function ProductSelectPage() {
     });
   };
 
-  const openFilterSheet = useCallback(() => {
-    setIsFilterSheetOpen(true);
-  }, []);
-
-  const confirmPriceLevelChange = useCallback(async () => {
-    if (!pendingPriceLevelChange) return;
-
-    const { priceLevel } = pendingPriceLevelChange;
-
-    try {
-      const repricedEntries = await Promise.all(
-        Object.entries(stagedItems).map(async ([productId, staged]) => {
-          const productDetail = await ensureProductDetail(
-            staged?.productDetail,
-            staged,
-          );
-          const nextRate = getPriceLevelRate(productDetail, priceLevel);
-
-          return [
-            productId,
-            {
-              ...staged,
-              productDetail,
-              rate: nextRate != null ? Number(nextRate) || 0 : 0,
-              initialPriceSource: "priceLevel",
-            },
-          ];
-        }),
-      );
-
-      setStagedItems(Object.fromEntries(repricedEntries));
-    } catch (error) {
-      const message =
-        error?.response?.data?.message ||
-        error?.message ||
-        "Failed to re-price staged items";
-      toast.error(message);
-      return;
-    }
-
-    applyFilters(pendingPriceLevelChange);
-    setPendingPriceLevelChange(null);
-  }, [applyFilters, pendingPriceLevelChange, stagedItems]);
-
-  const cancelPriceLevelChange = useCallback(() => {
-    setPendingPriceLevelChange(null);
-  }, []);
+  // ---------------------------------------------------------------------------
+  // Continue / Done
+  // ---------------------------------------------------------------------------
 
   const handleContinue = useCallback(() => {
     const payload = [];
 
-    Object.entries(stagedItems).forEach(([productId, staged]) => {
+    Object.entries(stagedItemsRef.current).forEach(([productId, staged]) => {
       const detail = buildProductDetail(staged?.productDetail);
       const quantity = Number(staged?.quantity) || 0;
       const originalQuantity = Number(staged?.originalQuantity) || 0;
@@ -1084,12 +949,11 @@ export default function ProductSelectPage() {
 
       if (originalQuantity > 0) {
         const snapshot = staged?.originalSnapshot || {};
-
         if (deltaQuantity > 0) {
           dispatch(updateItem({ id: productId, changes: baseChanges }));
         } else {
           const keptSameQuantity = quantity === originalQuantity;
-          const shouldUpdateExisting =
+          const shouldUpdate =
             snapshot.rate !== baseChanges.rate ||
             snapshot.taxInclusive !== baseChanges.taxInclusive ||
             snapshot.discountType !== baseChanges.discountType ||
@@ -1101,17 +965,14 @@ export default function ProductSelectPage() {
               (snapshot.actualQty !== (Number(staged?.actualQty) || quantity) ||
                 snapshot.billedQty !== quantity));
 
-          if (shouldUpdateExisting) {
+          if (shouldUpdate) {
             dispatch(
               updateItem({
                 id: productId,
                 changes: {
                   ...baseChanges,
                   ...(keptSameQuantity
-                    ? {
-                        actualQty: Number(staged?.actualQty) || quantity,
-                        billedQty: quantity,
-                      }
+                    ? { actualQty: Number(staged?.actualQty) || quantity, billedQty: quantity }
                     : {}),
                 },
               }),
@@ -1129,7 +990,7 @@ export default function ProductSelectPage() {
         unit: detail?.unit || "",
         taxRate: getProductTaxRate(detail),
         priceLevels: Array.isArray(detail?.priceLevels) ? detail.priceLevels : [],
-        priceLevel: appliedPriceLevel || null,
+        priceLevel: committedPriceLevelRef.current || null,
         rate: Number(staged?.rate) || 0,
         cgst: Number(detail?.cgst) || 0,
         sgst: Number(detail?.sgst) || 0,
@@ -1153,12 +1014,15 @@ export default function ProductSelectPage() {
       });
     });
 
-    if (payload.length > 0) {
-      dispatch(addItemsFromSelection(payload));
-    }
+    if (payload.length > 0) dispatch(addItemsFromSelection(payload));
+    navigate(returnTo);
+  }, [dispatch, navigate, returnTo, taxType]);
 
-    navigate(ROUTES.createOrder);
-  }, [appliedPriceLevel, dispatch, navigate, stagedItems, taxType]);
+  // ---------------------------------------------------------------------------
+  // Mobile header
+  // ---------------------------------------------------------------------------
+
+  const openFilterSheet = useCallback(() => setIsFilterSheetOpen(true), []);
 
   useEffect(() => {
     setHeaderOptions({
@@ -1172,7 +1036,6 @@ export default function ProductSelectPage() {
           size: "sm",
           className: "px-2.5 w-[110px] bg-violet-800 text-white",
         },
-
         {
           label: "",
           icon: SlidersHorizontal,
@@ -1197,15 +1060,29 @@ export default function ProductSelectPage() {
         onChange: setSearch,
       },
     });
-
     return () => resetHeaderOptions();
-  }, [
-    handleContinue,
-    openFilterSheet,
-    resetHeaderOptions,
-    search,
-    setHeaderOptions,
-  ]);
+  }, [handleContinue, openFilterSheet, resetHeaderOptions, search, setHeaderOptions]);
+
+  // ---------------------------------------------------------------------------
+  // Derived
+  // ---------------------------------------------------------------------------
+
+  const editingStagedItem = editingProductId ? stagedItems[editingProductId] || null : null;
+
+  const stagedItemCount = useMemo(
+    () =>
+      Object.values(stagedItems).filter((item) => (Number(item?.quantity) || 0) > 0).length,
+    [stagedItems],
+  );
+
+  const filterCount = useMemo(
+    () => [appliedPriceLevel, brandId, categoryId, subcategoryId].filter(Boolean).length,
+    [appliedPriceLevel, brandId, categoryId, subcategoryId],
+  );
+
+  // ---------------------------------------------------------------------------
+  // Early return
+  // ---------------------------------------------------------------------------
 
   if (!cmp_id) {
     return (
@@ -1217,54 +1094,42 @@ export default function ProductSelectPage() {
     );
   }
 
+  // ---------------------------------------------------------------------------
+  // Render
+  // ---------------------------------------------------------------------------
+
   return (
     <>
       <div className="flex h-full min-h-0 overflow-hidden flex-col bg-slate-50">
         <header className="hidden shrink-0 border-b border-slate-200 bg-white px-4 py-3 md:block">
           <div className="mx-auto flex max-w-5xl flex-col gap-3">
             <div className="flex items-center justify-between gap-3">
-              <div className="flex min-w-0 items-center gap-2">
-                <div className="min-w-0">
-                  <h1 className="text-sm font-semibold text-slate-900">
-                    Select Items
-                  </h1>
-                  <p className="truncate text-[11px] text-slate-500">
-                    {party?.partyName || "No party selected"}
-                  </p>
-                </div>
+              <div className="min-w-0">
+                <h1 className="text-sm font-semibold text-slate-900">Select Items</h1>
+                <p className="truncate text-[11px] text-slate-500">
+                  {party?.partyName || "No party selected"}
+                </p>
               </div>
-
               <div className="flex items-center gap-2">
                 <Button type="button" size="sm" onClick={handleContinue}>
                   <span className="hidden sm:inline">Continue</span>
                   <span className="sm:hidden">Done</span>
                 </Button>
-
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  onClick={openFilterSheet}
-                >
+                <Button type="button" variant="outline" size="sm" onClick={openFilterSheet}>
                   <SlidersHorizontal className="h-3.5 w-3.5" />
-                  <span>
-                    Filters{filterCount > 0 ? ` (${filterCount})` : ""}
-                  </span>
+                  <span>Filters{filterCount > 0 ? ` (${filterCount})` : ""}</span>
                 </Button>
-
                 <Button type="button" variant="outline" size="sm">
                   <Barcode className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Scan</span>
                 </Button>
               </div>
             </div>
-
-            {/* Search Bar */}
             <div className="relative">
               <Search className="pointer-events-none absolute top-1/2 left-3 h-4 w-4 -translate-y-1/2 text-slate-400" />
               <Input
                 value={search}
-                onChange={(event) => setSearch(event.target.value)}
+                onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search products by name or code"
                 className="min-h-11 pl-9 text-sm"
               />
@@ -1272,15 +1137,15 @@ export default function ProductSelectPage() {
           </div>
         </header>
 
-        <div className=" mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden py-1 sm:py-4">
+        <div className="mx-auto flex w-full max-w-5xl min-h-0 flex-1 flex-col overflow-hidden py-1 sm:py-4">
           <div className="min-h-0 flex-1 overflow-hidden rounded-sm border border-slate-200 bg-white">
             <ScrollArea key={filterSignature} className="h-full">
               <div className="space-y-3 p-3 sm:p-4">
                 {isLoading && (
                   <div className="space-y-2">
-                    {Array.from({ length: 6 }).map((_, index) => (
+                    {Array.from({ length: 6 }).map((_, i) => (
                       <div
-                        key={index}
+                        key={i}
                         className="h-28 animate-pulse rounded-xl border border-slate-200 bg-slate-50"
                       />
                     ))}
@@ -1289,9 +1154,7 @@ export default function ProductSelectPage() {
 
                 {!isLoading && products.length === 0 && (
                   <div className="rounded-xl border border-dashed border-slate-300 bg-slate-50 p-6 text-center text-sm text-slate-500">
-                    {debouncedSearch
-                      ? "No matching products found"
-                      : "No products found"}
+                    {debouncedSearch ? "No matching products found" : "No products found"}
                   </div>
                 )}
 
@@ -1313,9 +1176,7 @@ export default function ProductSelectPage() {
                     );
                   })}
 
-                {hasNextPage && (
-                  <div ref={loadMoreRef} className="h-4 w-full" />
-                )}
+                {hasNextPage && <div ref={loadMoreRef} className="h-4 w-full" />}
 
                 {isFetchingNextPage && (
                   <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-center text-sm text-slate-600">
@@ -1326,30 +1187,9 @@ export default function ProductSelectPage() {
             </ScrollArea>
           </div>
         </div>
-
-        {/* <footer className="border-t border-slate-200 bg-white px-4 py-3">
-          <div className="mx-auto flex max-w-5xl flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="text-xs text-slate-500">
-              {selectedCount} item{selectedCount === 1 ? "" : "s"} staged
-              {appliedPriceLevel ? ` · ${appliedPriceLevel}` : ""}
-            </div>
-
-            <div className="flex items-center gap-2">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={() => navigate(-1)}
-              >
-                Back
-              </Button>
-              <Button type="button" onClick={handleContinue}>
-                Continue
-              </Button>
-            </div>
-          </div>
-        </footer> */}
       </div>
 
+      {/* No key prop — FilterSheet resets its draft state via useEffect on open */}
       <FilterSheet
         open={isFilterSheetOpen}
         onOpenChange={setIsFilterSheetOpen}
@@ -1360,45 +1200,13 @@ export default function ProductSelectPage() {
         priceLevels={Array.isArray(priceLevelsData) ? priceLevelsData : []}
         brands={Array.isArray(brandsData) ? brandsData : []}
         categories={Array.isArray(categoriesData) ? categoriesData : []}
-        subcategories={
-          Array.isArray(subcategoriesData) ? subcategoriesData : []
-        }
-        onApply={({
-          priceLevel,
-          brandId: nextBrandId,
-          categoryId: nextCategoryId,
-          subcategoryId: nextSubcategoryId,
-        }) => {
-          const hasPriceLevelChanged =
-            (priceLevel || "") !== (appliedPriceLevel || "");
-          const hasStagedItems = Object.values(stagedItems).some(
-            (item) => (Number(item?.quantity) || 0) > 0,
-          );
-
-          if (hasPriceLevelChanged && hasStagedItems) {
-            setPendingPriceLevelChange({
-              priceLevel,
-              brandId: nextBrandId,
-              categoryId: nextCategoryId,
-              subcategoryId: nextSubcategoryId,
-            });
-            return;
-          }
-
-          applyFilters({
-            priceLevel,
-            brandId: nextBrandId,
-            categoryId: nextCategoryId,
-            subcategoryId: nextSubcategoryId,
-          });
-        }}
+        subcategories={Array.isArray(subcategoriesData) ? subcategoriesData : []}
+        onApply={handleFilterApply}
       />
 
       <ItemEditSheet
         open={Boolean(editingStagedItem)}
-        onOpenChange={(open) => {
-          if (!open) setEditingProductId(null);
-        }}
+        onOpenChange={(open) => { if (!open) setEditingProductId(null); }}
         item={
           editingProductId && editingStagedItem
             ? buildEditableItem(editingProductId, editingStagedItem)
@@ -1410,26 +1218,19 @@ export default function ProductSelectPage() {
       {pendingPriceLevelChange && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-4">
           <div className="w-full max-w-sm rounded-2xl bg-white p-6 shadow-xl">
-            <h2 className="text-lg font-semibold text-slate-900">
-              Change Price Level?
-            </h2>
+            <h2 className="text-lg font-semibold text-slate-900">Change Price Level?</h2>
             <p className="mt-2 text-sm text-slate-600">
-              {stagedItemCount} staged item{stagedItemCount === 1 ? "" : "s"}{" "}
-              will be re-priced to{" "}
+              {stagedItemCount} staged item{stagedItemCount === 1 ? "" : "s"} will be re-priced
+              to{" "}
               {priceLevelsData.find(
-                (level) =>
-                  level?._id?.toString() ===
+                (l) =>
+                  (l?._id || l?.id)?.toString() ===
                   pendingPriceLevelChange?.priceLevel?.toString(),
               )?.pricelevel || "Default"}
               . Items without this price level will be set to rate 0.
             </p>
-
             <div className="mt-6 flex items-center justify-end gap-3">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={cancelPriceLevelChange}
-              >
+              <Button type="button" variant="outline" onClick={cancelPriceLevelChange}>
                 Cancel
               </Button>
               <Button type="button" onClick={confirmPriceLevelChange}>
