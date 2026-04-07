@@ -1,50 +1,107 @@
-import { fetchCashParties } from "@/api/client/partyApi";
-import { useQuery } from "@tanstack/react-query";
+import { useMemo } from "react";
+import { Wallet } from "lucide-react";
 import { useSelector } from "react-redux";
 
-export default function CashInHandListPage() {
-  const { cmp_id, Primary_user_id } = useSelector((state) => ({
-    cmp_id: state.company?.selectedCompanyId || "",
-    Primary_user_id: state.auth?.user?.id || "",
-  }));
+import ErrorRetryState from "@/components/common/ErrorRetryState";
+import { usePartyListQuery } from "@/hooks/queries/partyQueries";
 
-  const { data, isLoading, isError, error } = useQuery({
-    queryKey: ["cash-parties", cmp_id, Primary_user_id],
-    enabled: !!cmp_id && !!Primary_user_id,
-    queryFn: () => fetchCashParties({ cmp_id, Primary_user_id }),
-    onError: (err) => console.error("cash-parties error", err?.response || err),
+function formatCurrency(value) {
+  return `Rs. ${Number(value || 0).toLocaleString("en-IN", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+export default function CashInHandListPage() {
+  const cmp_id = useSelector((state) => state.company?.selectedCompanyId || "");
+  const query = usePartyListQuery({
+    cmp_id,
+    page: 1,
+    limit: 1000,
+    partyType: "cash",
+    enabled: Boolean(cmp_id),
   });
 
-  if (!cmp_id || !Primary_user_id)
-    return <div className="p-4">Loading company / user...</div>;
-  if (isLoading) return <div className="p-4">Loading...</div>;
-  if (isError) {
-    console.log("React Query error object:", error);
-    return <div className="p-4 text-red-500">Error loading data</div>;
-  }
-
-  const allItems = data?.items || [];
-  const items = allItems.filter((p) => p.partyType === "cash"); // <---
-
-  const total = items.reduce(
-    (sum, p) => sum + (p.openingBalanceAmount || 0),
-    0
+  const items = query.data?.items || [];
+  const total = useMemo(
+    () => items.reduce((sum, item) => sum + (Number(item?.openingBalanceAmount) || 0), 0),
+    [items],
   );
 
+  if (!cmp_id) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-1 pb-6 pt-3 sm:px-4">
+        <div className="rounded-lg border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          Select a company first.
+        </div>
+      </div>
+    );
+  }
+
+  if (query.isLoading) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-1 pb-6 pt-3 sm:px-4">
+        <div className="space-y-3">
+          <div className="h-28 animate-pulse rounded-lg border border-slate-200 bg-slate-100" />
+          <div className="h-14 animate-pulse rounded-lg border border-slate-200 bg-slate-100" />
+          <div className="h-14 animate-pulse rounded-lg border border-slate-200 bg-slate-100" />
+        </div>
+      </div>
+    );
+  }
+
+  if (query.isError) {
+    return (
+      <div className="mx-auto w-full max-w-3xl px-1 pb-6 pt-3 sm:px-4">
+        <div className="rounded-lg border border-slate-200 bg-white">
+          <ErrorRetryState
+            message={
+              query.error?.response?.data?.message ||
+              query.error?.message ||
+              "Failed to load cash balances"
+            }
+            onRetry={() => query.refetch()}
+          />
+        </div>
+      </div>
+    );
+  }
+
   return (
-    <div className="p-4  min-h-screen text-white">
-      <h1 className="text-xl font-semibold mb-4">Cash In Hand</h1>
-      <div className="mb-3">Total: ₹ {total.toLocaleString("en-IN")}</div>
-      <div className="bg-white text-slate-900 rounded-md divide-y">
-        {items.map((p) => (
-          <div
-            key={p._id}
-            className="flex justify-between items-center px-4 py-3"
-          >
-            <span>{p.partyName}</span>
-            <span>₹ {p.openingBalanceAmount.toLocaleString("en-IN")}</span>
+    <div className="mx-auto w-full max-w-3xl px-1 pb-6 pt-3 sm:px-4">
+      <div className="overflow-hidden rounded-lg border border-slate-200 bg-[#3e5c76] shadow-sm">
+        <div className="px-4 py-4 text-white">
+          <p className="text-[11px] font-semibold uppercase tracking-[0.16em] text-white/90">
+            Cash In Hand
+          </p>
+          <p className="mt-2 text-3xl font-bold tracking-tight">{formatCurrency(total)}</p>
+          <p className="mt-1 text-xs text-slate-200">{items.length} cash ledger(s)</p>
+        </div>
+      </div>
+
+      <div className="mt-3 overflow-hidden rounded-lg bg-white ">
+        {items.length === 0 ? (
+          <div className="px-4 py-10 text-center text-sm text-slate-500">
+            No cash ledgers found.
           </div>
-        ))}
+        ) : (
+          items.map((item) => (
+            <div
+              key={item._id}
+              className="flex items-center justify-between border-b border-slate-100 px-4 py-3 last:border-b-0"
+            >
+              <span className="inline-flex items-center gap-2">
+                <span className="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-emerald-50 text-emerald-600">
+                  <Wallet className="h-4 w-4" />
+                </span>
+                <span className="text-sm font-semibold text-slate-900">{item.partyName || "--"}</span>
+              </span>
+              <span className="text-sm font-semibold text-slate-800">
+                {formatCurrency(item?.openingBalanceAmount)}
+              </span>
+            </div>
+          ))
+        )}
       </div>
     </div>
   );
