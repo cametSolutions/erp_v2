@@ -936,6 +936,32 @@ export default function ProductSelectPage() {
     });
   };
 
+  const handleStagedRemove = useCallback((item) => {
+    const productId = item?.id || editingProductId;
+    if (!productId) return;
+
+    setStagedItems((cur) => {
+      const existing = cur[productId];
+      if (!existing) return cur;
+
+      if ((Number(existing?.originalQuantity) || 0) > 0) {
+        return {
+          ...cur,
+          [productId]: {
+            ...existing,
+            quantity: 0,
+            billedQty: 0,
+            actualQty: 0,
+          },
+        };
+      }
+
+      const next = { ...cur };
+      delete next[productId];
+      return next;
+    });
+  }, [editingProductId]);
+
   // ---------------------------------------------------------------------------
   // Continue / Done
   // ---------------------------------------------------------------------------
@@ -1211,6 +1237,7 @@ export default function ProductSelectPage() {
             : null
         }
         onSave={handleStagedSave}
+        onRemove={handleStagedRemove}
       />
 
       {pendingPriceLevelChange && (

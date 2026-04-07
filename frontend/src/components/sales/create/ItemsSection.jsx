@@ -14,7 +14,7 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import { ROUTES } from "@/routes/paths";
-import { updateItem } from "@/store/slices/transactionSlice";
+import { removeItem, updateItem } from "@/store/slices/transactionSlice";
 
 export default function ItemsSection({ returnTo = ROUTES.createOrder }) {
   const navigate = useNavigate();
@@ -135,6 +135,10 @@ export default function ItemsSection({ returnTo = ROUTES.createOrder }) {
         onSave={(changes) => {
           if (!editingItem) return;
           dispatch(updateItem({ id: editingItem.id, changes }));
+        }}
+        onRemove={(item) => {
+          if (!item?.id) return;
+          dispatch(removeItem({ id: item.id }));
         }}
       />
 

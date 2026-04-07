@@ -144,6 +144,8 @@ function clearSaleOrderStorage(cmp_id) {
 
   try {
     localStorage.removeItem(`sale-order-product-filters-${cmp_id}`);
+    localStorage.removeItem(`lastSeries_saleOrder_${cmp_id}`);
+    localStorage.removeItem(`lastSeriesId_saleOrder_${cmp_id}`);
   } catch (error) {
     console.error("Failed to clear sale order local storage", error);
   }
@@ -399,6 +401,13 @@ const transactionSlice = createSlice({
 
       recalculateTotals(state);
     },
+    removeItem(state, action) {
+      const id = action.payload?.id || action.payload;
+      if (!id) return;
+
+      state.items = state.items.filter((item) => item.id !== id);
+      recalculateTotals(state);
+    },
     setPriceLevel(state, action) {
       state.priceLevel = action.payload || null;
     },
@@ -411,20 +420,19 @@ const transactionSlice = createSlice({
     },
     resetSaleOrderDraft(state) {
       const cmp_id = state.cmp_id;
-      const selectedSeries = state.selectedSeries;
-
-      state.transactionDate = null;
-      state.selectedSeries = selectedSeries;
+      state.cmp_id = initialState.cmp_id;
+      state.voucherType = initialState.voucherType;
+      state.transactionDate = initialState.transactionDate;
+      state.selectedSeries = initialState.selectedSeries;
       state.taxType = initialState.taxType;
       state.despatchDetails = { ...initialState.despatchDetails };
-      state.party = null;
-      state.priceLevel = null;
-      state.priceLevelObject = null;
-      state.editingOrderId = null;
+      state.party = initialState.party;
+      state.priceLevel = initialState.priceLevel;
+      state.priceLevelObject = initialState.priceLevelObject;
+      state.editingOrderId = initialState.editingOrderId;
       state.items = [];
       state.additionalCharges = [];
       state.totals = { ...initialState.totals };
-      state.cmp_id = cmp_id;
 
       clearSaleOrderStorage(cmp_id);
     },
@@ -445,6 +453,7 @@ export const {
   addItemsFromSelection,
   loadSaleOrderForEdit,
   updateItem,
+  removeItem,
   setPriceLevel,
   setPriceLevelObject,
   repriceAllItems,
