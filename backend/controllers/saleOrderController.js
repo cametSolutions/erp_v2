@@ -5,6 +5,7 @@ import {
   applyTransactionCreatorScope,
   getAccessibleCompanyIds,
 } from "../utils/authScope.js";
+import { calculateSaleOrderTotals } from "../services/calculation.service.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 
@@ -67,6 +68,17 @@ function normalizeTotals(body = {}) {
       ) || 0,
     finalAmount: Number(firstDefined(totals.finalAmount, body.finalAmount)) || 0,
     roundOff: Number(firstDefined(totals.roundOff, body.roundOff)) || 0,
+  };
+}
+
+function buildClientTotalsSnapshot(body = {}) {
+  const totals = normalizeTotals(body);
+
+  return {
+    subtotal: totals.subTotal,
+    totalDiscount: totals.totalDiscount,
+    totalTax: totals.totalTaxAmount,
+    grandTotal: totals.finalAmount,
   };
 }
 
@@ -174,24 +186,64 @@ function mapDespatchDetails(despatchDetails = {}) {
 }
 
 function mapTotals(body = {}) {
-  const totals = normalizeTotals(body);
+  const calculatedTotals = calculateSaleOrderTotals(
+    body.items || [],
+    body.additionalCharges || [],
+    body.discounts || null,
+  );
+  const normalizedTotals = normalizeTotals(body);
+  const totalIgstAmt =
+    normalizeTaxType(body) === "igst" ? calculatedTotals.totalTax : 0;
+  const splitTaxAmount =
+    normalizeTaxType(body) === "cgst_sgst"
+      ? roundMoney(calculatedTotals.totalTax / 2)
+      : 0;
+  const totalCgstAmt = splitTaxAmount;
+  const totalSgstAmt = splitTaxAmount;
 
   return {
-    sub_total: totals.subTotal,
-    total_discount: totals.totalDiscount,
-    taxable_amount: totals.taxableAmount,
-    total_tax_amount: totals.totalTaxAmount,
-    total_igst_amt: totals.totalIgstAmt,
-    total_cgst_amt: totals.totalCgstAmt || 0,
-    total_sgst_amt: totals.totalSgstAmt || 0,
-    total_cess_amt: totals.totalCessAmt || 0,
-    total_addl_cess_amt: totals.totalAddlCessAmt || 0,
-    item_total: totals.itemTotal,
-    total_additional_charge: totals.totalAdditionalCharge,
-    amount_with_additional_charge: totals.amountWithAdditionalCharge,
-    round_off: totals.roundOff,
-    final_amount: totals.finalAmount,
+    sub_total: calculatedTotals.subtotal,
+    total_discount: calculatedTotals.totalDiscount,
+    taxable_amount: calculatedTotals.taxableAmount,
+    total_tax_amount: calculatedTotals.totalTax,
+    total_igst_amt: totalIgstAmt,
+    total_cgst_amt: totalCgstAmt,
+    total_sgst_amt: totalSgstAmt,
+    total_cess_amt: roundMoney(calculatedTotals.totalCess),
+    total_addl_cess_amt: roundMoney(calculatedTotals.totalAddlCess),
+    item_total: calculatedTotals.itemTotal,
+    total_additional_charge: calculatedTotals.totalAdditionalCharge,
+    amount_with_additional_charge: calculatedTotals.amountWithAdditionalCharge,
+    round_off: normalizedTotals.roundOff || 0,
+    final_amount: calculatedTotals.grandTotal,
   };
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function logTotalsMismatch(body = {}) {
+  const clientTotals = buildClientTotalsSnapshot(body);
+  const serverTotals = calculateSaleOrderTotals(
+    body.items || [],
+    body.additionalCharges || [],
+    body.discounts || null,
+  );
+
+  const hasSignificantDifference = [
+    Math.abs((clientTotals.subtotal || 0) - serverTotals.subtotal),
+    Math.abs((clientTotals.totalDiscount || 0) - serverTotals.totalDiscount),
+    Math.abs((clientTotals.totalTax || 0) - serverTotals.totalTax),
+    Math.abs((clientTotals.grandTotal || 0) - serverTotals.grandTotal),
+  ].some((difference) => difference > 1);
+
+  if (hasSignificantDifference) {
+    console.warn("Sale order totals mismatch detected", {
+      clientTotals,
+      serverTotals,
+    });
+  }
 }
 
 function buildSaleOrderPayload(body, nextVoucher, serialNumbers, userId) {
@@ -251,6 +303,8 @@ export async function createSaleOrder(req, res) {
     const cmpId = body.cmpId || body.cmp_id;
     const selectedSeries = normalizeSelectedSeries(body);
     const userId = req.user?._id || req.user?.id || null;
+
+    logTotalsMismatch(body);
 
     await session.withTransaction(async () => {
       const nextVoucher = await getNextVoucherNumber({
@@ -357,6 +411,8 @@ export async function updateSaleOrder(req, res) {
     }
 
     let updatedSaleOrder = null;
+
+    logTotalsMismatch(body);
 
     await session.withTransaction(async () => {
       const saleOrder = await SaleOrder.findOne(
