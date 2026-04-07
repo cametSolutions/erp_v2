@@ -283,9 +283,7 @@ export default function MobileWalletCard({
             </div>
           </div>
 
-          <button
-            type="button"
-            onClick={() => navigate(ROUTES.daybook)}
+          <div
             onTouchStart={handleTouchStart}
             onTouchEnd={handleTouchEnd}
             className="relative mb-5 block w-full overflow-hidden rounded-2xl border border-white/10 bg-white/10 py-6 text-center backdrop-blur-sm transition-colors hover:bg-white/15"
@@ -319,7 +317,7 @@ export default function MobileWalletCard({
                 />
               ))}
             </div>
-          </button>
+          </div>
 
           <div className="flex gap-3">
             <Button
