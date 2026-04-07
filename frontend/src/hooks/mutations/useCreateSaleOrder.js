@@ -3,6 +3,7 @@ import { toast } from "sonner";
 
 import { saleOrderService } from "@/api/services/saleOrder.service";
 import { saleOrderQueryKeys } from "@/hooks/queries/saleOrderQueries";
+import { invalidateVoucherSummaryForCompany } from "@/hooks/queries/voucherQueries";
 import { voucherSeriesKeys } from "@/hooks/queries/voucherSeriesQueries";
 
 export function useCreateSaleOrder(options = {}) {
@@ -30,6 +31,7 @@ export function useCreateSaleOrder(options = {}) {
           queryClient.invalidateQueries({
             queryKey: voucherSeriesKeys.nextNumber(resolvedCmpId, "saleOrder"),
           }),
+          invalidateVoucherSummaryForCompany(queryClient, resolvedCmpId),
         ]);
       }
 

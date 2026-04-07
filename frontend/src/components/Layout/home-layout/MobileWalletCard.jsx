@@ -1,4 +1,4 @@
-import { createElement, useCallback, useMemo } from "react";
+import { createElement, useCallback, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 import {
@@ -16,6 +16,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import userAvatar from "@/assets/icons/user.png";
 import { useLogoutUser } from "@/hooks/mutations/useLogoutUser";
+import { useVoucherTotalsSummary } from "@/hooks/queries/voucherQueries";
 import { ROUTES } from "@/routes/paths";
 
 import MobileHeaderActions from "./MobileHeaderActions";
@@ -123,6 +124,14 @@ function QuickActionCard({
   );
 }
 
+function formatCurrency(value) {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    maximumFractionDigits: 2,
+  }).format(Number(value) || 0);
+}
+
 export default function MobileWalletCard({
   headerOptions,
   selectedCompany,
@@ -130,9 +139,41 @@ export default function MobileWalletCard({
 }) {
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
+  const selectedCompanyId = useSelector((state) => state.company.selectedCompanyId);
   const displayName = getUserDisplayName(user);
   const initials = getInitials(displayName);
   const { logoutUser } = useLogoutUser();
+  const [activeTotalType, setActiveTotalType] = useState("saleOrder");
+  const [touchStartX, setTouchStartX] = useState(null);
+  const isAdminUser = user?.role === "admin";
+  const totalsSummaryQuery = useVoucherTotalsSummary(selectedCompanyId, {
+    enabled: Boolean(selectedCompanyId),
+    staleTime: isAdminUser ? 10 * 60 * 1000 : 30 * 1000,
+    gcTime: isAdminUser ? 20 * 60 * 1000 : 10 * 60 * 1000,
+    refetchInterval: isAdminUser ? 10 * 60 * 1000 : false,
+  });
+  const totals = totalsSummaryQuery.data?.totals || { saleOrder: 0, receipt: 0 };
+
+  const totalCards = useMemo(
+    () => [
+      {
+        key: "saleOrder",
+        label: "Sale Order Total",
+        value: totals.saleOrder,
+        helper: "Swipe to switch voucher total",
+      },
+      {
+        key: "receipt",
+        label: "Receipt Total",
+        value: totals.receipt,
+        helper: "Receipt total will appear here",
+      },
+    ],
+    [totals.receipt, totals.saleOrder],
+  );
+
+  const activeIndex = totalCards.findIndex((card) => card.key === activeTotalType);
+  const activeCard = totalCards[activeIndex] || totalCards[0];
 
   const onLogout = useCallback(() => {
     logoutUser()
@@ -151,6 +192,41 @@ export default function MobileWalletCard({
       ],
     }),
     [headerOptions, onLogout],
+  );
+
+  const showPreviousTotal = useCallback(() => {
+    setActiveTotalType((current) => (current === "receipt" ? "saleOrder" : current));
+  }, []);
+
+  const showNextTotal = useCallback(() => {
+    setActiveTotalType((current) => (current === "saleOrder" ? "receipt" : current));
+  }, []);
+
+  const handleTouchStart = useCallback((event) => {
+    setTouchStartX(event.touches?.[0]?.clientX ?? null);
+  }, []);
+
+  const handleTouchEnd = useCallback(
+    (event) => {
+      if (touchStartX == null) return;
+
+      const touchEndX = event.changedTouches?.[0]?.clientX ?? null;
+      if (touchEndX == null) {
+        setTouchStartX(null);
+        return;
+      }
+
+      const deltaX = touchEndX - touchStartX;
+
+      if (deltaX > 40) {
+        showPreviousTotal();
+      } else if (deltaX < -40) {
+        showNextTotal();
+      }
+
+      setTouchStartX(null);
+    },
+    [showNextTotal, showPreviousTotal, touchStartX],
   );
 
   return (
@@ -210,14 +286,39 @@ export default function MobileWalletCard({
           <button
             type="button"
             onClick={() => navigate(ROUTES.daybook)}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
             className="relative mb-5 block w-full overflow-hidden rounded-2xl border border-white/10 bg-white/10 py-6 text-center backdrop-blur-sm transition-colors hover:bg-white/15"
           >
             <div className="absolute left-1/4 right-1/4 top-0 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent" />
             <p className="mb-1 text-[11px] uppercase tracking-wide text-blue-200">
               Total Balance
             </p>
-            <p className="text-3xl font-bold tracking-tight">$3,756.00</p>
-            <p className="mt-1 text-[11px] text-blue-300">Tap to view voucher list</p>
+            <p className="text-[11px] font-medium text-blue-100">
+              {activeCard.label}
+            </p>
+            <p className="text-3xl font-bold tracking-tight">
+              {totalsSummaryQuery.isLoading
+                ? "Loading..."
+                : formatCurrency(activeCard.value)}
+            </p>
+            <p className="mt-1 text-[11px] text-blue-300">
+              {totalsSummaryQuery.isError
+                ? "Unable to load total right now"
+                : activeCard.helper}
+            </p>
+            <div className="mt-3 flex items-center justify-center gap-2">
+              {totalCards.map((card) => (
+                <span
+                  key={card.key}
+                  className={`h-1.5 rounded-full transition-all ${
+                    card.key === activeCard.key
+                      ? "w-5 bg-white"
+                      : "w-1.5 bg-white/45"
+                  }`}
+                />
+              ))}
+            </div>
           </button>
 
           <div className="flex gap-3">

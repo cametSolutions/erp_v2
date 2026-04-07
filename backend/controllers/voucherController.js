@@ -1,3 +1,5 @@
+import mongoose from "mongoose";
+
 import SaleOrder from "../Model/SaleOrder.js";
 import { applyTransactionCreatorScope } from "../utils/authScope.js";
 
@@ -87,6 +89,67 @@ function parsePositiveInteger(value, fallback) {
     return fallback;
   }
   return parsed;
+}
+
+export async function getVoucherTotalsSummary(req, res) {
+  try {
+    const { cmpId, date } = req.query;
+
+    if (!cmpId) {
+      return res.status(400).json({
+        success: false,
+        message: "cmpId is required",
+      });
+    }
+
+    if (!mongoose.Types.ObjectId.isValid(cmpId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cmpId",
+      });
+    }
+
+    const { fromDate, toDate } = resolveDateRange(date, date);
+
+    const saleOrderFilter = applyTransactionCreatorScope(req, {
+      cmp_id: new mongoose.Types.ObjectId(cmpId),
+      date: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+    });
+
+    const saleOrderTotals = await SaleOrder.aggregate([
+      { $match: saleOrderFilter },
+      {
+        $group: {
+          _id: null,
+          total: {
+            $sum: { $ifNull: ["$totals.final_amount", 0] },
+          },
+        },
+      },
+    ]);
+
+    const saleOrderTotal = Number(saleOrderTotals?.[0]?.total) || 0;
+
+    return res.json({
+      success: true,
+      data: {
+        date: fromDate.toISOString(),
+        totals: {
+          saleOrder: saleOrderTotal,
+          receipt: 0,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("getVoucherTotalsSummary error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message,
+    });
+  }
 }
 
 export async function getVouchers(req, res) {

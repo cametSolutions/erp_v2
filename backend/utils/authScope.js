@@ -1,3 +1,4 @@
+import mongoose from "mongoose";
 import Company from "../Model/CompanySchema.js";
 
 export function resolveAdminOwnerId(req) {
@@ -19,9 +20,13 @@ export function applyTransactionCreatorScope(req, filter = {}) {
       return { ...filter, created_by: null };
     }
 
+    const normalizedCreatedBy = mongoose.Types.ObjectId.isValid(currentUserId)
+      ? new mongoose.Types.ObjectId(currentUserId)
+      : currentUserId;
+
     return {
       ...filter,
-      created_by: currentUserId,
+      created_by: normalizedCreatedBy,
     };
   }
 
