@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
 import SaleOrder from "../Model/SaleOrder.js";
+import {
+  applyTransactionCreatorScope,
+  getAccessibleCompanyIds,
+} from "../utils/authScope.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 
@@ -304,9 +308,12 @@ export async function getSaleOrderById(req, res) {
       });
     }
 
-    const filter = { _id: saleOrderId };
+    const filter = applyTransactionCreatorScope(req, { _id: saleOrderId });
     if (cmpId) {
       filter.cmp_id = cmpId;
+    } else {
+      const accessibleCompanyIds = await getAccessibleCompanyIds(req);
+      filter.cmp_id = { $in: accessibleCompanyIds };
     }
 
     const saleOrder = await SaleOrder.findOne(filter).lean();
@@ -352,10 +359,12 @@ export async function updateSaleOrder(req, res) {
     let updatedSaleOrder = null;
 
     await session.withTransaction(async () => {
-      const saleOrder = await SaleOrder.findOne({
+      const saleOrder = await SaleOrder.findOne(
+        applyTransactionCreatorScope(req, {
         _id: saleOrderId,
         cmp_id: cmpId,
-      }).session(session);
+        })
+      ).session(session);
 
       if (!saleOrder) {
         throw new Error("SALE_ORDER_NOT_FOUND");

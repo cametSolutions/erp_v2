@@ -1,4 +1,5 @@
 import SaleOrder from "../Model/SaleOrder.js";
+import { applyTransactionCreatorScope } from "../utils/authScope.js";
 
 const DEFAULT_VOUCHER_TYPES = ["saleOrder", "receipt"];
 
@@ -119,13 +120,13 @@ export async function getVouchers(req, res) {
       });
     }
 
-    const saleOrderFilter = {
+    const saleOrderFilter = applyTransactionCreatorScope(req, {
       cmp_id: cmpId,
       date: {
         $gte: fromDate,
         $lte: toDate,
       },
-    };
+    });
 
     const totalCount = await SaleOrder.countDocuments(saleOrderFilter);
     const skip = (currentPage - 1) * pageSize;

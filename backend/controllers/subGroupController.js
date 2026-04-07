@@ -1,9 +1,10 @@
 // backend/controllers/subGroupController.js
 import SubGroup from "../Model/SubGroup.js";
+import { resolveAdminOwnerId } from "../utils/authScope.js";
 
 export const listSubGroups = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { cmp_id, accountGroup } = req.query;
 
     if (!cmp_id) {

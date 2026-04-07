@@ -1,12 +1,13 @@
 // controllers/outstandingController.js
 import Outstanding from "../Model/oustandingShcema.js";
 import mongoose from "mongoose";
+import { resolveAdminOwnerId } from "../utils/authScope.js";
 
 
 
 export const getOutstandingByParty = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { partyId } = req.params;
 
     // NEW: read page and limit from query
