@@ -22,6 +22,7 @@ export default function SalesCreatePage() {
   const additionalCharges = useSelector((state) => state.transaction.additionalCharges);
   const totals = useSelector((state) => state.transaction.totals);
   const selectedPriceLevel = useSelector((state) => state.transaction.priceLevelObject);
+  const taxType = useSelector((state) => state.transaction.taxType);
   const dispatch = useDispatch();
   const navigate = useNavigate();
   const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
@@ -58,6 +59,7 @@ export default function SalesCreatePage() {
     const headerPayload = buildHeaderPayload ? buildHeaderPayload() : {};
     const payload = saleOrderService.buildCreateSaleOrderPayload({
       cmp_id,
+      taxType,
       party,
       items,
       despatchDetails,
@@ -66,10 +68,6 @@ export default function SalesCreatePage() {
       selectedPriceLevel,
       headerPayload,
     });
-
-
-    console.log(payload);
-    
 
     createSaleOrderMutation.mutate(payload);
   };

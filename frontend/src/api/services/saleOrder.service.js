@@ -9,6 +9,7 @@ function normalizeOptionalVoucherPart(value) {
 
 export function buildCreateSaleOrderPayload({
   cmp_id,
+  taxType,
   party,
   items = [],
   despatchDetails,
@@ -27,6 +28,8 @@ export function buildCreateSaleOrderPayload({
     ...sanitizedHeaderPayload,
     cmp_id,
     cmpId: cmp_id,
+    taxType: taxType || "igst",
+    tax_type: taxType || "igst",
     party,
     selectedPriceLevel: selectedPriceLevel
       ? {
@@ -98,6 +101,7 @@ export function buildCreateSaleOrderPayload({
 
 export function buildUpdateSaleOrderPayload({
   cmp_id,
+  taxType,
   party,
   items = [],
   despatchDetails,
@@ -109,6 +113,7 @@ export function buildUpdateSaleOrderPayload({
 }) {
   const basePayload = buildCreateSaleOrderPayload({
     cmp_id,
+    taxType,
     party,
     items,
     despatchDetails,

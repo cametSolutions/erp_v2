@@ -58,6 +58,7 @@ export default function SaleOrderEditPage() {
     const headerPayload = buildHeaderPayload ? buildHeaderPayload() : {};
     const payload = saleOrderService.buildUpdateSaleOrderPayload({
       cmp_id: effectiveCmpId,
+      taxType: transaction.taxType,
       party,
       items,
       despatchDetails,

@@ -270,6 +270,8 @@ export async function createSaleOrder(req, res) {
         userId
       );
 
+      console.log("Sale Order Document:", saleOrderDoc);
+
       const [created] = await SaleOrder.create([saleOrderDoc], { session });
       createdSaleOrder = await SaleOrder.findById(created._id).session(session).lean();
     });

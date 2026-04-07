@@ -376,17 +376,27 @@ const transactionSlice = createSlice({
       const { id, changes } = action.payload || {};
       if (!id || !changes) return;
 
-      const existingItem = state.items.find((item) => item.id === id);
+      const existingItemIndex = state.items.findIndex((item) => item.id === id);
+      if (existingItemIndex === -1) return;
+
+      const existingItem = state.items[existingItemIndex];
       if (!existingItem) return;
 
-      Object.assign(
-        existingItem,
-        recalculateItem({
-          ...existingItem,
-          ...changes,
-          taxType: changes?.taxType || existingItem.taxType || state.taxType,
-        }),
-      );
+      const nextItem = recalculateItem({
+        ...existingItem,
+        ...changes,
+        taxType: changes?.taxType || existingItem.taxType || state.taxType,
+      });
+
+      const nextBilledQty = Number(nextItem?.billedQty) || 0;
+      const nextActualQty = Number(nextItem?.actualQty) || 0;
+
+      if (nextBilledQty <= 0 && nextActualQty <= 0) {
+        state.items.splice(existingItemIndex, 1);
+      } else {
+        Object.assign(existingItem, nextItem);
+      }
+
       recalculateTotals(state);
     },
     setPriceLevel(state, action) {

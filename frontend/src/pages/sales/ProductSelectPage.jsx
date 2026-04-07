@@ -870,6 +870,17 @@ export default function ProductSelectPage() {
       const existing = cur[productId];
       const nextQty = (Number(existing?.quantity) || 0) - 1;
       if (nextQty <= 0) {
+        if ((Number(existing?.originalQuantity) || 0) > 0) {
+          return {
+            ...cur,
+            [productId]: {
+              ...existing,
+              quantity: 0,
+              billedQty: 0,
+              actualQty: 0,
+            },
+          };
+        }
         const next = { ...cur };
         delete next[productId];
         return next;
@@ -936,7 +947,6 @@ export default function ProductSelectPage() {
       const detail = buildProductDetail(staged?.productDetail);
       const quantity = Number(staged?.quantity) || 0;
       const originalQuantity = Number(staged?.originalQuantity) || 0;
-      const deltaQuantity = Math.max(quantity - originalQuantity, 0);
       const baseChanges = {
         rate: Number(staged?.rate) || 0,
         taxInclusive: Boolean(staged?.taxInclusive),
@@ -948,40 +958,28 @@ export default function ProductSelectPage() {
       };
 
       if (originalQuantity > 0) {
-        const snapshot = staged?.originalSnapshot || {};
-        if (deltaQuantity > 0) {
-          dispatch(updateItem({ id: productId, changes: baseChanges }));
-        } else {
-          const keptSameQuantity = quantity === originalQuantity;
-          const shouldUpdate =
-            snapshot.rate !== baseChanges.rate ||
-            snapshot.taxInclusive !== baseChanges.taxInclusive ||
-            snapshot.discountType !== baseChanges.discountType ||
-            snapshot.discountPercentage !== baseChanges.discountPercentage ||
-            snapshot.discountAmount !== baseChanges.discountAmount ||
-            snapshot.description !== baseChanges.description ||
-            snapshot.warrantyCardId !== baseChanges.warrantyCardId ||
-            (keptSameQuantity &&
-              (snapshot.actualQty !== (Number(staged?.actualQty) || quantity) ||
-                snapshot.billedQty !== quantity));
+        const nextActualQty =
+          quantity > 0
+            ? Number(staged?.actualQty ?? quantity) || quantity
+            : 0;
 
-          if (shouldUpdate) {
-            dispatch(
-              updateItem({
-                id: productId,
-                changes: {
-                  ...baseChanges,
-                  ...(keptSameQuantity
-                    ? { actualQty: Number(staged?.actualQty) || quantity, billedQty: quantity }
-                    : {}),
-                },
-              }),
-            );
-          }
-        }
+        dispatch(
+          updateItem({
+            id: productId,
+            changes: {
+              ...baseChanges,
+              actualQty: nextActualQty,
+              billedQty: quantity,
+            },
+          }),
+        );
+
+        return;
       }
 
-      if (deltaQuantity <= 0) return;
+      if (quantity <= 0) {
+        return;
+      }
 
       payload.push({
         id: productId,
@@ -999,8 +997,8 @@ export default function ProductSelectPage() {
         addl_cess: Number(detail?.addl_cess ?? detail?.addlCess) || 0,
         taxType: staged?.taxType || taxType || "igst",
         initialPriceSource: staged?.initialPriceSource || "manual",
-        actualQty: deltaQuantity,
-        billedQty: deltaQuantity,
+        actualQty: quantity,
+        billedQty: quantity,
         taxInclusive: Boolean(staged?.taxInclusive),
         discountType: staged?.discountType || "percentage",
         discountPercentage: Number(staged?.discountPercentage) || 0,
