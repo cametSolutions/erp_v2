@@ -1,24 +1,25 @@
-
-
 import VoucherSeries from "../Model/VoucherSeriesSchema.js";
 
-
-export const createDefaultVoucherSeries = async ({ companyId, ownerId, session }) => {
+export const createDefaultVoucherSeries = async ({
+  companyId,
+  ownerId,
+  session,
+}) => {
   const voucherTypes = [
-    "sales",
     "saleOrder",
-    "vanSale",
-    "purchase",
-    "creditNote",
-    "debitNote",
-    "stockTransfer",
     "receipt",
-    "payment",
+    // "sales",
+    // "vanSale",
+    // "purchase",
+    // "creditNote",
+    // "debitNote",
+    // "stockTransfer",
+    // "payment",
   ];
 
   const seriesDocs = voucherTypes.map((voucherType) => ({
-    cmp_id: companyId,         // Company _id
-    primary_user_id: ownerId,  // Admin _id
+    cmp_id: companyId, // Company _id
+    primary_user_id: ownerId, // Admin _id
     voucherType,
     series: [
       {
