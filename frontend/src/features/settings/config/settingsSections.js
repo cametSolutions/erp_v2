@@ -36,7 +36,7 @@ export const dataEntrySettingsItems = [
   {
     id: "data-entry-voucher-settings",
     title: "Voucher",
-    description: "Select the default bank account used while entering vouchers",
+    description: "Manage voucher series and default bank account settings",
     icon: FiFileText,
     action: {
       type: "route",

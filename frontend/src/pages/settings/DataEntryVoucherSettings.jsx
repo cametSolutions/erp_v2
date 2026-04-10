@@ -1,6 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
-import { BadgeIndianRupee, Check, ChevronDown, Loader2 } from "lucide-react";
+import {
+  BadgeIndianRupee,
+  Check,
+  ChevronDown,
+  Loader2,
+  Rows3,
+} from "lucide-react";
 import { toast } from "sonner";
 
 import ErrorRetryState from "@/components/common/ErrorRetryState";
@@ -30,6 +37,7 @@ import { useCompanySettingsMutation } from "@/hooks/mutations/useCompanySettings
 import { useCompanySettingsQuery } from "@/hooks/queries/companySettingsQueries";
 import { usePartyListQuery } from "@/hooks/queries/partyQueries";
 import { cn } from "@/lib/utils";
+import { ROUTES } from "@/routes/paths";
 import { DataEntryActionRow } from "@/pages/settings/DataEntrySettingsShared";
 
 function VoucherSettingsSheet({
@@ -243,6 +251,7 @@ function VoucherSettingsSheet({
 }
 
 export default function DataEntryVoucherSettings() {
+  const navigate = useNavigate();
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const [sheetOpen, setSheetOpen] = useState(false);
 
@@ -288,16 +297,24 @@ export default function DataEntryVoucherSettings() {
           onRetry={() => refetch()}
         />
       ) : (
-        <DataEntryActionRow
-          title="Select Bank Account"
-          description={
-            selectedBank?.partyName
-              ? `${selectedBank.partyName}${selectedBank.bank_name ? ` - ${selectedBank.bank_name}` : ""}`
-              : "Choose the default bank account for voucher entry."
-          }
-          icon={BadgeIndianRupee}
-          onClick={() => setSheetOpen(true)}
-        />
+        <div className="space-y-3">
+          <DataEntryActionRow
+            title="Voucher Series"
+            description="Open sale order and receipt voucher series settings."
+            icon={Rows3}
+            onClick={() => navigate(ROUTES.settingsVoucherSeries)}
+          />
+          <DataEntryActionRow
+            title="Select Bank Account"
+            description={
+              selectedBank?.partyName
+                ? `${selectedBank.partyName}${selectedBank.bank_name ? ` - ${selectedBank.bank_name}` : ""}`
+                : "Choose the default bank account for voucher entry."
+            }
+            icon={BadgeIndianRupee}
+            onClick={() => setSheetOpen(true)}
+          />
+        </div>
       )}
 
       <VoucherSettingsSheet
