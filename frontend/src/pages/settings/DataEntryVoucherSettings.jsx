@@ -306,11 +306,7 @@ export default function DataEntryVoucherSettings() {
           />
           <DataEntryActionRow
             title="Select Bank Account"
-            description={
-              selectedBank?.partyName
-                ? `${selectedBank.partyName}${selectedBank.bank_name ? ` - ${selectedBank.bank_name}` : ""}`
-                : "Choose the default bank account for voucher entry."
-            }
+            description="Choose the default bank account for voucher entry."
             icon={BadgeIndianRupee}
             onClick={() => setSheetOpen(true)}
           />

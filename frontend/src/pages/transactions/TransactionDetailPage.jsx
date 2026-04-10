@@ -4,8 +4,10 @@ import { useSelector } from "react-redux";
 
 import ErrorRetryState from "@/components/common/ErrorRetryState";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
+import ReceiptDetailView from "@/components/transactions/details/ReceiptDetailView";
 import SaleOrderDetailView from "@/components/transactions/details/SaleOrderDetailView";
 import TransactionTypePlaceholder from "@/components/transactions/details/TransactionTypePlaceholder";
+import { useCashTransactionDetailQuery } from "@/hooks/queries/cashTransactionQueries";
 import { useCompanySettingsQuery } from "@/hooks/queries/companySettingsQueries";
 import { usePrintConfigQuery } from "@/hooks/queries/printConfigQueries";
 import { useSaleOrderDetailQuery } from "@/hooks/queries/saleOrderQueries";
@@ -51,6 +53,10 @@ export default function TransactionDetailPage({
     voucherType === "saleOrder" ? cmpId : null,
     "sale_order"
   );
+  const receiptQuery = useCashTransactionDetailQuery(voucherId, cmpId, {
+    enabled: voucherType === "receipt" && Boolean(voucherId),
+    initialData: voucherType === "receipt" ? fallbackTransaction : undefined,
+  });
   const companySettingsQuery = useCompanySettingsQuery(
     voucherType === "saleOrder" ? cmpId : null,
     voucherType === "saleOrder"
@@ -102,6 +108,42 @@ export default function TransactionDetailPage({
         companySettings={companySettingsQuery.data || null}
       />
     );
+  }
+
+  if (voucherType === "receipt") {
+    const receipt = receiptQuery.data || fallbackTransaction;
+
+    if (receiptQuery.isLoading && !receipt) {
+      return (
+        <div className="mx-auto w-full max-w-5xl space-y-3 p-4">
+          {Array.from({ length: 4 }).map((_, index) => (
+            <div
+              key={index}
+              className="h-24 animate-pulse rounded-2xl border border-slate-200 bg-slate-50"
+            />
+          ))}
+        </div>
+      );
+    }
+
+    if (receiptQuery.isError || !receipt) {
+      return (
+        <div className="mx-auto w-full max-w-xl p-4">
+          <div className="rounded-2xl border border-slate-200 bg-white">
+            <ErrorRetryState
+              message={
+                receiptQuery.error?.response?.data?.message ||
+                receiptQuery.error?.message ||
+                "Receipt details could not be loaded."
+              }
+              onRetry={() => receiptQuery.refetch()}
+            />
+          </div>
+        </div>
+      );
+    }
+
+    return <ReceiptDetailView receipt={receipt} />;
   }
 
   if (ORDER_VOUCHER_TYPES.has(voucherType)) {

@@ -3,6 +3,7 @@ import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { outstandingService } from "@/api/services/outstanding.service";
 
 export const outstandingQueryKeys = {
+  all: ["outstanding"],
   party: (partyId, cmp_id) => ["outstanding", "party", { partyId, cmp_id }],
   settlement: (partyId, cmp_id, classification) => [
     "outstanding",

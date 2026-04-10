@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
 
 import { cashTransactionService } from "@/api/services/cashTransaction.service";
+import { outstandingQueryKeys } from "@/hooks/queries/outstandingQueries";
+import { partyQueryKeys } from "@/hooks/queries/partyQueries";
 import { invalidateVoucherSummaryForCompany } from "@/hooks/queries/voucherQueries";
 import { voucherSeriesKeys } from "@/hooks/queries/voucherSeriesQueries";
 
@@ -25,6 +27,14 @@ export function useCreateCashTransaction(options = {}) {
             queryKey: voucherSeriesKeys.nextNumber(resolvedCmpId, resolvedVoucherType),
           }),
           invalidateVoucherSummaryForCompany(queryClient, resolvedCmpId),
+          queryClient.invalidateQueries({
+            queryKey: outstandingQueryKeys.all || ["outstanding"],
+            exact: false,
+          }),
+          queryClient.invalidateQueries({
+            queryKey: partyQueryKeys.all,
+            exact: false,
+          }),
         ]);
       }
 

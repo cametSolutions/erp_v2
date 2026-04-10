@@ -181,7 +181,7 @@ function AmountSettlementStep({
   };
 
   return (
-    <div className="flex h-full flex-col bg-slate-50">
+    <div className="flex h-full flex-col bg-slate-50 px-1">
       <header className="sticky top-0 z-10 border-b border-slate-200 bg-white px-3 py-3">
         <div className="mx-auto flex max-w-4xl items-center justify-between gap-3">
           <div>
@@ -196,7 +196,7 @@ function AmountSettlementStep({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto px-3 py-4">
+      <main className="flex-1 overflow-y-auto py-4">
         <div className="mx-auto flex max-w-4xl flex-col gap-4">
           <DetailCard
             title="Settlement"
