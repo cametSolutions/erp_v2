@@ -9,6 +9,7 @@ export default function SummarySection({
   createLoading,
   createError,
   disableCreate,
+  buttonLabel = "Create Sales Order",
 }) {
   const totals = useSelector((state) => state.transaction.totals);
   const errorMessage =
@@ -83,7 +84,7 @@ export default function SummarySection({
           className="inline-flex w-full items-center justify-center gap-2 rounded-xl bg-sky-600 px-5 py-3 text-sm font-semibold text-white transition hover:bg-sky-700 disabled:cursor-not-allowed disabled:opacity-60"
         >
           {createLoading && <LoaderCircle className="h-4 w-4 animate-spin" />}
-          Create Sales Order
+          {buttonLabel}
         </button>
 
         {errorMessage && (

@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 import Product from "../Model/ProductSchema.js";
 import { Brand, Category, Subcategory } from "../Model/ProductSubDetails.js";
+import { resolveAdminOwnerId } from "../utils/authScope.js";
 
 const PRODUCT_POPULATE = [
   { path: "brand", select: "brand brand_id" },
@@ -39,7 +40,7 @@ async function resolveMasterFilterId({
 
 async function listProductMasters(Model, fieldName, req, res) {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { cmp_id, search = "" } = req.query;
 
     if (!cmp_id) {
@@ -71,7 +72,7 @@ async function listProductMasters(Model, fieldName, req, res) {
 
 export const listProducts = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const {
       cmp_id,
       page = 1,
@@ -170,7 +171,7 @@ export const listProducts = async (req, res) => {
 
 export const getProductById = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { id } = req.params;
 
     const product = await Product.findOne({

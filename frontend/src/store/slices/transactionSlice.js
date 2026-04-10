@@ -63,11 +63,15 @@ function repriceAllItemsInternal(state) {
       priceLevel: state.priceLevel,
     };
 
-    if (nextItem.initialPriceSource === "priceLevel") {
+    if (state.priceLevel) {
       const nextRate = resolveItemPriceLevelRate(nextItem, state.priceLevel);
-      if (nextRate != null) {
-        nextItem.rate = nextRate;
-      }
+      nextItem.rate = nextRate != null ? Number(nextRate) || 0 : 0;
+      nextItem.initialPriceSource = "priceLevel";
+      return recalculateItem(nextItem);
+    }
+
+    if (nextItem.initialPriceSource === "priceLevel") {
+      nextItem.rate = 0;
     }
 
     return recalculateItem(nextItem);
@@ -114,6 +118,7 @@ const initialState = {
   party: null,
   priceLevel: null,
   priceLevelObject: null,
+  editingOrderId: null,
   items: [],
   additionalCharges: [],
   totals: {
@@ -139,9 +144,90 @@ function clearSaleOrderStorage(cmp_id) {
 
   try {
     localStorage.removeItem(`sale-order-product-filters-${cmp_id}`);
+    localStorage.removeItem(`lastSeries_saleOrder_${cmp_id}`);
+    localStorage.removeItem(`lastSeriesId_saleOrder_${cmp_id}`);
   } catch (error) {
     console.error("Failed to clear sale order local storage", error);
   }
+}
+
+function mapSaleOrderParty(doc = {}) {
+  const snapshot = doc?.party_snapshot || {};
+
+  return {
+    _id: doc?.party_id || null,
+    partyName: snapshot?.name || "",
+    gstNo: snapshot?.gst_no || "",
+    billingAddress: snapshot?.billing_address || "",
+    shippingAddress: snapshot?.shipping_address || "",
+    mobileNumber: snapshot?.mobile || "",
+    state: snapshot?.state || "",
+  };
+}
+
+function mapSaleOrderItem(row = {}, taxType = "igst") {
+  return recalculateItem({
+    _id: row?._id || null,
+    id: row?.item_id || null,
+    name: row?.item_name || "",
+    hsn: row?.hsn || "",
+    unit: row?.unit || "",
+    actualQty: Number(row?.actual_qty) || 0,
+    billedQty: Number(row?.billed_qty) || 0,
+    rate: Number(row?.rate) || 0,
+    taxRate: Number(row?.tax_rate) || 0,
+    cgst: taxType === "cgst_sgst" ? Number(row?.tax_rate) / 2 || 0 : 0,
+    sgst: taxType === "cgst_sgst" ? Number(row?.tax_rate) / 2 || 0 : 0,
+    igst: taxType === "igst" ? Number(row?.tax_rate) || 0 : 0,
+    cess: Number(row?.cess_rate) || 0,
+    addl_cess: Number(row?.addl_cess_rate) || 0,
+    taxType,
+    priceLevel: row?.price_level_id || null,
+    priceLevels: Array.isArray(row?.priceLevels) ? row.priceLevels : [],
+    initialPriceSource: "saved",
+    taxInclusive: Boolean(row?.tax_inclusive),
+    discountType: row?.discount_type || "amount",
+    discountPercentage: Number(row?.discount_percentage) || 0,
+    discountAmount: Number(row?.discount_amount) || 0,
+    basePrice: Number(row?.base_price) || 0,
+    taxableAmount: Number(row?.taxable_amount) || 0,
+    igstAmount: Number(row?.igst_amount) || 0,
+    cgstAmount: Number(row?.cgst_amount) || 0,
+    sgstAmount: Number(row?.sgst_amount) || 0,
+    taxAmount: Number(row?.tax_amount) || 0,
+    cessAmount: Number(row?.cess_amount) || 0,
+    addlCessAmount: Number(row?.addl_cess_amount) || 0,
+    totalAmount: Number(row?.total_amount) || 0,
+    description: row?.description || "",
+    warrantyCardId: row?.warranty_card_id || null,
+  });
+}
+
+function mapSaleOrderAdditionalCharge(charge = {}) {
+  return normalizeAdditionalCharge({
+    _id: charge?._id || null,
+    option: charge?.option || "",
+    value: charge?.value ?? "",
+    action: charge?.action === "subtract" ? "subtract" : "add",
+    taxPercentage: Number(charge?.tax_percentage) || 0,
+    taxAmt: Number(charge?.tax_amount) || 0,
+    hsn: charge?.hsn || "",
+    finalValue: Number(charge?.final_value) || 0,
+  });
+}
+
+function mapSaleOrderDespatchDetails(details = {}) {
+  return {
+    ...initialState.despatchDetails,
+    challanNo: details?.challan_no || "",
+    containerNo: details?.container_no || "",
+    despatchThrough: details?.despatch_through || "",
+    destination: details?.destination || "",
+    vehicleNo: details?.vehicle_no || "",
+    orderNo: details?.order_no || "",
+    termsOfPay: details?.terms_of_pay || "",
+    termsOfDelivery: details?.terms_of_delivery || "",
+  };
 }
 
 const transactionSlice = createSlice({
@@ -259,21 +345,67 @@ const transactionSlice = createSlice({
 
       recalculateTotals(state);
     },
+    loadSaleOrderForEdit(state, action) {
+      const incomingId = action.payload?._id?.toString();
+      if (!incomingId) return;
+      if (state.editingOrderId === incomingId) return;
+      state.editingOrderId = incomingId;
+
+      const doc = action.payload || {};
+      const taxType = doc?.tax_type || "igst";
+
+      state.cmp_id = doc?.cmp_id || state.cmp_id || null;
+      state.transactionDate = doc?.date || null;
+      state.taxType = taxType;
+      state.party = mapSaleOrderParty(doc);
+      state.items = Array.isArray(doc?.items)
+        ? doc.items.map((row) => mapSaleOrderItem(row, taxType))
+        : [];
+      state.additionalCharges = Array.isArray(doc?.additional_charges)
+        ? doc.additional_charges.map(mapSaleOrderAdditionalCharge)
+        : [];
+      state.despatchDetails = mapSaleOrderDespatchDetails(doc?.despatch_details);
+      state.priceLevel = null;
+      state.priceLevelObject = null;
+      state.selectedSeries = {
+        _id: doc?.series_id || null,
+        seriesName: doc?.series_name || "",
+        voucherNumber: doc?.voucher_number || "",
+      };
+      recalculateTotals(state);
+    },
     updateItem(state, action) {
       const { id, changes } = action.payload || {};
       if (!id || !changes) return;
 
-      const existingItem = state.items.find((item) => item.id === id);
+      const existingItemIndex = state.items.findIndex((item) => item.id === id);
+      if (existingItemIndex === -1) return;
+
+      const existingItem = state.items[existingItemIndex];
       if (!existingItem) return;
 
-      Object.assign(
-        existingItem,
-        recalculateItem({
-          ...existingItem,
-          ...changes,
-          taxType: changes?.taxType || existingItem.taxType || state.taxType,
-        }),
-      );
+      const nextItem = recalculateItem({
+        ...existingItem,
+        ...changes,
+        taxType: changes?.taxType || existingItem.taxType || state.taxType,
+      });
+
+      const nextBilledQty = Number(nextItem?.billedQty) || 0;
+      const nextActualQty = Number(nextItem?.actualQty) || 0;
+
+      if (nextBilledQty <= 0 && nextActualQty <= 0) {
+        state.items.splice(existingItemIndex, 1);
+      } else {
+        Object.assign(existingItem, nextItem);
+      }
+
+      recalculateTotals(state);
+    },
+    removeItem(state, action) {
+      const id = action.payload?.id || action.payload;
+      if (!id) return;
+
+      state.items = state.items.filter((item) => item.id !== id);
       recalculateTotals(state);
     },
     setPriceLevel(state, action) {
@@ -288,19 +420,19 @@ const transactionSlice = createSlice({
     },
     resetSaleOrderDraft(state) {
       const cmp_id = state.cmp_id;
-      const selectedSeries = state.selectedSeries;
-
-      state.transactionDate = null;
-      state.selectedSeries = selectedSeries;
+      state.cmp_id = initialState.cmp_id;
+      state.voucherType = initialState.voucherType;
+      state.transactionDate = initialState.transactionDate;
+      state.selectedSeries = initialState.selectedSeries;
       state.taxType = initialState.taxType;
       state.despatchDetails = { ...initialState.despatchDetails };
-      state.party = null;
-      state.priceLevel = null;
-      state.priceLevelObject = null;
+      state.party = initialState.party;
+      state.priceLevel = initialState.priceLevel;
+      state.priceLevelObject = initialState.priceLevelObject;
+      state.editingOrderId = initialState.editingOrderId;
       state.items = [];
       state.additionalCharges = [];
       state.totals = { ...initialState.totals };
-      state.cmp_id = cmp_id;
 
       clearSaleOrderStorage(cmp_id);
     },
@@ -319,7 +451,9 @@ export const {
   setAdditionalCharges,
   resetAdditionalCharges,
   addItemsFromSelection,
+  loadSaleOrderForEdit,
   updateItem,
+  removeItem,
   setPriceLevel,
   setPriceLevelObject,
   repriceAllItems,

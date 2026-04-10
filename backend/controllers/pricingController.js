@@ -1,28 +1,36 @@
 import mongoose from "mongoose";
 
 import SaleOrder from "../Model/SaleOrder.js";
+import {
+  getAccessibleCompanyIds,
+  isStaffUser,
+  resolveCurrentUserId,
+} from "../utils/authScope.js";
 
 function toObjectId(value) {
   if (!value || !mongoose.Types.ObjectId.isValid(value)) return null;
   return new mongoose.Types.ObjectId(value);
 }
 
-async function getLatestPrice({ owner, partyId, productId }) {
+async function getLatestPrice({ req, partyId, productId }) {
   const productObjectId = toObjectId(productId);
   const partyObjectId = partyId ? toObjectId(partyId) : null;
-  const ownerObjectId = toObjectId(owner);
+  const currentUserId = resolveCurrentUserId(req);
+  const currentUserObjectId = toObjectId(currentUserId);
 
-  if (!productObjectId || (partyId && !partyObjectId) || !ownerObjectId) {
+  if (!productObjectId || (partyId && !partyObjectId)) {
+    return null;
+  }
+
+  const accessibleCompanyIds = await getAccessibleCompanyIds(req);
+  if (!accessibleCompanyIds.length) {
     return null;
   }
 
   const matchStage = {
     $and: [
       {
-        $or: [
-          { Primary_user_id: ownerObjectId },
-          { created_by: ownerObjectId },
-        ],
+        cmp_id: { $in: accessibleCompanyIds },
       },
       {
         $or: [
@@ -32,6 +40,16 @@ async function getLatestPrice({ owner, partyId, productId }) {
       },
     ],
   };
+
+  if (isStaffUser(req)) {
+    if (!currentUserObjectId) {
+      return null;
+    }
+
+    matchStage.$and.push({
+      created_by: currentUserObjectId,
+    });
+  }
 
   if (partyObjectId) {
     matchStage.$and.push({
@@ -87,7 +105,7 @@ export const getPartyLsp = async (req, res) => {
     }
 
     const latest = await getLatestPrice({
-      owner: req.user.owner || req.user.id,
+      req,
       partyId,
       productId,
     });
@@ -112,7 +130,7 @@ export const getGlobalLsp = async (req, res) => {
     }
 
     const latest = await getLatestPrice({
-      owner: req.user.owner || req.user.id,
+      req,
       productId,
     });
 

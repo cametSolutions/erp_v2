@@ -3,6 +3,10 @@ import mongoose from "mongoose";
 import Party from "../Model/partySchema.js";
 import AccountGroup from "../Model/AccountGroup.js";
 import Outstanding from "../Model/oustandingShcema.js";
+import {
+  resolveAdminOwnerId,
+  resolveCurrentUserId,
+} from "../utils/authScope.js";
 
 const PARTY_LIST_PROJECTION = {
   partyName: 1,
@@ -16,7 +20,7 @@ const PARTY_LIST_PROJECTION = {
   openingBalanceAmount: 1,
 };
 
-const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
+const resolveAccountGroupId = async ({ cmp_id, accountGroup, owner }) => {
   if (accountGroup && accountGroup !== "") {
     return accountGroup;
   }
@@ -24,6 +28,7 @@ const resolveAccountGroupId = async ({ cmp_id, accountGroup }) => {
   const fallbackGroup = await AccountGroup.findOne({
     accountGroup: "Sundry Debtors",
     cmp_id,
+    ...(owner ? { Primary_user_id: owner } : {}),
   });
 
   if (!fallbackGroup) {
@@ -86,6 +91,8 @@ const withOutstandingSummary = (party, totalsMap) => {
 
 export const addParty = async (req, res) => {
   try {
+    const owner = resolveAdminOwnerId(req);
+    const createdBy = resolveCurrentUserId(req);
     let {
       cmp_id,
       accountGroup,
@@ -111,7 +118,7 @@ export const addParty = async (req, res) => {
     // use currently selected company (if you store it) or from body:
     // cmp_id = cmp_id || req.companyIdFromHeader;
 
-    accountGroup = await resolveAccountGroupId({ cmp_id, accountGroup });
+    accountGroup = await resolveAccountGroupId({ cmp_id, accountGroup, owner });
     if (!accountGroup) {
       return res
         .status(400)
@@ -124,7 +131,7 @@ export const addParty = async (req, res) => {
     const party = new Party({
       _id: generatedId,
       cmp_id,
-      Primary_user_id: req.user.id,
+      Primary_user_id: owner,
       partyType: partyType || "party",
       accountGroup,
       subGroup: cleanSubGroup,
@@ -143,6 +150,7 @@ export const addParty = async (req, res) => {
       state,
       pin,
       party_master_id: party_master_id || generatedId.toString(),
+      created_by: createdBy,
     });
 
     const result = await party.save();
@@ -162,7 +170,7 @@ export const addParty = async (req, res) => {
 
 export const listParties = async (req, res) => {
   try {
-    const owner = req.user.id; // logged-in primary user
+    const owner = resolveAdminOwnerId(req);
     const {
       cmp_id,
       page = 1,
@@ -319,7 +327,7 @@ export const listParties = async (req, res) => {
 
 export const getPartyById = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { id } = req.params;
     const party = await Party.findOne({
       _id: id,
@@ -344,7 +352,7 @@ export const getPartyById = async (req, res) => {
 
 export const updateParty = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { id } = req.params;
     const existingParty = await Party.findOne({
       _id: id,
@@ -358,6 +366,7 @@ export const updateParty = async (req, res) => {
     const accountGroup = await resolveAccountGroupId({
       cmp_id: req.body?.cmp_id || existingParty.cmp_id,
       accountGroup: req.body?.accountGroup,
+      owner,
     });
 
     if (!accountGroup) {
@@ -389,7 +398,7 @@ export const updateParty = async (req, res) => {
 
 export const deleteParty = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { id } = req.params;
 
     const party = await Party.findOneAndDelete({
@@ -409,6 +418,7 @@ export const deleteParty = async (req, res) => {
 
 export const getParties = async (req, res) => {
   try {
+    const owner = resolveAdminOwnerId(req);
     const {
       page = 1,
       limit = 20,
@@ -419,7 +429,7 @@ export const getParties = async (req, res) => {
 
     const query = {};
     if (cmp_id) query.cmp_id = cmp_id;
-    if (Primary_user_id) query.Primary_user_id = Primary_user_id;
+    query.Primary_user_id = Primary_user_id || owner;
     if (partyType) query.partyType = partyType; // critical
 
     console.log("getParties query =", query);

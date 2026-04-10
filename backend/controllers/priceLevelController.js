@@ -1,8 +1,9 @@
 import PriceLevel from "../Model/PriceLevel.js";
+import { resolveAdminOwnerId } from "../utils/authScope.js";
 
 export const listPriceLevels = async (req, res) => {
   try {
-    const owner = req.user.id;
+    const owner = resolveAdminOwnerId(req);
     const { cmp_id } = req.query;
 
     if (!cmp_id) {

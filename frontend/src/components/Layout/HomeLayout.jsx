@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useDispatch, useSelector } from "react-redux";
 
@@ -11,6 +11,8 @@ import {
   useCompanyByIdQuery,
   useCompanyOptionsQuery,
 } from "@/hooks/queries/companyQueries";
+import { ROUTES } from "@/routes/paths";
+import { resetSaleOrderDraft } from "@/store/slices/transactionSlice";
 
 import CompanyDrawer from "./home-layout/CompanyDrawer";
 import CompanySwitchOverlay from "./home-layout/CompanySwitchOverlay";
@@ -19,9 +21,21 @@ import { MobileHeaderContext, useMobileHeaderContext } from "./home-layout/conte
 import DesktopShell from "./home-layout/DesktopShell";
 import MobileShell from "./home-layout/MobileShell";
 
+function isSaleOrderContextPath(pathname) {
+  if (!pathname) return false;
+
+  return (
+    pathname === ROUTES.createOrder ||
+    pathname === ROUTES.salesSelectItems ||
+    /^\/sale-orders\/[^/]+\/edit$/.test(pathname)
+  );
+}
+
 // Keeps route-level header state and company selection state in one place.
 function useHomeLayoutState() {
   const dispatch = useDispatch();
+  const location = useLocation();
+  const previousPathnameRef = useRef(location.pathname);
   const user = useSelector((state) => state.auth.user);
   const isLoggedIn = useSelector((state) => state.auth.isLoggedIn);
   const selectedCompanyId = useSelector(
@@ -86,6 +100,21 @@ function useHomeLayoutState() {
 
     dispatch(setSelectedCompany(selectedCompanyDetails));
   }, [dispatch, selectedCompanyDetails]);
+
+  useEffect(() => {
+    const previousPathname = previousPathnameRef.current;
+    const currentPathname = location.pathname;
+
+    if (
+      previousPathname !== currentPathname &&
+      isSaleOrderContextPath(previousPathname) &&
+      !isSaleOrderContextPath(currentPathname)
+    ) {
+      dispatch(resetSaleOrderDraft());
+    }
+
+    previousPathnameRef.current = currentPathname;
+  }, [dispatch, location.pathname]);
 
   useEffect(() => {
     if (!switchingCompanyId || !selectedCompanyDetails) return;

@@ -55,7 +55,13 @@ function buildDraft(item, form) {
   });
 }
 
-export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
+export default function ItemEditSheet({
+  open,
+  onOpenChange,
+  item,
+  onSave,
+  onRemove,
+}) {
   const [form, setForm] = useState({
     rate: "",
     taxInclusive: false,
@@ -110,6 +116,12 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
       description: form.description || "",
     });
 
+    onOpenChange(false);
+  };
+
+  const handleRemove = () => {
+    if (!item || !onRemove) return;
+    onRemove(item);
     onOpenChange(false);
   };
 
@@ -321,6 +333,16 @@ export default function ItemEditSheet({ open, onOpenChange, item, onSave }) {
         </div>
 
         <SheetFooter className="border-t border-slate-100 pt-4">
+          {onRemove ? (
+            <Button
+              variant="destructive"
+              size="lg"
+              type="button"
+              onClick={handleRemove}
+            >
+              Remove Item
+            </Button>
+          ) : null}
           <Button
             variant="outline"
             size="lg"

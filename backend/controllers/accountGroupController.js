@@ -1,9 +1,10 @@
 // backend/controllers/accountGroupController.js
 import AccountGroup from "../Model/AccountGroup.js";
+import { resolveAdminOwnerId } from "../utils/authScope.js";
 
 export const listAccountGroups = async (req, res) => {
   try {
-    const owner = req.user.id; // from protect middleware
+    const owner = resolveAdminOwnerId(req);
     const { cmp_id } = req.query;
 
     if (!cmp_id) {

@@ -3,6 +3,7 @@
 // controllers/voucherSeriesController.js
 import VoucherSeries from "../Model/VoucherSeriesSchema.js";
 import { createSaleOrder, getSaleOrderById } from "./saleOrderController.js";
+import { resolveAdminOwnerId } from "../utils/authScope.js";
 
 export const getSeriesByVoucher = async (req, res) => {
   try {
@@ -46,7 +47,7 @@ export const getSeriesByVoucher = async (req, res) => {
 export const createVoucherSeries = async (req, res) => {
   try {
     const { cmp_id } = req.params;
-    const primary_user_id = req.user._id;
+    const primary_user_id = resolveAdminOwnerId(req);
     const {
       voucherType,
       seriesName,

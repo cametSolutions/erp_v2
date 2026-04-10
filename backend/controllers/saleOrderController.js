@@ -1,6 +1,10 @@
 import mongoose from "mongoose";
 
 import SaleOrder from "../Model/SaleOrder.js";
+import {
+  applyTransactionCreatorScope,
+  getAccessibleCompanyIds,
+} from "../utils/authScope.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 
@@ -83,6 +87,113 @@ function normalizeTaxType(body = {}) {
   return body.tax_type || body.taxType || "igst";
 }
 
+function mapSaleOrderItems(items = [], { preserveIds = false } = {}) {
+  return items.map((row) => ({
+    _id:
+      preserveIds && row?._id
+        ? row._id
+        : new mongoose.Types.ObjectId(),
+    item_id: row?.id || row?._id,
+    item_name: row?.name || row?.product_name || "",
+    hsn: row?.hsn || row?.hsn_code || null,
+    unit: row?.unit || null,
+    actual_qty: Number(firstDefined(row?.actualQty, row?.actual_qty)) || 0,
+    billed_qty: Number(firstDefined(row?.billedQty, row?.billed_qty)) || 0,
+    rate: Number(row?.rate) || 0,
+    tax_rate: Number(firstDefined(row?.taxRate, row?.tax_rate)) || 0,
+    cess_rate:
+      Number(
+        firstDefined(
+          row?.cessRate,
+          row?.cess_rate,
+          row?.cess,
+          row?.cess_percentage
+        )
+      ) || 0,
+    addl_cess_rate:
+      Number(
+        firstDefined(
+          row?.addlCessRate,
+          row?.addl_cess_rate,
+          row?.addl_cess,
+          row?.addlCess,
+          row?.addl_cess_percentage
+        )
+      ) || 0,
+    tax_inclusive: Boolean(firstDefined(row?.taxInclusive, row?.tax_inclusive)),
+    discount_type: row?.discountType || row?.discount_type || "amount",
+    discount_percentage:
+      Number(firstDefined(row?.discountPercentage, row?.discount_percentage)) || 0,
+    discount_amount:
+      Number(firstDefined(row?.discountAmount, row?.discount_amount)) || 0,
+    base_price: Number(firstDefined(row?.basePrice, row?.base_price)) || 0,
+    taxable_amount:
+      Number(firstDefined(row?.taxableAmount, row?.taxable_amount)) || 0,
+    igst_amount: Number(firstDefined(row?.igstAmount, row?.igst_amount)) || 0,
+    cgst_amount: Number(firstDefined(row?.cgstAmount, row?.cgst_amount)) || 0,
+    sgst_amount: Number(firstDefined(row?.sgstAmount, row?.sgst_amount)) || 0,
+    tax_amount: Number(firstDefined(row?.taxAmount, row?.tax_amount)) || 0,
+    cess_amount: Number(firstDefined(row?.cessAmount, row?.cess_amount)) || 0,
+    addl_cess_amount:
+      Number(firstDefined(row?.addlCessAmount, row?.addl_cess_amount)) || 0,
+    total_amount:
+      Number(firstDefined(row?.totalAmount, row?.total_amount, row?.total)) || 0,
+    price_level_id: row?.priceLevel || row?.price_level_id || null,
+    initial_price_source:
+      row?.initialPriceSource || row?.initial_price_source || null,
+    description: row?.description || null,
+    warranty_card_id: row?.warrantyCardId || row?.warranty_card_id || null,
+  }));
+}
+
+function mapAdditionalCharges(additionalCharges = []) {
+  return additionalCharges.map((charge) => ({
+    option: charge?.option || "",
+    value: Number(charge?.value) || 0,
+    action: charge?.action === "substract" ? "subtract" : charge?.action || "add",
+    tax_percentage:
+      Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0,
+    tax_amount: Number(firstDefined(charge?.taxAmt, charge?.tax_amount)) || 0,
+    hsn: charge?.hsn || null,
+    final_value:
+      Number(firstDefined(charge?.finalValue, charge?.final_value)) || 0,
+  }));
+}
+
+function mapDespatchDetails(despatchDetails = {}) {
+  return {
+    challan_no: despatchDetails?.challanNo || null,
+    container_no: despatchDetails?.containerNo || null,
+    despatch_through: despatchDetails?.despatchThrough || null,
+    destination: despatchDetails?.destination || null,
+    vehicle_no: despatchDetails?.vehicleNo || null,
+    order_no: despatchDetails?.orderNo || null,
+    terms_of_pay: despatchDetails?.termsOfPay || null,
+    terms_of_delivery: despatchDetails?.termsOfDelivery || null,
+  };
+}
+
+function mapTotals(body = {}) {
+  const totals = normalizeTotals(body);
+
+  return {
+    sub_total: totals.subTotal,
+    total_discount: totals.totalDiscount,
+    taxable_amount: totals.taxableAmount,
+    total_tax_amount: totals.totalTaxAmount,
+    total_igst_amt: totals.totalIgstAmt,
+    total_cgst_amt: totals.totalCgstAmt || 0,
+    total_sgst_amt: totals.totalSgstAmt || 0,
+    total_cess_amt: totals.totalCessAmt || 0,
+    total_addl_cess_amt: totals.totalAddlCessAmt || 0,
+    item_total: totals.itemTotal,
+    total_additional_charge: totals.totalAdditionalCharge,
+    amount_with_additional_charge: totals.amountWithAdditionalCharge,
+    round_off: totals.roundOff,
+    final_amount: totals.finalAmount,
+  };
+}
+
 function buildSaleOrderPayload(body, nextVoucher, serialNumbers, userId) {
   const {
     cmpId,
@@ -95,7 +206,6 @@ function buildSaleOrderPayload(body, nextVoucher, serialNumbers, userId) {
 
   const selectedSeries = normalizeSelectedSeries(body);
   const priceLevelObject = normalizePriceLevelObject(body);
-  const totals = normalizeTotals(body);
   const tax_type = normalizeTaxType(body);
 
   return {
@@ -120,96 +230,10 @@ function buildSaleOrderPayload(body, nextVoucher, serialNumbers, userId) {
     tax_type,
     price_level_id: priceLevelObject?._id || null,
     price_level_name: priceLevelObject?.pricelevel || priceLevelObject?.name || null,
-    items: items.map((row) => ({
-      _id: new mongoose.Types.ObjectId(),
-      item_id: row?.id || row?._id,
-      item_name: row?.name || row?.product_name || "",
-      hsn: row?.hsn || row?.hsn_code || null,
-      unit: row?.unit || null,
-      actual_qty: Number(firstDefined(row?.actualQty, row?.actual_qty)) || 0,
-      billed_qty: Number(firstDefined(row?.billedQty, row?.billed_qty)) || 0,
-      rate: Number(row?.rate) || 0,
-      tax_rate: Number(firstDefined(row?.taxRate, row?.tax_rate)) || 0,
-      cess_rate:
-        Number(
-          firstDefined(
-            row?.cessRate,
-            row?.cess_rate,
-            row?.cess,
-            row?.cess_percentage
-          )
-        ) || 0,
-      addl_cess_rate:
-        Number(
-          firstDefined(
-            row?.addlCessRate,
-            row?.addl_cess_rate,
-            row?.addl_cess,
-            row?.addlCess,
-            row?.addl_cess_percentage
-          )
-        ) || 0,
-      tax_inclusive: Boolean(firstDefined(row?.taxInclusive, row?.tax_inclusive)),
-      discount_type: row?.discountType || row?.discount_type || "amount",
-      discount_percentage:
-        Number(firstDefined(row?.discountPercentage, row?.discount_percentage)) || 0,
-      discount_amount:
-        Number(firstDefined(row?.discountAmount, row?.discount_amount)) || 0,
-      base_price: Number(firstDefined(row?.basePrice, row?.base_price)) || 0,
-      taxable_amount:
-        Number(firstDefined(row?.taxableAmount, row?.taxable_amount)) || 0,
-      igst_amount: Number(firstDefined(row?.igstAmount, row?.igst_amount)) || 0,
-      cgst_amount: Number(firstDefined(row?.cgstAmount, row?.cgst_amount)) || 0,
-      sgst_amount: Number(firstDefined(row?.sgstAmount, row?.sgst_amount)) || 0,
-      tax_amount: Number(firstDefined(row?.taxAmount, row?.tax_amount)) || 0,
-      cess_amount: Number(firstDefined(row?.cessAmount, row?.cess_amount)) || 0,
-      addl_cess_amount:
-        Number(firstDefined(row?.addlCessAmount, row?.addl_cess_amount)) || 0,
-      total_amount:
-        Number(firstDefined(row?.totalAmount, row?.total_amount, row?.total)) || 0,
-      price_level_id: row?.priceLevel || row?.price_level_id || null,
-      initial_price_source:
-        row?.initialPriceSource || row?.initial_price_source || null,
-      description: row?.description || null,
-      warranty_card_id: row?.warrantyCardId || row?.warranty_card_id || null,
-    })),
-    additional_charges: additionalCharges.map((charge) => ({
-      option: charge?.option || "",
-      value: Number(charge?.value) || 0,
-      action: charge?.action === "substract" ? "subtract" : charge?.action || "add",
-      tax_percentage:
-        Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0,
-      tax_amount: Number(firstDefined(charge?.taxAmt, charge?.tax_amount)) || 0,
-      hsn: charge?.hsn || null,
-      final_value:
-        Number(firstDefined(charge?.finalValue, charge?.final_value)) || 0,
-    })),
-    despatch_details: {
-      challan_no: despatchDetails?.challanNo || null,
-      container_no: despatchDetails?.containerNo || null,
-      despatch_through: despatchDetails?.despatchThrough || null,
-      destination: despatchDetails?.destination || null,
-      vehicle_no: despatchDetails?.vehicleNo || null,
-      order_no: despatchDetails?.orderNo || null,
-      terms_of_pay: despatchDetails?.termsOfPay || null,
-      terms_of_delivery: despatchDetails?.termsOfDelivery || null,
-    },
-    totals: {
-      sub_total: totals.subTotal,
-      total_discount: totals.totalDiscount,
-      taxable_amount: totals.taxableAmount,
-      total_tax_amount: totals.totalTaxAmount,
-      total_igst_amt: totals.totalIgstAmt,
-      total_cgst_amt: totals.totalCgstAmt || 0,
-      total_sgst_amt: totals.totalSgstAmt || 0,
-      total_cess_amt: totals.totalCessAmt || 0,
-      total_addl_cess_amt: totals.totalAddlCessAmt || 0,
-      item_total: totals.itemTotal,
-      total_additional_charge: totals.totalAdditionalCharge,
-      amount_with_additional_charge: totals.amountWithAdditionalCharge,
-      round_off: totals.roundOff,
-      final_amount: totals.finalAmount,
-    },
+    items: mapSaleOrderItems(items),
+    additional_charges: mapAdditionalCharges(additionalCharges),
+    despatch_details: mapDespatchDetails(despatchDetails),
+    totals: mapTotals(body),
     status: "open",
     tally_ref: null,
     narration: null,
@@ -250,6 +274,7 @@ export async function createSaleOrder(req, res) {
         userId
       );
 
+
       const [created] = await SaleOrder.create([saleOrderDoc], { session });
       createdSaleOrder = await SaleOrder.findById(created._id).session(session).lean();
     });
@@ -283,9 +308,12 @@ export async function getSaleOrderById(req, res) {
       });
     }
 
-    const filter = { _id: saleOrderId };
+    const filter = applyTransactionCreatorScope(req, { _id: saleOrderId });
     if (cmpId) {
       filter.cmp_id = cmpId;
+    } else {
+      const accessibleCompanyIds = await getAccessibleCompanyIds(req);
+      filter.cmp_id = { $in: accessibleCompanyIds };
     }
 
     const saleOrder = await SaleOrder.findOne(filter).lean();
@@ -312,7 +340,94 @@ export async function getSaleOrderById(req, res) {
   }
 }
 
+export async function updateSaleOrder(req, res) {
+  const session = await mongoose.startSession();
+
+  try {
+    const saleOrderId = req.params.saleOrderId || req.params.id;
+    const body = req.body || {};
+    const cmpId = body.cmpId || body.cmp_id;
+    const userId = req.user?._id || req.user?.id || null;
+
+    if (!saleOrderId || !cmpId) {
+      return res.status(400).json({
+        success: false,
+        message: "saleOrderId and cmpId are required",
+      });
+    }
+
+    let updatedSaleOrder = null;
+
+    await session.withTransaction(async () => {
+      const saleOrder = await SaleOrder.findOne(
+        applyTransactionCreatorScope(req, {
+        _id: saleOrderId,
+        cmp_id: cmpId,
+        })
+      ).session(session);
+
+      if (!saleOrder) {
+        throw new Error("SALE_ORDER_NOT_FOUND");
+      }
+
+      if (saleOrder.status !== "open") {
+        throw new Error(`CANNOT_EDIT_${saleOrder.status}`);
+      }
+
+      const priceLevelObject = normalizePriceLevelObject(body);
+
+      saleOrder.date = new Date(body.transactionDate);
+      saleOrder.tax_type = normalizeTaxType(body);
+      saleOrder.price_level_id = priceLevelObject?._id || null;
+      saleOrder.price_level_name =
+        priceLevelObject?.pricelevel || priceLevelObject?.name || null;
+      saleOrder.items = mapSaleOrderItems(body.items || [], { preserveIds: true });
+      saleOrder.additional_charges = mapAdditionalCharges(
+        body.additionalCharges || [],
+      );
+      saleOrder.despatch_details = mapDespatchDetails(body.despatchDetails || {});
+      saleOrder.totals = mapTotals(body);
+      saleOrder.updated_by = userId || null;
+
+      await saleOrder.save({ session });
+      updatedSaleOrder = saleOrder.toObject();
+    });
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        saleOrder: updatedSaleOrder,
+      },
+    });
+  } catch (error) {
+    console.error("updateSaleOrder error:", error);
+
+    if (error.message === "SALE_ORDER_NOT_FOUND") {
+      return res.status(400).json({
+        success: false,
+        message: "Sale order not found",
+      });
+    }
+
+    if (error.message?.startsWith("CANNOT_EDIT_")) {
+      const status = error.message.replace("CANNOT_EDIT_", "");
+      return res.status(400).json({
+        success: false,
+        message: `Cannot edit a ${status} sale order`,
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to update sale order",
+    });
+  } finally {
+    await session.endSession();
+  }
+}
+
 export default {
   createSaleOrder,
   getSaleOrderById,
+  updateSaleOrder,
 };

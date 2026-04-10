@@ -1,14 +1,13 @@
 import express from "express";
 
 import { protect } from "../../middleware/authMiddleware.js";
+import * as saleOrderController from "../../controllers/saleOrderController.js";
 import {
   getSeriesByVoucher,
   createVoucherSeries,
   updateVoucherSeries,
   deleteVoucherSeriesById,
   getNextVoucherSeriesNumber,
-  createSaleOrder,
-  getSaleOrderById,
 } from "../../controllers/voucherSerieController.js";
 
 const router = express.Router();
@@ -31,6 +30,7 @@ router.get(
   protect,
   getNextVoucherSeriesNumber
 );
-router.get("/saleOrders/:saleOrderId", protect, getSaleOrderById);
-router.post("/createSaleOrder", protect, createSaleOrder);
+router.get("/saleOrders/:saleOrderId", protect, saleOrderController.getSaleOrderById);
+router.put("/saleOrders/:id", protect, saleOrderController.updateSaleOrder);
+router.post("/createSaleOrder", protect, saleOrderController.createSaleOrder);
 export default router;
