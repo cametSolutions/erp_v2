@@ -63,11 +63,13 @@ export default function TransactionHeader({
   onHeaderReady,
   editMode = false,
   lockedSeries = null,
+  voucherTypeOverride = null,
 }) {
   const dispatch = useDispatch();
   const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
 
-  const voucherType = useSelector((state) => state.transaction.voucherType);
+  const transactionVoucherType = useSelector((state) => state.transaction.voucherType);
+  const voucherType = voucherTypeOverride || transactionVoucherType;
   const transactionDate = useSelector(
     (state) => state.transaction.transactionDate
   );

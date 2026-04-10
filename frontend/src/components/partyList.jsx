@@ -100,7 +100,7 @@ function ErrorRetryState({ message, onRetry }) {
  * - mode: "master" | "outstanding" | "select"
  * - onSelect?: function(party)
  */
-export function PartyList({ mode = "master", onSelect }) {
+export function PartyList({ mode = "master", onSelect, partyType = "" }) {
   const [searchText, setSearchText] = useState("");
   const [ledgerType, setLedgerType] = useState("ledger"); // ledger | receivable | payable
   const loadMoreRef = useRef(null);
@@ -135,6 +135,7 @@ export function PartyList({ mode = "master", onSelect }) {
     limit: PAGE_SIZE,
     search: debouncedSearchText,
     ledgerType: mode === "outstanding" ? ledgerType : undefined,
+    partyType,
   });
 
   // Mobile header config (master & outstanding)

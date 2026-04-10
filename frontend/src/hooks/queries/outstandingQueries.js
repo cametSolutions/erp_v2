@@ -4,6 +4,11 @@ import { outstandingService } from "@/api/services/outstanding.service";
 
 export const outstandingQueryKeys = {
   party: (partyId, cmp_id) => ["outstanding", "party", { partyId, cmp_id }],
+  settlement: (partyId, cmp_id, classification) => [
+    "outstanding",
+    "settlement",
+    { partyId, cmp_id, classification },
+  ],
   partyInfinite: (partyId, cmp_id, limit) => [
     "outstanding",
     "party",
@@ -47,5 +52,33 @@ export const useInfinitePartyOutstandingQuery = ({
     getNextPageParam: (lastPage) =>
       lastPage?.hasMore ? (lastPage?.page || 1) + 1 : undefined,
     enabled: Boolean(partyId && cmp_id) && enabled,
+  });
+
+export const useSettlementOutstandingQuery = ({
+  partyId,
+  cmp_id,
+  classification,
+  enabled = true,
+}) =>
+  useQuery({
+    queryKey: outstandingQueryKeys.settlement(
+      partyId,
+      cmp_id,
+      classification
+    ),
+    queryFn: ({ signal }) =>
+      outstandingService.getPartyOutstanding({
+        partyId,
+        cmp_id,
+        page: 1,
+        limit: 200,
+        classification,
+        isCancelled: false,
+        positiveOnly: true,
+        signal,
+        skipGlobalLoader: true,
+      }),
+    enabled: Boolean(partyId && cmp_id && classification) && enabled,
+    staleTime: 30_000,
   });
 

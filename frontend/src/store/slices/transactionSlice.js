@@ -151,6 +151,14 @@ function clearSaleOrderStorage(cmp_id) {
   }
 }
 
+function getSeriesStorageKey(voucherType, cmp_id) {
+  return `lastSeries_${voucherType || "saleOrder"}_${cmp_id}`;
+}
+
+function getLegacySeriesStorageKey(voucherType, cmp_id) {
+  return `lastSeriesId_${voucherType || "saleOrder"}_${cmp_id}`;
+}
+
 function mapSaleOrderParty(doc = {}) {
   const snapshot = doc?.party_snapshot || {};
 
@@ -237,6 +245,10 @@ const transactionSlice = createSlice({
     setCompany(state, action) {
       state.cmp_id = action.payload?.cmp_id ?? null;
     },
+    setVoucherType(state, action) {
+      state.voucherType = action.payload || "saleOrder";
+      state.selectedSeries = null;
+    },
     setTransactionDate(state, action) {
       state.transactionDate = action.payload?.transactionDate ?? null;
     },
@@ -249,7 +261,7 @@ const transactionSlice = createSlice({
 
       try {
         localStorage.setItem(
-          `lastSeries_saleOrder_${cmp_id}`,
+          getSeriesStorageKey(state.voucherType, cmp_id),
           JSON.stringify(enrichedSeries),
         );
       } catch (error) {
@@ -261,14 +273,18 @@ const transactionSlice = createSlice({
       if (!cmp_id) return;
 
       try {
-        const raw = localStorage.getItem(`lastSeries_saleOrder_${cmp_id}`);
+        const raw = localStorage.getItem(
+          getSeriesStorageKey(state.voucherType, cmp_id)
+        );
 
         if (raw) {
           state.selectedSeries = enrichSelectedSeries(JSON.parse(raw));
           return;
         }
 
-        const legacyId = localStorage.getItem(`lastSeriesId_saleOrder_${cmp_id}`);
+        const legacyId = localStorage.getItem(
+          getLegacySeriesStorageKey(state.voucherType, cmp_id)
+        );
         state.selectedSeries = legacyId ? { _id: legacyId } : null;
       } catch (error) {
         console.error("Failed to hydrate last series id", error);
@@ -441,6 +457,7 @@ const transactionSlice = createSlice({
 
 export const {
   setCompany,
+  setVoucherType,
   setTransactionDate,
   setSelectedSeries,
   hydrateSelectedSeries,

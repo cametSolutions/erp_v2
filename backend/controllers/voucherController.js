@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+import Receipt from "../Model/Receipt.js";
 import SaleOrder from "../Model/SaleOrder.js";
 import { applyTransactionCreatorScope } from "../utils/authScope.js";
 
@@ -119,19 +120,41 @@ export async function getVoucherTotalsSummary(req, res) {
       },
     });
 
-    const saleOrderTotals = await SaleOrder.aggregate([
-      { $match: saleOrderFilter },
-      {
-        $group: {
-          _id: null,
-          total: {
-            $sum: { $ifNull: ["$totals.final_amount", 0] },
+    const receiptFilter = applyTransactionCreatorScope(req, {
+      cmp_id: new mongoose.Types.ObjectId(cmpId),
+      date: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+    });
+
+    const [saleOrderTotals, receiptTotals] = await Promise.all([
+      SaleOrder.aggregate([
+        { $match: saleOrderFilter },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: { $ifNull: ["$totals.final_amount", 0] },
+            },
           },
         },
-      },
+      ]),
+      Receipt.aggregate([
+        { $match: receiptFilter },
+        {
+          $group: {
+            _id: null,
+            total: {
+              $sum: { $ifNull: ["$amount", 0] },
+            },
+          },
+        },
+      ]),
     ]);
 
     const saleOrderTotal = Number(saleOrderTotals?.[0]?.total) || 0;
+    const receiptTotal = Number(receiptTotals?.[0]?.total) || 0;
 
     return res.json({
       success: true,
@@ -139,7 +162,7 @@ export async function getVoucherTotalsSummary(req, res) {
         date: fromDate.toISOString(),
         totals: {
           saleOrder: saleOrderTotal,
-          receipt: 0,
+          receipt: receiptTotal,
         },
       },
     });
@@ -168,21 +191,6 @@ export async function getVouchers(req, res) {
     const currentPage = parsePositiveInteger(page, 1);
     const pageSize = parsePositiveInteger(limit, 20);
 
-    if (!voucherTypes.includes("saleOrder")) {
-      return res.json({
-        success: true,
-        data: {
-          from: fromDate.toISOString(),
-          to: toDate.toISOString(),
-          page: currentPage,
-          limit: pageSize,
-          hasMore: false,
-          count: 0,
-          vouchers: [],
-        },
-      });
-    }
-
     const saleOrderFilter = applyTransactionCreatorScope(req, {
       cmp_id: cmpId,
       date: {
@@ -190,33 +198,84 @@ export async function getVouchers(req, res) {
         $lte: toDate,
       },
     });
-
-    const totalCount = await SaleOrder.countDocuments(saleOrderFilter);
     const skip = (currentPage - 1) * pageSize;
+    const receiptFilter = applyTransactionCreatorScope(req, {
+      cmp_id: cmpId,
+      date: {
+        $gte: fromDate,
+        $lte: toDate,
+      },
+    });
 
-    const saleOrders = await SaleOrder.find(saleOrderFilter, {
-      _id: 1,
-      voucher_type: 1,
-      date: 1,
-      voucher_number: 1,
-      status: 1,
-      "party_snapshot.name": 1,
-      "totals.final_amount": 1,
-    })
-      .sort({ date: -1, voucher_number: 1 })
-      .skip(skip)
-      .limit(pageSize)
-      .lean();
+    const fetchSaleOrders = voucherTypes.includes("saleOrder")
+      ? SaleOrder.find(saleOrderFilter, {
+          _id: 1,
+          voucher_type: 1,
+          date: 1,
+          voucher_number: 1,
+          status: 1,
+          "party_snapshot.name": 1,
+          "totals.final_amount": 1,
+        }).lean()
+      : Promise.resolve([]);
 
-    const vouchers = saleOrders.map((doc) => ({
-      _id: doc._id,
-      voucher_type: doc.voucher_type,
-      date: doc.date,
-      voucher_number: doc.voucher_number,
-      party_name: doc.party_snapshot?.name || null,
-      amount: Number(doc.totals?.final_amount) || 0,
-      status: doc.status || null,
-    }));
+    const fetchReceipts = voucherTypes.includes("receipt")
+        ? Receipt.find(
+            {
+              ...receiptFilter,
+              voucher_type: "receipt",
+            },
+            {
+              _id: 1,
+              voucher_type: 1,
+              date: 1,
+              voucher_number: 1,
+              status: 1,
+              party_name: 1,
+              amount: 1,
+            }
+          ).lean()
+        : Promise.resolve([]);
+
+    const [saleOrders, receipts] = await Promise.all([
+      fetchSaleOrders,
+      fetchReceipts,
+    ]);
+
+    const vouchers = [
+      ...saleOrders.map((doc) => ({
+        _id: doc._id,
+        voucher_type: doc.voucher_type,
+        date: doc.date,
+        voucher_number: doc.voucher_number,
+        party_name: doc.party_snapshot?.name || null,
+        amount: Number(doc.totals?.final_amount) || 0,
+        status: doc.status || null,
+      })),
+      ...receipts.map((doc) => ({
+        _id: doc._id,
+        voucher_type: doc.voucher_type,
+        date: doc.date,
+        voucher_number: doc.voucher_number,
+        party_name: doc.party_name || null,
+        amount: Number(doc.amount) || 0,
+        status: doc.status || null,
+      })),
+    ].sort((left, right) => {
+      const leftDate = new Date(left.date).getTime();
+      const rightDate = new Date(right.date).getTime();
+
+      if (leftDate !== rightDate) {
+        return rightDate - leftDate;
+      }
+
+      return String(left.voucher_number || "").localeCompare(
+        String(right.voucher_number || "")
+      );
+    });
+
+    const totalCount = vouchers.length;
+    const paginatedVouchers = vouchers.slice(skip, skip + pageSize);
 
     return res.json({
       success: true,
@@ -225,9 +284,9 @@ export async function getVouchers(req, res) {
         to: toDate.toISOString(),
         page: currentPage,
         limit: pageSize,
-        hasMore: skip + vouchers.length < totalCount,
+        hasMore: skip + paginatedVouchers.length < totalCount,
         count: totalCount,
-        vouchers,
+        vouchers: paginatedVouchers,
       },
     });
   } catch (error) {
