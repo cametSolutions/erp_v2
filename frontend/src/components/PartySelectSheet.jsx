@@ -19,6 +19,8 @@ export default function PartySelectSheet({
   onOpenChange,
   title = "Select Party",
   partyType = "",
+  outstandingFilter = "all",
+  hideZeroOutstanding = false,
   onSelectParty = null,
 }) {
   const dispatch = useDispatch();
@@ -85,7 +87,13 @@ export default function PartySelectSheet({
           </SheetHeader>
 
           <div className="min-h-0 flex-1 px-4 pb-2">
-            <PartyList mode="select" onSelect={handleSelect} partyType={partyType} />
+            <PartyList
+              mode="select"
+              onSelect={handleSelect}
+              partyType={partyType}
+              outstandingFilter={outstandingFilter}
+              hideZeroOutstanding={hideZeroOutstanding}
+            />
           </div>
         </div>
       </SheetContent>

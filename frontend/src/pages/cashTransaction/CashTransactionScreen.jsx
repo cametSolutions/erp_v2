@@ -23,6 +23,7 @@ import { useSettlementOutstandingQuery } from "@/hooks/queries/outstandingQuerie
 import { ROUTES } from "@/routes/paths";
 import { setCompany, setVoucherType } from "@/store/slices/transactionSlice";
 import calculateAutoSettlement from "@/utils/calculateAutoSettlement";
+import { useMobileHeader } from "@/components/Layout/HomeLayout";
 
 function getReceiptDraftStorageKey(cmp_id, voucher_type) {
   return `cash-transaction-draft-${voucher_type || "receipt"}-${cmp_id || "default"}`;
@@ -319,6 +320,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   const transactionDate = useSelector((state) => state.transaction.transactionDate);
   const dispatch = useDispatch();
   const navigate = useNavigate();
+  const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
   const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
   const [party, setParty] = useState(null);
   const [cashBank, setCashBank] = useState(null);
@@ -355,6 +357,14 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
 
     setCashBank(null);
   }, [instrumentType]);
+
+  useEffect(() => {
+    setHeaderOptions({
+      onBack: step === "settlement" ? () => setStep("main") : undefined,
+    });
+
+    return () => resetHeaderOptions();
+  }, [resetHeaderOptions, setHeaderOptions, step]);
 
   useEffect(() => {
     if (!cmp_id) return;
@@ -469,6 +479,8 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   const title = voucher_type === "payment" ? "Create Payment" : "Create Receipt";
   const amountLabel = voucher_type === "payment" ? "Payment Amount" : "Receipt Amount";
   const actionLabel = voucher_type === "payment" ? "Create Payment" : "Create Receipt";
+  const partyOutstandingFilter =
+    voucher_type === "payment" ? "payable" : "receivable";
   const cashBankLabel = instrumentType === "cash" ? "Cash Account" : "Bank Account";
   const cashBankType = instrumentType === "cash" ? "cash" : "bank";
   const createLoading =
@@ -731,6 +743,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
         open={partySheetOpen}
         onOpenChange={setPartySheetOpen}
         title="Select Party"
+        outstandingFilter={partyOutstandingFilter}
         onSelectParty={setParty}
       />
 

@@ -10,11 +10,11 @@ export const outstandingQueryKeys = {
     "settlement",
     { partyId, cmp_id, classification },
   ],
-  partyInfinite: (partyId, cmp_id, limit) => [
+  partyInfinite: (partyId, cmp_id, limit, positiveOnly = false) => [
     "outstanding",
     "party",
     "infinite",
-    { partyId, cmp_id, limit },
+    { partyId, cmp_id, limit, positiveOnly },
   ],
 };
 
@@ -36,16 +36,23 @@ export const useInfinitePartyOutstandingQuery = ({
   partyId,
   cmp_id,
   limit = 20,
+  positiveOnly = false,
   enabled = true,
 }) =>
   useInfiniteQuery({
-    queryKey: outstandingQueryKeys.partyInfinite(partyId, cmp_id, limit),
+    queryKey: outstandingQueryKeys.partyInfinite(
+      partyId,
+      cmp_id,
+      limit,
+      positiveOnly
+    ),
     queryFn: ({ pageParam = 1, signal }) =>
       outstandingService.getPartyOutstanding({
         partyId,
         cmp_id,
         page: pageParam,   // 👈 sends page
         limit,             // 👈 sends limit
+        positiveOnly,
         signal,
         skipGlobalLoader: true,
       }),
@@ -82,4 +89,3 @@ export const useSettlementOutstandingQuery = ({
     enabled: Boolean(partyId && cmp_id && classification) && enabled,
     staleTime: 30_000,
   });
-

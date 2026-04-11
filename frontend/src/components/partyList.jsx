@@ -100,7 +100,13 @@ function ErrorRetryState({ message, onRetry }) {
  * - mode: "master" | "outstanding" | "select"
  * - onSelect?: function(party)
  */
-export function PartyList({ mode = "master", onSelect, partyType = "" }) {
+export function PartyList({
+  mode = "master",
+  onSelect,
+  partyType = "",
+  outstandingFilter = "all",
+  hideZeroOutstanding = false,
+}) {
   const [searchText, setSearchText] = useState("");
   const [ledgerType, setLedgerType] = useState("ledger"); // ledger | receivable | payable
   const loadMoreRef = useRef(null);
@@ -120,6 +126,8 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
   const isCustomersRoute = location.pathname === ROUTES.mastersCustomers;
   const pageLabel = isCustomersRoute ? "Customers" : "Parties";
   const emptyLabel = isCustomersRoute ? "customers" : "parties";
+  const effectiveLedgerType =
+    mode === "outstanding" ? ledgerType : outstandingFilter;
 
   const {
     data,
@@ -134,7 +142,7 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
     cmp_id: cmp_id,
     limit: PAGE_SIZE,
     search: debouncedSearchText,
-    ledgerType: mode === "outstanding" ? ledgerType : undefined,
+    ledgerType: effectiveLedgerType,
     partyType,
   });
 
@@ -191,6 +199,21 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
 
   const parties =
     data?.pages?.flatMap((page) => page?.items || []) || [];
+  const shouldHideZeroOutstanding = mode === "outstanding" || hideZeroOutstanding;
+  const visibleParties = shouldHideZeroOutstanding
+    ? parties.filter((party) => {
+        const netOutstanding = Number(
+          party?.netOutstanding ?? party?.totalOutstanding ?? 0,
+        );
+        const displayOutstanding = Number(party?.totalOutstanding) || 0;
+
+        if (effectiveLedgerType === "receivable" || effectiveLedgerType === "payable") {
+          return displayOutstanding > 0;
+        }
+
+        return Math.abs(netOutstanding) > 0;
+      })
+    : parties;
 
   // IntersectionObserver for infinite scroll
   useEffect(() => {
@@ -339,7 +362,7 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
   const { headerBalance, headerClassification } = useMemo(() => {
     if (ledgerType === "receivable") {
       return {
-        headerBalance: parties.reduce(
+        headerBalance: visibleParties.reduce(
           (acc, p) => acc + (p.totalOutstanding || 0),
           0,
         ),
@@ -349,7 +372,7 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
 
     if (ledgerType === "payable") {
       return {
-        headerBalance: parties.reduce(
+        headerBalance: visibleParties.reduce(
           (acc, p) => acc + (p.totalOutstanding || 0),
           0,
         ),
@@ -357,7 +380,7 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
       };
     }
 
-    const sum = parties.reduce(
+    const sum = visibleParties.reduce(
       (acc, p) => acc + (p.totalOutstanding || 0),
       0,
     );
@@ -366,7 +389,7 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
       headerBalance: sum,
       headerClassification: sum >= 0 ? "dr" : "cr",
     };
-  }, [parties, ledgerType]);
+  }, [visibleParties, ledgerType]);
 
   const listContent = (
     <>
@@ -381,7 +404,7 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
         </div>
       )}
 
-      {!isLoading && parties.length === 0 && (
+      {!isLoading && visibleParties.length === 0 && (
         <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
           {debouncedSearchText
             ? `No matching ${emptyLabel}`
@@ -389,9 +412,9 @@ export function PartyList({ mode = "master", onSelect, partyType = "" }) {
         </div>
       )}
 
-      {!isLoading && parties.length > 0 && (
+      {!isLoading && visibleParties.length > 0 && (
         <div className="space-y-2">
-          {parties.map((party) => (
+          {visibleParties.map((party) => (
             <PartyRow
               key={party._id}
               party={party}
