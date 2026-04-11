@@ -78,7 +78,7 @@ async function updatePartyMonthlyBalance({
       },
     },
     {
-      new: true,
+      returnDocument: "after",
       upsert: true,
       session,
       runValidators: true,

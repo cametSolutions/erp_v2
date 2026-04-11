@@ -204,7 +204,7 @@ export const updateCompany = async (req, res) => {
     }
 
     const company = await Company.findOneAndUpdate({ _id: id, owner }, body, {
-      new: true,
+      returnDocument: "after",
       runValidators: true,
     });
 
