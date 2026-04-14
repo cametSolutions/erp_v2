@@ -1,4 +1,5 @@
 // controllers/companyController.js
+import { randomBytes } from "crypto";
 import mongoose from "mongoose";
 import Company from "../Model/CompanySchema.js";
 import { createDefaultVoucherSeries } from "../helpers/createDefaultVoucherSeries.js";
@@ -20,6 +21,20 @@ const findCompanyWithSameName = async ({ owner, name, excludeId }) => {
   }
 
   return Company.findOne(query);
+};
+
+const generateTallyApiKey = () => `tly_${randomBytes(24).toString("hex")}`;
+
+const generateUniqueTallyApiKey = async (session) => {
+  for (let attempt = 0; attempt < 5; attempt += 1) {
+    const candidate = generateTallyApiKey();
+    const exists = await Company.exists({ tally_api_key: candidate }).session(session);
+    if (!exists) {
+      return candidate;
+    }
+  }
+
+  throw new Error("Failed to generate unique tally API key");
 };
 
 export const registerCompany = async (req, res) => {
@@ -104,6 +119,7 @@ export const registerCompany = async (req, res) => {
           currencyName,
           currencySymbol,
           industry,
+          tally_api_key: await generateUniqueTallyApiKey(session),
           owner,
         },
       ],

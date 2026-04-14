@@ -6,6 +6,7 @@ import Party from "../Model/partySchema.js";
 import PartyLedger from "../Model/PartyLedger.js";
 import PartyMonthlyBalance from "../Model/PartyMonthlyBalance.js";
 import Receipt from "../Model/Receipt.js";
+import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import {
   applyTransactionCreatorScope,
@@ -176,6 +177,12 @@ export async function createCashTransaction(data = {}, req) {
         seriesId: data.series_id,
         session,
       });
+      const serialNumbers = await getNextTransactionSerialNumbers({
+        cmpId: data.cmp_id,
+        transactionType: data.voucher_type,
+        userId: data.created_by,
+        session,
+      });
 
       const date = new Date(data.date);
       const settlement_details = normalizeSettlementDetails(
@@ -197,6 +204,8 @@ export async function createCashTransaction(data = {}, req) {
             cmp_id: data.cmp_id,
             voucher_type: data.voucher_type,
             voucher_number: nextVoucher.voucherNumber,
+            company_level_serial_number: serialNumbers.companyLevelSerialNumber,
+            user_level_serial_number: serialNumbers.userLevelSerialNumber,
             date,
             party_id: data.party_id,
             party_name: data.party_name,
