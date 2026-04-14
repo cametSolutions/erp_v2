@@ -30,14 +30,17 @@ export function useCancelCashTransaction(options = {}) {
         queryClient.invalidateQueries({
           queryKey: cashTransactionQueryKeys.all,
           exact: false,
+          refetchType: "all",
         }),
         queryClient.invalidateQueries({
           queryKey: outstandingQueryKeys.all,
           exact: false,
+          refetchType: "all",
         }),
         queryClient.invalidateQueries({
           queryKey: partyQueryKeys.all,
           exact: false,
+          refetchType: "all",
         }),
         resolvedCmpId
           ? invalidateVoucherSummaryForCompany(queryClient, resolvedCmpId)

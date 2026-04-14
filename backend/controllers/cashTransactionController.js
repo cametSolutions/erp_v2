@@ -3,6 +3,7 @@ import mongoose from "mongoose";
 import {
   cancelCashTransaction as cancelCashTransactionService,
   createCashTransaction as createCashTransactionService,
+  getCashBankLedgerBalances as getCashBankLedgerBalancesService,
   getCashTransactionById as getCashTransactionByIdService,
   getCashTransactions as getCashTransactionsService,
 } from "../services/cashTransaction.service.js";
@@ -209,9 +210,58 @@ export async function getCashTransactions(req, res) {
   }
 }
 
+export async function getCashBankLedgerBalances(req, res) {
+  try {
+    const { cmp_id, cmpId, cash_bank_type, cashBankType } = req.query || {};
+    const resolvedCmpId = cmp_id || cmpId;
+    const resolvedType = cash_bank_type || cashBankType || null;
+
+    if (!resolvedCmpId) {
+      return res.status(400).json({
+        success: false,
+        message: "cmp_id is required",
+      });
+    }
+    if (!mongoose.Types.ObjectId.isValid(resolvedCmpId)) {
+      return res.status(400).json({
+        success: false,
+        message: "Invalid cmp_id",
+      });
+    }
+    if (resolvedType && !["cash", "bank"].includes(String(resolvedType))) {
+      return res.status(400).json({
+        success: false,
+        message: "cash_bank_type must be cash or bank",
+      });
+    }
+
+    const balances = await getCashBankLedgerBalancesService(
+      {
+        cmp_id: resolvedCmpId,
+        cash_bank_type: resolvedType,
+      },
+      req
+    );
+
+    return res.status(200).json({
+      success: true,
+      data: {
+        balances,
+      },
+    });
+  } catch (error) {
+    console.error("getCashBankLedgerBalances error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to fetch cash/bank ledger balances",
+    });
+  }
+}
+
 export default {
   createCashTransaction,
   cancelCashTransaction,
   getCashTransactionById,
   getCashTransactions,
+  getCashBankLedgerBalances,
 };
