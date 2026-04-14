@@ -86,9 +86,27 @@ export async function cancelCashTransaction(id, payload) {
   return response.data;
 }
 
+export async function getCashBankLedgerBalances({
+  cmp_id,
+  cash_bank_type,
+  ...options
+} = {}) {
+  const response = await api.get("/cash-transactions/cash-bank-balances", {
+    params: {
+      cmp_id,
+      ...(cash_bank_type ? { cash_bank_type } : {}),
+    },
+    skipGlobalLoader: true,
+    ...options,
+  });
+
+  return response.data?.data?.balances || [];
+}
+
 export const cashTransactionService = {
   buildCreateCashTransactionPayload,
   createCashTransaction,
   getCashTransactionById,
   cancelCashTransaction,
+  getCashBankLedgerBalances,
 };

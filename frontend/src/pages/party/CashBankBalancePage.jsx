@@ -4,7 +4,7 @@ import { useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 
 import ErrorRetryState from "@/components/common/ErrorRetryState";
-import { usePartyListQuery } from "@/hooks/queries/partyQueries";
+import { useCashBankLedgerBalancesQuery } from "@/hooks/queries/cashTransactionQueries";
 import { ROUTES } from "@/routes/paths";
 
 function formatCurrency(value) {
@@ -18,31 +18,23 @@ export default function CashBankBalancePage() {
   const navigate = useNavigate();
   const cmp_id = useSelector((state) => state.company?.selectedCompanyId || "");
 
-  const cashQuery = usePartyListQuery({
-    cmp_id,
-    page: 1,
-    limit: 1000,
-    partyType: "cash",
+  const cashQuery = useCashBankLedgerBalancesQuery(cmp_id, "cash", {
     enabled: Boolean(cmp_id),
   });
 
-  const bankQuery = usePartyListQuery({
-    cmp_id,
-    page: 1,
-    limit: 1000,
-    partyType: "bank",
+  const bankQuery = useCashBankLedgerBalancesQuery(cmp_id, "bank", {
     enabled: Boolean(cmp_id),
   });
 
-  const cashItems = cashQuery.data?.items || [];
-  const bankItems = bankQuery.data?.items || [];
+  const cashItems = cashQuery.data || [];
+  const bankItems = bankQuery.data || [];
 
   const totalCash = useMemo(
-    () => cashItems.reduce((sum, item) => sum + (Number(item?.openingBalanceAmount) || 0), 0),
+    () => cashItems.reduce((sum, item) => sum + (Number(item?.current_balance) || 0), 0),
     [cashItems],
   );
   const totalBank = useMemo(
-    () => bankItems.reduce((sum, item) => sum + (Number(item?.openingBalanceAmount) || 0), 0),
+    () => bankItems.reduce((sum, item) => sum + (Number(item?.current_balance) || 0), 0),
     [bankItems],
   );
   const grandTotal = totalCash + totalBank;

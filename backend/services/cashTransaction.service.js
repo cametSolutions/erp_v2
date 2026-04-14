@@ -11,6 +11,7 @@ import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import {
   applyTransactionCreatorScope,
   getAccessibleCompanyIds,
+  resolveAdminOwnerId,
 } from "../utils/authScope.js";
 
 function formatMonthKey(dateValue) {
@@ -491,9 +492,107 @@ export async function getCashTransactions(filters = {}, req) {
   return Receipt.find(query).sort({ date: -1, voucher_number: 1 }).lean();
 }
 
+export async function getCashBankLedgerBalances(filters = {}, req) {
+  const { cmp_id, cash_bank_type } = filters;
+  const scopedMatch = {
+    status: "active",
+  };
+  const partyFilter = {};
+  const ownerId = resolveAdminOwnerId(req);
+
+  if (cmp_id) {
+    scopedMatch.cmp_id = new mongoose.Types.ObjectId(cmp_id);
+    partyFilter.cmp_id = new mongoose.Types.ObjectId(cmp_id);
+  } else {
+    const accessibleCompanyIds = await getAccessibleCompanyIds(req);
+    scopedMatch.cmp_id = { $in: accessibleCompanyIds };
+    partyFilter.cmp_id = { $in: accessibleCompanyIds };
+  }
+
+  if (ownerId) {
+    partyFilter.Primary_user_id = new mongoose.Types.ObjectId(ownerId);
+  }
+
+  if (cash_bank_type) {
+    scopedMatch.cash_bank_type = cash_bank_type;
+    partyFilter.partyType = cash_bank_type;
+  } else {
+    partyFilter.partyType = { $in: ["cash", "bank"] };
+  }
+
+  const [partyLedgers, ledgerSummaries] = await Promise.all([
+    Party.find(partyFilter)
+      .select("_id partyName partyType")
+      .sort({ partyName: 1 })
+      .lean(),
+    CashBankLedger.aggregate([
+    { $match: scopedMatch },
+    {
+      $group: {
+        _id: {
+          cash_bank_id: "$cash_bank_id",
+          cash_bank_name: "$cash_bank_name",
+          cash_bank_type: "$cash_bank_type",
+        },
+        current_balance: {
+          $sum: {
+            $cond: [
+              { $eq: ["$ledger_side", "debit"] },
+              { $ifNull: ["$amount", 0] },
+              { $multiply: [{ $ifNull: ["$amount", 0] }, -1] },
+            ],
+          },
+        },
+      },
+    },
+    {
+      $project: {
+        _id: "$_id.cash_bank_id",
+        cash_bank_name: "$_id.cash_bank_name",
+        cash_bank_type: "$_id.cash_bank_type",
+        current_balance: 1,
+      },
+    },
+    { $sort: { cash_bank_name: 1 } },
+    ]),
+  ]);
+
+  const summaryMap = new Map();
+  for (const summary of ledgerSummaries) {
+    summaryMap.set(String(summary?._id), summary);
+  }
+
+  const balances = partyLedgers.map((party) => {
+    const matchedSummary = summaryMap.get(String(party._id));
+    summaryMap.delete(String(party._id));
+
+    return {
+      _id: party._id,
+      cash_bank_name: party.partyName || matchedSummary?.cash_bank_name || "--",
+      cash_bank_type: party.partyType || matchedSummary?.cash_bank_type || null,
+      current_balance: Number(matchedSummary?.current_balance) || 0,
+    };
+  });
+
+  // Keep orphan ledger summaries (if any ledger exists without party master)
+  for (const [, summary] of summaryMap.entries()) {
+    balances.push({
+      _id: summary?._id || null,
+      cash_bank_name: summary?.cash_bank_name || "--",
+      cash_bank_type: summary?.cash_bank_type || null,
+      current_balance: Number(summary?.current_balance) || 0,
+    });
+  }
+
+  return balances.sort((left, right) =>
+    String(left?.cash_bank_name || "").localeCompare(String(right?.cash_bank_name || ""))
+  );
+}
+
 export default {
   createCashTransaction,
   cancelCashTransaction,
   getCashTransactionById,
   getCashTransactions,
+  getCashBankLedgerBalances,
 };

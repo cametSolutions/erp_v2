@@ -10,6 +10,12 @@ export const cashTransactionQueryKeys = {
     transactionId,
     cmpId,
   ],
+  cashBankBalances: (cmpId = "", cashBankType = "") => [
+    ...cashTransactionQueryKeys.all,
+    "cash-bank-balances",
+    cmpId,
+    cashBankType,
+  ],
 };
 
 export function useCashTransactionDetailQuery(transactionId, cmpId, options = {}) {
@@ -28,5 +34,24 @@ export function useCashTransactionDetailQuery(transactionId, cmpId, options = {}
       }),
     enabled: Boolean(transactionId) && enabled,
     initialData,
+  });
+}
+
+export function useCashBankLedgerBalancesQuery(
+  cmpId,
+  cashBankType = "",
+  options = {}
+) {
+  const { enabled = true, skipGlobalLoader = true } = options;
+
+  return useQuery({
+    queryKey: cashTransactionQueryKeys.cashBankBalances(cmpId || "", cashBankType || ""),
+    queryFn: () =>
+      cashTransactionService.getCashBankLedgerBalances({
+        cmp_id: cmpId,
+        cash_bank_type: cashBankType || undefined,
+        skipGlobalLoader,
+      }),
+    enabled: Boolean(cmpId) && enabled,
   });
 }
