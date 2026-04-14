@@ -7,11 +7,21 @@ export const outstandingService = {
     cmp_id,
     page,
     limit,
+    classification,
+    isCancelled,
+    positiveOnly,
     signal,
     skipGlobalLoader,
   }) => {
     const res = await api.get(`/outstanding/party/${partyId}`, {
-      params: { cmp_id, page, limit },
+      params: {
+        cmp_id,
+        page,
+        limit,
+        classification,
+        isCancelled,
+        positiveOnly,
+      },
       signal,
       skipGlobalLoader,
     });

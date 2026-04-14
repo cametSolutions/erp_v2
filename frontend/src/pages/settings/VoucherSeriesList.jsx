@@ -1,22 +1,26 @@
 import { useEffect, useState } from "react";
-import { FaEdit } from "react-icons/fa";
-import { MdOutlineInsertLink } from "react-icons/md";
-import { RiDeleteBin6Fill } from "react-icons/ri";
+import { useQueryClient } from "@tanstack/react-query";
+import { Pencil, Rows3, Trash2 } from "lucide-react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { useSelector } from "react-redux";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import { Button } from "@/components/ui/button";
 
 import api from "@/api/client/apiClient";
-import { ROUTES } from "@/routes/paths";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
+import ErrorRetryState from "@/components/common/ErrorRetryState";
+import { Card, CardContent } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import {
   useVoucherSeries,
   voucherSeriesKeys,
 } from "@/hooks/queries/voucherSeriesQueries";
+import { ROUTES } from "@/routes/paths";
 
-function VoucherSeriesList() {
+function formatNumber(num, width) {
+  return String(num || 0).padStart(width || 1, "0");
+}
+
+export default function VoucherSeriesList() {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
@@ -27,14 +31,26 @@ function VoucherSeriesList() {
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const [seriesToDelete, setSeriesToDelete] = useState(null);
   const [deletingSeriesId, setDeletingSeriesId] = useState("");
-  const { data, isLoading: loading } = useVoucherSeries({
-    cmp_id: cmp_id,
+
+  const { data, isLoading, isError, error, refetch } = useVoucherSeries({
+    cmp_id,
     voucherType,
     enabled: Boolean(cmp_id && voucherType),
   });
+
   const series = data?.series || [];
 
-  // Header setup
+  const openCreateSeries = () =>
+    navigate(
+      {
+        pathname: ROUTES.settingsVoucherSeriesCreate,
+        search: `?voucherType=${voucherType}`,
+      },
+      {
+        state: { from: voucherType },
+      },
+    );
+
   useEffect(() => {
     if (!voucherType) return;
 
@@ -43,29 +59,18 @@ function VoucherSeriesList() {
       menuItems: [
         {
           label: "Add Series",
-          onSelect: () =>
-            navigate(
-              {
-                pathname: ROUTES.settingsVoucherSeriesCreate,
-                search: `?voucherType=${voucherType}`,
-              },
-              {
-                state: { from: voucherType },
-              },
-            ),
+          onSelect: openCreateSeries,
         },
       ],
     });
 
     return () => resetHeaderOptions();
-  }, [navigate, resetHeaderOptions, setHeaderOptions, voucherType]);
+  }, [resetHeaderOptions, setHeaderOptions, voucherType]);
 
-  // Handle delete
   const handleDelete = async () => {
     if (!seriesToDelete) return;
 
     const { _id: seriesId } = seriesToDelete;
-
     if (!cmp_id || !voucherType) {
       toast.error("Missing voucher type or company");
       return;
@@ -81,38 +86,30 @@ function VoucherSeriesList() {
           withCredentials: true,
         },
       );
+
       queryClient.setQueryData(voucherSeriesKeys.list(cmp_id, voucherType), {
         voucherSeriesId: res?.data?.voucherSeriesId,
         series: res?.data?.series || [],
       });
+
       await queryClient.invalidateQueries({
         queryKey: voucherSeriesKeys.list(cmp_id, voucherType),
       });
       await queryClient.invalidateQueries({
         queryKey: voucherSeriesKeys.nextNumber(cmp_id, voucherType),
       });
+
       toast.success(res?.data?.message || "Series deleted");
       setSeriesToDelete(null);
-    } catch (error) {
-      console.error("Failed to delete series:", error);
+    } catch (deleteError) {
       toast.error(
-        error?.response?.data?.message ||
-          error?.message ||
+        deleteError?.response?.data?.message ||
+          deleteError?.message ||
           "Failed to delete series",
       );
     } finally {
       setDeletingSeriesId("");
     }
-  };
-
-  const handleDeleteClick = (seriesItem) => {
-    const { isDefault } = seriesItem;
-
-    if (isDefault) {
-      toast.warning("Cannot delete default series");
-      return;
-    }
-    setSeriesToDelete(seriesItem);
   };
 
   const handleEditClick = (seriesItem) => {
@@ -127,121 +124,144 @@ function VoucherSeriesList() {
     );
   };
 
-  const formatNumber = (num, width) => num.toString().padStart(width, "0");
+  const handleDeleteClick = (seriesItem) => {
+    if (seriesItem?.isDefault) {
+      toast.warning("Cannot delete default series");
+      return;
+    }
+
+    setSeriesToDelete(seriesItem);
+  };
+
+  if (!cmp_id) {
+    return (
+      <div className="w-full font-[sans-serif]">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          Select a company first to view voucher series.
+        </div>
+      </div>
+    );
+  }
+
+  if (!voucherType) {
+    return (
+      <div className="w-full font-[sans-serif]">
+        <div className="mx-auto w-full max-w-md rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+          Voucher type is missing.
+        </div>
+      </div>
+    );
+  }
+
+  if (isError) {
+    const message =
+      error?.response?.data?.message ||
+      error?.message ||
+      "Failed to load voucher series";
+
+    return (
+      <div className="w-full font-[sans-serif]">
+        <div className="mx-auto w-full max-w-md">
+          <ErrorRetryState message={message} onRetry={() => refetch()} />
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <section className="flex-1 bg-white text-slate-700">
-      {/* Header */}
-
-      {/* Content */}
-      <main className="mx-auto max-w-6xl px-2 py-5">
-        {loading && (
-          <div className="flex h-40 items-center justify-center">
-            <div className="flex flex-col items-center gap-2">
-              <div className="h-5 w-5 animate-spin rounded-full border-[2px] border-slate-300 border-t-pink-600" />
-              <p className="text-xs text-slate-500">Loading voucher series…</p>
-            </div>
+    <section className="w-full font-[sans-serif]">
+      <div className="mx-auto w-full max-w-md space-y-3">
+        {isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, index) => (
+              <div
+                key={index}
+                className="h-16 animate-pulse rounded-xl border border-slate-200 bg-white"
+              />
+            ))}
           </div>
-        )}
+        ) : null}
 
-        {!loading && series.length === 0 && (
-          <div className="flex h-56 items-center justify-center">
-            <div className="rounded-lg border border-dashed border-slate-300 bg-white px-8 py-6 text-center">
-              <p className="text-sm font-semibold text-slate-800">
-                No series configured yet
-              </p>
-              <p className="mt-1 text-xs text-slate-500">
-                Create a series to start numbering vouchers consistently.
-              </p>
-              <button
-                type="button"
-                onClick={() =>
-                  navigate(
-                    {
-                      pathname: ROUTES.settingsVoucherSeriesCreate,
-                      search: `?voucherType=${voucherType}`,
-                    },
-                    {
-                      state: { from: voucherType },
-                    },
-                  )
-                }
-                className="mt-3 inline-flex items-center rounded-md bg-pink-600 px-4 py-1.5 text-xs font-semibold text-white shadow-sm hover:bg-pink-700"
-              >
-                + Add first series
-              </button>
-            </div>
+        {!isLoading && series.length === 0 ? (
+          <div className="rounded-xl border border-dashed border-slate-300 bg-white p-6 text-center text-sm text-slate-500">
+            <p className="font-semibold text-slate-800">
+              No voucher series found
+            </p>
+            <p className="mt-1">
+              Create a series to start numbering vouchers consistently.
+            </p>
+            <button
+              type="button"
+              onClick={openCreateSeries}
+              className="mt-3 rounded-md bg-slate-900 px-3 py-1.5 text-xs font-medium text-white hover:bg-slate-800"
+            >
+              Add first series
+            </button>
           </div>
-        )}
+        ) : null}
 
-        {!loading && series.length > 0 && (
-          <div className="space-y-3">
+        {!isLoading && series.length > 0 ? (
+          <div className="space-y-2">
             {series.map((item) => {
-              const formattedNumber = `${item?.prefix ?? ""}${formatNumber(
-                item?.currentNumber,
-                item?.widthOfNumericalPart,
-              )}${item?.suffix ?? ""}`;
+              const prefix = item?.prefix ? `${item.prefix}/` : "";
+              const suffix = item?.suffix ? `/${item.suffix}` : "";
+              const formattedNumber = `${prefix}${formatNumber(item?.currentNumber, item?.widthOfNumericalPart)}${suffix}`;
 
               return (
-                <div
+                <Card
                   key={item._id}
-                  className="rounded-sm border border-slate-200 bg-white px-4 py-3 shadow-sm transition hover:-translate-y-[1px] hover:border-slate-300 hover:shadow-md"
+                  className="rounded border-none bg-slate-50 py-1 shadow-lg ring-0"
                 >
-                  <div className="flex items-center justify-between gap-4">
-                    {/* Left */}
-                    <div className="flex items-start gap-3 min-w-0">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-pink-50 text-pink-600">
-                        <MdOutlineInsertLink className="-rotate-90" size={18} />
+                  <CardContent className="flex items-center justify-between gap-3 p-3.5">
+                    <div className="min-w-0 flex items-center gap-3">
+                      <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-100 text-blue-700">
+                        <Rows3 className="h-4 w-4" />
                       </div>
                       <div className="min-w-0">
                         <div className="flex items-center gap-2">
-                          <p className="max-w-xs truncate text-sm font-semibold text-slate-900">
-                            {item?.seriesName}
+                          <p className="truncate text-sm font-bold text-slate-900">
+                            {item?.seriesName || "Untitled Series"}
                           </p>
-                          {item?.isDefault && (
+                          {item?.isDefault ? (
                             <span className="rounded-full bg-emerald-50 px-2 py-[2px] text-[10px] font-semibold text-emerald-700">
                               Default
                             </span>
-                          )}
+                          ) : null}
                         </div>
-                        <p className="mt-0.5 text-[11px] font-medium tracking-[0.16em] text-slate-500">
-                          {formattedNumber}
+                        <p className="truncate text-xs text-slate-500">
+                          {formattedNumber || "No number"}
                         </p>
                       </div>
                     </div>
 
-                    {/* Actions: icon-only */}
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         onClick={() => handleEditClick(item)}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-slate-50 text-slate-600 hover:bg-slate-100 hover:border-slate-300"
-                        aria-label="Edit"
+                        className="rounded-md p-2 text-slate-600 transition-colors hover:bg-slate-100"
+                        title="Edit"
                       >
-                        <FaEdit size={12} />
+                        <Pencil className="h-4 w-4" />
                       </button>
                       <button
                         type="button"
-                        onClick={async (event) => {
-                          event.stopPropagation();
-                          handleDeleteClick(item);
-                        }}
+                        onClick={() => handleDeleteClick(item)}
                         disabled={item?.isDefault}
-                        className="inline-flex h-8 w-8 items-center justify-center rounded-md border border-red-200 bg-red-50 text-red-600 hover:bg-red-100 disabled:cursor-not-allowed disabled:opacity-50"
-                        aria-label="Delete"
+                        className="rounded-md p-2 text-rose-600 transition-colors hover:bg-rose-50 disabled:cursor-not-allowed disabled:opacity-50"
+                        title="Delete"
                       >
-                        <RiDeleteBin6Fill size={12} />
+                        <Trash2 className="h-4 w-4" />
                       </button>
                     </div>
-                  </div>
-                </div>
+                  </CardContent>
+                </Card>
               );
             })}
           </div>
-        )}
-      </main>
+        ) : null}
+      </div>
 
-      {seriesToDelete && (
+      {seriesToDelete ? (
         <div
           className="fixed inset-0 z-[220] flex items-center justify-center bg-black/55 px-4"
           onClick={() => {
@@ -295,9 +315,7 @@ function VoucherSeriesList() {
             </div>
           </div>
         </div>
-      )}
+      ) : null}
     </section>
   );
 }
-
-export default VoucherSeriesList;

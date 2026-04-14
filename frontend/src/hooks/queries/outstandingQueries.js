@@ -3,12 +3,18 @@ import { useQuery, useInfiniteQuery } from "@tanstack/react-query";
 import { outstandingService } from "@/api/services/outstanding.service";
 
 export const outstandingQueryKeys = {
+  all: ["outstanding"],
   party: (partyId, cmp_id) => ["outstanding", "party", { partyId, cmp_id }],
-  partyInfinite: (partyId, cmp_id, limit) => [
+  settlement: (partyId, cmp_id, classification) => [
+    "outstanding",
+    "settlement",
+    { partyId, cmp_id, classification },
+  ],
+  partyInfinite: (partyId, cmp_id, limit, positiveOnly = false) => [
     "outstanding",
     "party",
     "infinite",
-    { partyId, cmp_id, limit },
+    { partyId, cmp_id, limit, positiveOnly },
   ],
 };
 
@@ -30,16 +36,23 @@ export const useInfinitePartyOutstandingQuery = ({
   partyId,
   cmp_id,
   limit = 20,
+  positiveOnly = false,
   enabled = true,
 }) =>
   useInfiniteQuery({
-    queryKey: outstandingQueryKeys.partyInfinite(partyId, cmp_id, limit),
+    queryKey: outstandingQueryKeys.partyInfinite(
+      partyId,
+      cmp_id,
+      limit,
+      positiveOnly
+    ),
     queryFn: ({ pageParam = 1, signal }) =>
       outstandingService.getPartyOutstanding({
         partyId,
         cmp_id,
         page: pageParam,   // 👈 sends page
         limit,             // 👈 sends limit
+        positiveOnly,
         signal,
         skipGlobalLoader: true,
       }),
@@ -49,3 +62,30 @@ export const useInfinitePartyOutstandingQuery = ({
     enabled: Boolean(partyId && cmp_id) && enabled,
   });
 
+export const useSettlementOutstandingQuery = ({
+  partyId,
+  cmp_id,
+  classification,
+  enabled = true,
+}) =>
+  useQuery({
+    queryKey: outstandingQueryKeys.settlement(
+      partyId,
+      cmp_id,
+      classification
+    ),
+    queryFn: ({ signal }) =>
+      outstandingService.getPartyOutstanding({
+        partyId,
+        cmp_id,
+        page: 1,
+        limit: 200,
+        classification,
+        isCancelled: false,
+        positiveOnly: true,
+        signal,
+        skipGlobalLoader: true,
+      }),
+    enabled: Boolean(partyId && cmp_id && classification) && enabled,
+    staleTime: 30_000,
+  });

@@ -66,7 +66,7 @@ export async function getNextVoucherNumber({
       },
       $inc: { "series.$.currentNumber": 1 },
     },
-    { new: true, session }
+    { returnDocument: "after", session }
   );
 
   if (!updatedVoucherSeries) {

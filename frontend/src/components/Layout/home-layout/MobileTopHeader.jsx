@@ -41,6 +41,7 @@ export default function MobileTopHeader({
       : headerOptions;
 
   const actionButtons = effectiveHeaderOptions?.actionButtons ?? [];
+  const customOnBack = effectiveHeaderOptions?.onBack;
   const primaryActionButtons = actionButtons.filter(
     (action) => action?.primaryButton,
   );
@@ -51,6 +52,11 @@ export default function MobileTopHeader({
   if (isHome && !forceShowOnHome) return null;
 
   const onBack = () => {
+    if (typeof customOnBack === "function") {
+      customOnBack();
+      return;
+    }
+
     const backRouteMap = {
       [ROUTES.createOrder]: ROUTES.home,
       [ROUTES.salesSelectItems]:

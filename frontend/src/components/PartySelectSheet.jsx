@@ -14,7 +14,15 @@ import { PartyList } from "@/components/partyList";
 import { setParty } from "@/store/slices/transactionSlice";
 import { resolveTaxType } from "@/utils/salesCalculation";
 
-export default function PartySelectSheet({ open, onOpenChange }) {
+export default function PartySelectSheet({
+  open,
+  onOpenChange,
+  title = "Select Party",
+  partyType = "",
+  outstandingFilter = "all",
+  hideZeroOutstanding = false,
+  onSelectParty = null,
+}) {
   const dispatch = useDispatch();
   const selectedCompany = useSelector((state) => state.company.selectedCompany);
   const [selectedPartyId, setSelectedPartyId] = useState(null);
@@ -28,19 +36,24 @@ export default function PartySelectSheet({ open, onOpenChange }) {
         skipGlobalLoader: true,
       });
 
-      dispatch(
-        setParty({
-          ...fullParty,
-          taxType: resolveTaxType(
-            selectedCompany?.state ?? null,
-            fullParty?.state ?? party?.state ?? null,
-          ),
-          totalOutstanding:
-            fullParty?.totalOutstanding ?? party?.totalOutstanding ?? 0,
-          classification:
-            fullParty?.classification ?? party?.classification ?? "dr",
-        })
-      );
+      const selectedParty = {
+        ...fullParty,
+        taxType: resolveTaxType(
+          selectedCompany?.state ?? null,
+          fullParty?.state ?? party?.state ?? null,
+        ),
+        totalOutstanding:
+          fullParty?.totalOutstanding ?? party?.totalOutstanding ?? 0,
+        classification:
+          fullParty?.classification ?? party?.classification ?? "dr",
+      };
+
+      if (onSelectParty) {
+        await onSelectParty(selectedParty);
+      } else {
+        dispatch(setParty(selectedParty));
+      }
+
       onOpenChange(false);
     } catch (error) {
       const message =
@@ -63,7 +76,7 @@ export default function PartySelectSheet({ open, onOpenChange }) {
         <div className="flex h-full min-h-0 flex-col">
           <SheetHeader className="shrink-0 px-4 pb-2">
             <div className="flex items-center justify-between gap-3">
-              <SheetTitle className="text-sm">Select Party</SheetTitle>
+              <SheetTitle className="text-sm">{title}</SheetTitle>
               {selectedPartyId && (
                 <div className="inline-flex items-center gap-1.5 text-[11px] text-slate-500">
                   <LoaderCircle className="h-3.5 w-3.5 animate-spin" />
@@ -74,7 +87,13 @@ export default function PartySelectSheet({ open, onOpenChange }) {
           </SheetHeader>
 
           <div className="min-h-0 flex-1 px-4 pb-2">
-            <PartyList mode="select" onSelect={handleSelect} />
+            <PartyList
+              mode="select"
+              onSelect={handleSelect}
+              partyType={partyType}
+              outstandingFilter={outstandingFilter}
+              hideZeroOutstanding={hideZeroOutstanding}
+            />
           </div>
         </div>
       </SheetContent>

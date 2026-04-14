@@ -96,7 +96,7 @@ export const createVoucherSeries = async (req, res) => {
         },
       },
       {
-        new: true,
+        returnDocument: "after",
         upsert: true,
         runValidators: true,
       }
@@ -150,7 +150,7 @@ export const updateVoucherSeries = async (req, res) => {
         },
       },
       {
-        new: true,
+        returnDocument: "after",
         runValidators: true,
       }
     ).lean();
@@ -190,7 +190,7 @@ export const deleteVoucherSeriesById = async (req, res) => {
       {
         $pull: { series: { _id: seriesId } },
       },
-      { new: true }
+      { returnDocument: "after" }
     );
 
     if (!result) {

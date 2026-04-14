@@ -426,8 +426,83 @@ export async function updateSaleOrder(req, res) {
   }
 }
 
+export async function cancelSaleOrder(req, res) {
+  const session = await mongoose.startSession();
+
+  try {
+    const saleOrderId = req.params.saleOrderId || req.params.id;
+    const body = req.body || {};
+    const cmpId = body.cmpId || body.cmp_id;
+    const userId = req.user?._id || req.user?.id || null;
+
+    if (!saleOrderId || !cmpId) {
+      return res.status(400).json({
+        success: false,
+        message: "saleOrderId and cmpId are required",
+      });
+    }
+
+    let cancelledSaleOrder = null;
+
+    await session.withTransaction(async () => {
+      const saleOrder = await SaleOrder.findOne(
+        applyTransactionCreatorScope(req, {
+          _id: saleOrderId,
+          cmp_id: cmpId,
+        })
+      ).session(session);
+
+      if (!saleOrder) {
+        throw new Error("SALE_ORDER_NOT_FOUND");
+      }
+
+      if (saleOrder.status === "cancelled") {
+        throw new Error("SALE_ORDER_ALREADY_CANCELLED");
+      }
+
+      saleOrder.status = "cancelled";
+      saleOrder.updated_by = userId || null;
+
+      await saleOrder.save({ session });
+      cancelledSaleOrder = saleOrder.toObject();
+    });
+
+    return res.status(200).json({
+      success: true,
+      message: "Sale order cancelled successfully",
+      data: {
+        saleOrder: cancelledSaleOrder,
+      },
+    });
+  } catch (error) {
+    console.error("cancelSaleOrder error:", error);
+
+    if (error.message === "SALE_ORDER_NOT_FOUND") {
+      return res.status(404).json({
+        success: false,
+        message: "Sale order not found",
+      });
+    }
+
+    if (error.message === "SALE_ORDER_ALREADY_CANCELLED") {
+      return res.status(400).json({
+        success: false,
+        message: "Sale order is already cancelled",
+      });
+    }
+
+    return res.status(500).json({
+      success: false,
+      message: error.message || "Failed to cancel sale order",
+    });
+  } finally {
+    await session.endSession();
+  }
+}
+
 export default {
   createSaleOrder,
   getSaleOrderById,
   updateSaleOrder,
+  cancelSaleOrder,
 };

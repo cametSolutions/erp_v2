@@ -108,6 +108,13 @@ const companySchema = new mongoose.Schema(
   default: "",
 },
     configurations: [{ type: mongoose.Schema.Types.Mixed }],
+    tally_api_key: {
+      type: String,
+      trim: true,
+      index: true,
+      unique: true,
+      sparse: true,
+    },
   },
   { timestamps: true }
 );
