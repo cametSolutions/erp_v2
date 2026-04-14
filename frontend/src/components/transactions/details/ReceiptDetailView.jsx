@@ -1,5 +1,7 @@
 import { ArrowRight, BadgeIndianRupee, Building2, CreditCard, ReceiptText, User2 } from "lucide-react";
 
+import CancelVoucherDialog from "@/components/transactions/details/CancelVoucherDialog";
+
 function formatDate(value) {
   if (!value) return "--";
   const parsed = new Date(value);
@@ -47,7 +49,8 @@ function SectionCard({ title, icon: Icon, children }) {
   );
 }
 
-export default function ReceiptDetailView({ receipt }) {
+export default function ReceiptDetailView({ receipt, onCancel, isCancelling = false }) {
+  const isCancelled = receipt?.status === "cancelled";
   const statusTone =
     receipt?.status === "cancelled"
       ? "bg-rose-100 text-rose-800"
@@ -84,6 +87,15 @@ export default function ReceiptDetailView({ receipt }) {
                 {formatAmount(receipt?.amount)}
               </p>
             </div>
+            <CancelVoucherDialog
+              label="Cancel"
+              title="Cancel receipt?"
+              description="This will mark the receipt as cancelled. This action can be reverted later if needed."
+              warning="Settlements are reverted only if the outstanding exists."
+              isCancelled={isCancelled}
+              isLoading={isCancelling}
+              onConfirm={onCancel}
+            />
           </div>
         </div>
       </section>

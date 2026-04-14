@@ -1,6 +1,7 @@
 import { ArrowRight, FileText, Printer, SquarePen, Truck, User2 } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
+import CancelVoucherDialog from "@/components/transactions/details/CancelVoucherDialog";
 import { Button } from "@/components/ui/button";
 import { generateSaleOrderPdf } from "@/utils/pdf/generateSaleOrderPdf";
 
@@ -57,11 +58,14 @@ export default function SaleOrderDetailView({
   configurations,
   bankDetails,
   companySettings,
+  onCancel,
+  isCancelling = false,
 }) {
   const navigate = useNavigate();
   const totals = saleOrder?.totals || {};
   const items = saleOrder?.items || [];
   const additionalCharges = saleOrder?.additional_charges || [];
+  const isCancelled = saleOrder?.status === "cancelled";
   const statusTone =
     saleOrder?.status === "converted"
       ? "bg-amber-100 text-amber-800"
@@ -136,11 +140,20 @@ export default function SaleOrderDetailView({
             size="sm"
             variant="outline"
             className="border-white/25 bg-white/10 text-white hover:bg-white/15"
+            disabled={isCancelled}
             onClick={() => navigate(`/sale-orders/${saleOrder._id}/edit`)}
           >
             <SquarePen className="h-3.5 w-3.5" />
             Edit
           </Button>
+          <CancelVoucherDialog
+            label="Cancel"
+            title="Cancel sale order?"
+            description="This will mark the sale order as cancelled. This action can be reverted later if needed."
+            isCancelled={isCancelled}
+            isLoading={isCancelling}
+            onConfirm={onCancel}
+          />
         </div>
       </section>
 

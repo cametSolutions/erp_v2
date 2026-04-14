@@ -165,10 +165,20 @@ export async function updateSaleOrder(saleOrderId, payload) {
   return response.data;
 }
 
+export async function cancelSaleOrder(saleOrderId, payload) {
+  const response = await api.put(`/sUsers/saleOrders/${saleOrderId}/cancel`, payload, {
+    headers: { "Content-Type": "application/json" },
+    withCredentials: true,
+  });
+
+  return response.data;
+}
+
 export const saleOrderService = {
   buildCreateSaleOrderPayload,
   buildUpdateSaleOrderPayload,
   createSaleOrder,
   getSaleOrderById,
   updateSaleOrder,
+  cancelSaleOrder,
 };

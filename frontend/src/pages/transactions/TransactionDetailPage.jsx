@@ -7,6 +7,8 @@ import { useMobileHeader } from "@/components/Layout/HomeLayout";
 import ReceiptDetailView from "@/components/transactions/details/ReceiptDetailView";
 import SaleOrderDetailView from "@/components/transactions/details/SaleOrderDetailView";
 import TransactionTypePlaceholder from "@/components/transactions/details/TransactionTypePlaceholder";
+import { useCancelCashTransaction } from "@/hooks/mutations/useCancelCashTransaction";
+import { useCancelSaleOrder } from "@/hooks/mutations/useCancelSaleOrder";
 import { useCashTransactionDetailQuery } from "@/hooks/queries/cashTransactionQueries";
 import { useCompanySettingsQuery } from "@/hooks/queries/companySettingsQueries";
 import { usePrintConfigQuery } from "@/hooks/queries/printConfigQueries";
@@ -61,6 +63,8 @@ export default function TransactionDetailPage({
     voucherType === "saleOrder" ? cmpId : null,
     voucherType === "saleOrder"
   );
+  const cancelSaleOrderMutation = useCancelSaleOrder({ cmp_id: cmpId || "" });
+  const cancelReceiptMutation = useCancelCashTransaction({ cmp_id: cmpId || "" });
 
   if (voucherType === "saleOrder") {
     const saleOrder = saleOrderQuery.data || fallbackTransaction;
@@ -106,6 +110,15 @@ export default function TransactionDetailPage({
           null
         }
         companySettings={companySettingsQuery.data || null}
+        isCancelling={cancelSaleOrderMutation.isPending}
+        onCancel={() =>
+          cancelSaleOrderMutation.mutateAsync({
+            id: saleOrder?._id,
+            payload: {
+              cmp_id: cmpId,
+            },
+          })
+        }
       />
     );
   }
@@ -143,7 +156,20 @@ export default function TransactionDetailPage({
       );
     }
 
-    return <ReceiptDetailView receipt={receipt} />;
+    return (
+      <ReceiptDetailView
+        receipt={receipt}
+        isCancelling={cancelReceiptMutation.isPending}
+        onCancel={() =>
+          cancelReceiptMutation.mutateAsync({
+            id: receipt?._id,
+            payload: {
+              cmp_id: cmpId,
+            },
+          })
+        }
+      />
+    );
   }
 
   if (ORDER_VOUCHER_TYPES.has(voucherType)) {

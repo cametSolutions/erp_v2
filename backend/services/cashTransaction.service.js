@@ -135,7 +135,6 @@ async function createAdvanceReceiptOutstanding({
         bill_pending_amt: Number(advance_amount) || 0,
         classification: "dr",
         createdBy: created_by ? String(created_by) : "",
-        isCancelled: false,
         source: "advance_receipt",
       },
     ],
@@ -153,11 +152,10 @@ async function cancelAdvanceReceiptOutstanding({
       cmp_id,
       billId: String(receipt_id),
       source: "advance_receipt",
-      isCancelled: false,
     },
     {
       $set: {
-        isCancelled: true,
+        bill_amount: 0,
         bill_pending_amt: 0,
       },
     },
@@ -372,11 +370,48 @@ export async function cancelCashTransaction(id, data = {}, req) {
           continue;
         }
 
-        await Outstanding.findByIdAndUpdate(
-          item.outstanding,
-          { $inc: { bill_pending_amt: Number(item.settled_amount) || 0 } },
-          { session }
-        );
+        const outstanding = await Outstanding.findById(item.outstanding).session(session);
+
+        if (!outstanding || outstanding.isCancelled) {
+          continue;
+        }
+
+        const settledSummary = await Receipt.aggregate([
+          {
+            $match: {
+              cmp_id: transaction.cmp_id,
+              status: "active",
+            },
+          },
+          { $unwind: "$settlement_details" },
+          {
+            $match: {
+              "settlement_details.outstanding": outstanding._id,
+            },
+          },
+          {
+            $group: {
+              _id: null,
+              totalSettled: {
+                $sum: { $ifNull: ["$settlement_details.settled_amount", 0] },
+              },
+            },
+          },
+        ]).session(session);
+
+        const activeSettledAmount = Number(settledSummary?.[0]?.totalSettled) || 0;
+        const billAmount = Number(outstanding.bill_amount) || 0;
+        const classification = String(outstanding.classification || "dr").toLowerCase();
+
+        // DR pending = bill_amount - settled_receipts
+        // CR pending = -(bill_amount + settled_receipts)
+        outstanding.bill_pending_amt =
+          classification === "cr"
+            ? -(billAmount + activeSettledAmount)
+            : billAmount - activeSettledAmount;
+        outstanding.classification =
+          Number(outstanding.bill_pending_amt) < 0 ? "cr" : "dr";
+        await outstanding.save({ session });
       }
 
       await cancelAdvanceReceiptOutstanding({

@@ -114,6 +114,7 @@ export async function getVoucherTotalsSummary(req, res) {
 
     const saleOrderFilter = applyTransactionCreatorScope(req, {
       cmp_id: new mongoose.Types.ObjectId(cmpId),
+      status: { $ne: "cancelled" },
       date: {
         $gte: fromDate,
         $lte: toDate,
@@ -122,6 +123,7 @@ export async function getVoucherTotalsSummary(req, res) {
 
     const receiptFilter = applyTransactionCreatorScope(req, {
       cmp_id: new mongoose.Types.ObjectId(cmpId),
+      status: { $ne: "cancelled" },
       date: {
         $gte: fromDate,
         $lte: toDate,

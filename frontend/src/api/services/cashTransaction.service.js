@@ -77,8 +77,18 @@ export async function getCashTransactionById(id, { cmp_id, ...options } = {}) {
   return response.data?.data?.cashTransaction || null;
 }
 
+export async function cancelCashTransaction(id, payload) {
+  const response = await api.put(`/cash-transactions/${id}/cancel`, payload, {
+    headers: { "Content-Type": "application/json" },
+    withCredentials: true,
+  });
+
+  return response.data;
+}
+
 export const cashTransactionService = {
   buildCreateCashTransactionPayload,
   createCashTransaction,
   getCashTransactionById,
+  cancelCashTransaction,
 };

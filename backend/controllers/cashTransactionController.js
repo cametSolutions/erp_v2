@@ -133,6 +133,7 @@ export async function cancelCashTransaction(req, res) {
 
     return res.status(200).json({
       success: true,
+      message: "Receipt cancelled successfully",
       data: {
         cashTransaction,
       },
