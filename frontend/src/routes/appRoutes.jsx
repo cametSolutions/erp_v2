@@ -77,7 +77,14 @@ export const appRoutes = (
   >
     <Route path={ROUTES.root} element={<Navigate to={ROUTES.home} replace />} />
     <Route path={ROUTES.home} element={<HomePage />} />
-    <Route path={ROUTES.user} element={<UserPage />} />
+    <Route
+      path={ROUTES.user}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <UserPage />
+        </ProtectedRoute>
+      }
+    />
     <Route path={ROUTES.settings} element={<SettingsPage />} />
     <Route path={ROUTES.outstanding} element={<OutstandingsPage />} />
     <Route
@@ -96,8 +103,22 @@ export const appRoutes = (
     <Route path={ROUTES.saleOrderEdit} element={<SaleOrderEditPage />} />
     <Route path={ROUTES.salesSelectItems} element={<ProductSelectPage />} />
     <Route path={ROUTES.createReceipt} element={<CreateReceiptPage />} />
-    <Route path={ROUTES.usersCreate} element={<UserCreatePage />} />
-    <Route path={ROUTES.usersList} element={<UserListPage />} />
+    <Route
+      path={ROUTES.usersCreate}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <UserCreatePage />
+        </ProtectedRoute>
+      }
+    />
+    <Route
+      path={ROUTES.usersList}
+      element={
+        <ProtectedRoute allowedRoles={["admin"]}>
+          <UserListPage />
+        </ProtectedRoute>
+      }
+    />
     <Route path={ROUTES.CashInHandListPage} element={<CashInHandListPage />} />
     <Route
       path={ROUTES.BankBalanceListPage}

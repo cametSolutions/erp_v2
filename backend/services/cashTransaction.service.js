@@ -9,6 +9,10 @@ import Receipt from "../Model/Receipt.js";
 import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import {
+  createVoucherTimelineEntry,
+  updateVoucherTimelineEntry,
+} from "./voucherTimeline.service.js";
+import {
   applyTransactionCreatorScope,
   getAccessibleCompanyIds,
   resolveAdminOwnerId,
@@ -172,6 +176,30 @@ export async function createCashTransaction(data = {}, req) {
     let createdCashTransaction = null;
 
     await session.withTransaction(async () => {
+      const [party, cashBank] = await Promise.all([
+        Party.findOne({ _id: data.party_id, cmp_id: data.cmp_id })
+          .session(session)
+          .lean(),
+        Party.findOne({
+          _id: data.cash_bank_id,
+          cmp_id: data.cmp_id,
+          partyType: data.cash_bank_type,
+        })
+          .session(session)
+          .lean(),
+      ]);
+
+      if (!party) {
+        throw createHttpError("Selected party does not belong to this company", 400);
+      }
+
+      if (!cashBank) {
+        throw createHttpError(
+          "Selected cash/bank ledger does not belong to this company",
+          400
+        );
+      }
+
       const nextVoucher = await getNextVoucherNumber({
         cmpId: data.cmp_id,
         voucherType: data.voucher_type,
@@ -287,11 +315,32 @@ export async function createCashTransaction(data = {}, req) {
           continue;
         }
 
-        await Outstanding.findByIdAndUpdate(
-          item.outstanding,
-          { $inc: { bill_pending_amt: -Number(item.settled_amount) || 0 } },
-          { session }
-        );
+        const outstanding = await Outstanding.findOne({
+          _id: item.outstanding,
+          cmp_id: data.cmp_id,
+          party_id: data.party_id,
+          isCancelled: false,
+        }).session(session);
+
+        if (!outstanding) {
+          throw createHttpError(
+            "Outstanding bill not found for the selected company and party",
+            400
+          );
+        }
+
+        const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
+        const settledAmount = Number(item.settled_amount) || 0;
+
+        if (settledAmount <= 0 || settledAmount > currentPendingAmount) {
+          throw createHttpError(
+            "Settled amount cannot exceed the current pending amount",
+            400
+          );
+        }
+
+        outstanding.bill_pending_amt = currentPendingAmount - settledAmount;
+        await outstanding.save({ session });
       }
 
       await createAdvanceReceiptOutstanding({
@@ -309,6 +358,21 @@ export async function createCashTransaction(data = {}, req) {
       createdCashTransaction = await Receipt.findById(cashTransaction._id)
         .session(session)
         .lean();
+
+      await createVoucherTimelineEntry(
+        {
+          cmp_id: cashTransaction.cmp_id,
+          voucher_type: cashTransaction.voucher_type,
+          voucher_id: cashTransaction._id,
+          date: cashTransaction.date,
+          party_id: cashTransaction.party_id,
+          party_name: cashTransaction.party_name,
+          voucher_number: cashTransaction.voucher_number,
+          amount: Number(cashTransaction.amount) || 0,
+          status: cashTransaction.status || null,
+        },
+        session
+      );
     });
 
     return createdCashTransaction;
@@ -431,6 +495,17 @@ export async function cancelCashTransaction(id, data = {}, req) {
       });
 
       updatedCashTransaction = transaction.toObject();
+
+      await updateVoucherTimelineEntry(
+        {
+          voucher_id: transaction._id,
+          voucher_type: transaction.voucher_type,
+        },
+        {
+          status: transaction.status || null,
+        },
+        session
+      );
     });
 
     return updatedCashTransaction;

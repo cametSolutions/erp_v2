@@ -28,7 +28,7 @@ function normalizeSettlementDetails(settlement_details = []) {
 
 function buildCashTransactionPayload(body = {}, userId = null) {
   return {
-    cmp_id: body.cmp_id || body.cmpId,
+    cmp_id: body.cmp_id,
     voucher_type: body.voucher_type,
     series_id: body.series_id || body.selectedSeries?._id || null,
     voucher_number: body.voucher_number,
@@ -56,7 +56,13 @@ export async function createCashTransaction(req, res) {
   try {
     const body = req.body || {};
     const userId = req.user?._id || req.user?.id || null;
-    const payload = buildCashTransactionPayload(body, userId);
+    const payload = buildCashTransactionPayload(
+      {
+        ...body,
+        cmp_id: req.companyId,
+      },
+      userId
+    );
 
     if (
       !payload.cmp_id ||
@@ -112,7 +118,7 @@ export async function cancelCashTransaction(req, res) {
   try {
     const id = req.params.id;
     const body = req.body || {};
-    const cmp_id = body.cmp_id || body.cmpId;
+    const cmp_id = req.companyId;
     const cancelled_by = req.user?._id || req.user?.id || body.cancelled_by || null;
 
     if (!id || !cmp_id) {
@@ -151,7 +157,7 @@ export async function cancelCashTransaction(req, res) {
 export async function getCashTransactionById(req, res) {
   try {
     const { id } = req.params;
-    const cmp_id = req.query.cmp_id || req.query.cmpId;
+    const cmp_id = req.companyId;
 
     if (!id) {
       return res.status(400).json({
@@ -212,8 +218,8 @@ export async function getCashTransactions(req, res) {
 
 export async function getCashBankLedgerBalances(req, res) {
   try {
-    const { cmp_id, cmpId, cash_bank_type, cashBankType } = req.query || {};
-    const resolvedCmpId = cmp_id || cmpId;
+    const { cash_bank_type, cashBankType } = req.query || {};
+    const resolvedCmpId = req.companyId;
     const resolvedType = cash_bank_type || cashBankType || null;
 
     if (!resolvedCmpId) {

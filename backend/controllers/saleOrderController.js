@@ -1,10 +1,15 @@
 import mongoose from "mongoose";
 
+import Party from "../Model/partySchema.js";
 import SaleOrder from "../Model/SaleOrder.js";
 import {
   applyTransactionCreatorScope,
-  getAccessibleCompanyIds,
 } from "../utils/authScope.js";
+import { calculateSaleOrderTotals } from "../services/calculation.service.js";
+import {
+  createVoucherTimelineEntry,
+  updateVoucherTimelineEntry,
+} from "../services/voucherTimeline.service.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 
@@ -67,6 +72,17 @@ function normalizeTotals(body = {}) {
       ) || 0,
     finalAmount: Number(firstDefined(totals.finalAmount, body.finalAmount)) || 0,
     roundOff: Number(firstDefined(totals.roundOff, body.roundOff)) || 0,
+  };
+}
+
+function buildClientTotalsSnapshot(body = {}) {
+  const totals = normalizeTotals(body);
+
+  return {
+    subtotal: totals.subTotal,
+    totalDiscount: totals.totalDiscount,
+    totalTax: totals.totalTaxAmount,
+    grandTotal: totals.finalAmount,
   };
 }
 
@@ -174,24 +190,64 @@ function mapDespatchDetails(despatchDetails = {}) {
 }
 
 function mapTotals(body = {}) {
-  const totals = normalizeTotals(body);
+  const calculatedTotals = calculateSaleOrderTotals(
+    body.items || [],
+    body.additionalCharges || [],
+    body.discounts || null,
+  );
+  const normalizedTotals = normalizeTotals(body);
+  const totalIgstAmt =
+    normalizeTaxType(body) === "igst" ? calculatedTotals.totalTax : 0;
+  const splitTaxAmount =
+    normalizeTaxType(body) === "cgst_sgst"
+      ? roundMoney(calculatedTotals.totalTax / 2)
+      : 0;
+  const totalCgstAmt = splitTaxAmount;
+  const totalSgstAmt = splitTaxAmount;
 
   return {
-    sub_total: totals.subTotal,
-    total_discount: totals.totalDiscount,
-    taxable_amount: totals.taxableAmount,
-    total_tax_amount: totals.totalTaxAmount,
-    total_igst_amt: totals.totalIgstAmt,
-    total_cgst_amt: totals.totalCgstAmt || 0,
-    total_sgst_amt: totals.totalSgstAmt || 0,
-    total_cess_amt: totals.totalCessAmt || 0,
-    total_addl_cess_amt: totals.totalAddlCessAmt || 0,
-    item_total: totals.itemTotal,
-    total_additional_charge: totals.totalAdditionalCharge,
-    amount_with_additional_charge: totals.amountWithAdditionalCharge,
-    round_off: totals.roundOff,
-    final_amount: totals.finalAmount,
+    sub_total: calculatedTotals.subtotal,
+    total_discount: calculatedTotals.totalDiscount,
+    taxable_amount: calculatedTotals.taxableAmount,
+    total_tax_amount: calculatedTotals.totalTax,
+    total_igst_amt: totalIgstAmt,
+    total_cgst_amt: totalCgstAmt,
+    total_sgst_amt: totalSgstAmt,
+    total_cess_amt: roundMoney(calculatedTotals.totalCess),
+    total_addl_cess_amt: roundMoney(calculatedTotals.totalAddlCess),
+    item_total: calculatedTotals.itemTotal,
+    total_additional_charge: calculatedTotals.totalAdditionalCharge,
+    amount_with_additional_charge: calculatedTotals.amountWithAdditionalCharge,
+    round_off: normalizedTotals.roundOff || 0,
+    final_amount: calculatedTotals.grandTotal,
   };
+}
+
+function roundMoney(value) {
+  return Math.round((Number(value) || 0) * 100) / 100;
+}
+
+function logTotalsMismatch(body = {}) {
+  const clientTotals = buildClientTotalsSnapshot(body);
+  const serverTotals = calculateSaleOrderTotals(
+    body.items || [],
+    body.additionalCharges || [],
+    body.discounts || null,
+  );
+
+  const hasSignificantDifference = [
+    Math.abs((clientTotals.subtotal || 0) - serverTotals.subtotal),
+    Math.abs((clientTotals.totalDiscount || 0) - serverTotals.totalDiscount),
+    Math.abs((clientTotals.totalTax || 0) - serverTotals.totalTax),
+    Math.abs((clientTotals.grandTotal || 0) - serverTotals.grandTotal),
+  ].some((difference) => difference > 1);
+
+  if (hasSignificantDifference) {
+    console.warn("Sale order totals mismatch detected", {
+      clientTotals,
+      serverTotals,
+    });
+  }
 }
 
 function buildSaleOrderPayload(body, nextVoucher, serialNumbers, userId) {
@@ -248,11 +304,26 @@ export async function createSaleOrder(req, res) {
   try {
     let createdSaleOrder = null;
     const body = req.body || {};
-    const cmpId = body.cmpId || body.cmp_id;
+    const cmpId = req.companyId;
     const selectedSeries = normalizeSelectedSeries(body);
     const userId = req.user?._id || req.user?.id || null;
+    const partyId = body.party?._id || body.party?.id || null;
+
+    logTotalsMismatch(body);
 
     await session.withTransaction(async () => {
+      const party = await Party.findOne({
+        _id: partyId,
+        cmp_id: cmpId,
+      })
+        .select("_id")
+        .session(session)
+        .lean();
+
+      if (!party) {
+        throw new Error("PARTY_NOT_FOUND");
+      }
+
       const nextVoucher = await getNextVoucherNumber({
         cmpId,
         voucherType: "saleOrder",
@@ -277,6 +348,21 @@ export async function createSaleOrder(req, res) {
 
       const [created] = await SaleOrder.create([saleOrderDoc], { session });
       createdSaleOrder = await SaleOrder.findById(created._id).session(session).lean();
+
+      await createVoucherTimelineEntry(
+        {
+          cmp_id: created.cmp_id,
+          voucher_type: created.voucher_type,
+          voucher_id: created._id,
+          date: created.date,
+          party_id: created.party_id,
+          party_name: created.party_snapshot?.name || "",
+          voucher_number: created.voucher_number,
+          amount: Number(created.totals?.final_amount) || 0,
+          status: created.status || null,
+        },
+        session
+      );
     });
 
     return res.status(201).json({
@@ -287,6 +373,14 @@ export async function createSaleOrder(req, res) {
     });
   } catch (error) {
     console.error("createSaleOrder error:", error);
+
+    if (error.message === "PARTY_NOT_FOUND") {
+      return res.status(400).json({
+        success: false,
+        message: "Selected party does not belong to this company",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to create sale order",
@@ -299,7 +393,7 @@ export async function createSaleOrder(req, res) {
 export async function getSaleOrderById(req, res) {
   try {
     const { saleOrderId } = req.params;
-    const cmpId = req.query.cmpId;
+    const cmpId = req.companyId;
 
     if (!saleOrderId) {
       return res.status(400).json({
@@ -309,12 +403,7 @@ export async function getSaleOrderById(req, res) {
     }
 
     const filter = applyTransactionCreatorScope(req, { _id: saleOrderId });
-    if (cmpId) {
-      filter.cmp_id = cmpId;
-    } else {
-      const accessibleCompanyIds = await getAccessibleCompanyIds(req);
-      filter.cmp_id = { $in: accessibleCompanyIds };
-    }
+    filter.cmp_id = cmpId;
 
     const saleOrder = await SaleOrder.findOne(filter).lean();
 
@@ -346,8 +435,9 @@ export async function updateSaleOrder(req, res) {
   try {
     const saleOrderId = req.params.saleOrderId || req.params.id;
     const body = req.body || {};
-    const cmpId = body.cmpId || body.cmp_id;
+    const cmpId = req.companyId;
     const userId = req.user?._id || req.user?.id || null;
+    const partyId = body.party?._id || body.party?.id || null;
 
     if (!saleOrderId || !cmpId) {
       return res.status(400).json({
@@ -358,7 +448,23 @@ export async function updateSaleOrder(req, res) {
 
     let updatedSaleOrder = null;
 
+    logTotalsMismatch(body);
+
     await session.withTransaction(async () => {
+      if (partyId) {
+        const party = await Party.findOne({
+          _id: partyId,
+          cmp_id: cmpId,
+        })
+          .select("_id")
+          .session(session)
+          .lean();
+
+        if (!party) {
+          throw new Error("PARTY_NOT_FOUND");
+        }
+      }
+
       const saleOrder = await SaleOrder.findOne(
         applyTransactionCreatorScope(req, {
         _id: saleOrderId,
@@ -391,6 +497,22 @@ export async function updateSaleOrder(req, res) {
 
       await saleOrder.save({ session });
       updatedSaleOrder = saleOrder.toObject();
+
+      await updateVoucherTimelineEntry(
+        {
+          voucher_id: saleOrder._id,
+          voucher_type: saleOrder.voucher_type,
+        },
+        {
+          date: saleOrder.date,
+          party_id: saleOrder.party_id,
+          party_name: saleOrder.party_snapshot?.name || "",
+          voucher_number: saleOrder.voucher_number,
+          amount: Number(saleOrder.totals?.final_amount) || 0,
+          status: saleOrder.status || null,
+        },
+        session
+      );
     });
 
     return res.status(200).json({
@@ -406,6 +528,13 @@ export async function updateSaleOrder(req, res) {
       return res.status(400).json({
         success: false,
         message: "Sale order not found",
+      });
+    }
+
+    if (error.message === "PARTY_NOT_FOUND") {
+      return res.status(400).json({
+        success: false,
+        message: "Selected party does not belong to this company",
       });
     }
 
@@ -431,8 +560,7 @@ export async function cancelSaleOrder(req, res) {
 
   try {
     const saleOrderId = req.params.saleOrderId || req.params.id;
-    const body = req.body || {};
-    const cmpId = body.cmpId || body.cmp_id;
+    const cmpId = req.companyId;
     const userId = req.user?._id || req.user?.id || null;
 
     if (!saleOrderId || !cmpId) {
@@ -465,6 +593,17 @@ export async function cancelSaleOrder(req, res) {
 
       await saleOrder.save({ session });
       cancelledSaleOrder = saleOrder.toObject();
+
+      await updateVoucherTimelineEntry(
+        {
+          voucher_id: saleOrder._id,
+          voucher_type: saleOrder.voucher_type,
+        },
+        {
+          status: saleOrder.status || null,
+        },
+        session
+      );
     });
 
     return res.status(200).json({

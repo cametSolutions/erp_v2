@@ -78,7 +78,10 @@ export default function DesktopShell({
           </Avatar>
         </header>
 
-        <main className="flex-1 overflow-y-auto p-6">
+        <main
+          className="flex-1 overflow-y-auto p-6"
+          data-route-scroll-reset="true"
+        >
           {isCheckingCompanies ? (
             <div className="flex h-full items-center justify-center">
               <p className="text-sm text-slate-500">Checking your companies...</p>

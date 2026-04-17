@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+import VoucherTimeline from "../Model/VoucherTimeline.js";
 import Receipt from "../Model/Receipt.js";
 import SaleOrder from "../Model/SaleOrder.js";
 import { applyTransactionCreatorScope } from "../utils/authScope.js";
@@ -94,7 +95,8 @@ function parsePositiveInteger(value, fallback) {
 
 export async function getVoucherTotalsSummary(req, res) {
   try {
-    const { cmpId, date } = req.query;
+    const { date } = req.query;
+    const cmpId = req.companyId;
 
     if (!cmpId) {
       return res.status(400).json({
@@ -179,7 +181,8 @@ export async function getVoucherTotalsSummary(req, res) {
 
 export async function getVouchers(req, res) {
   try {
-    const { cmpId, from, to, voucherType, page, limit } = req.query;
+    const { from, to, voucherType, page, limit } = req.query;
+    const cmpId = req.companyId;
 
     if (!cmpId) {
       return res.status(400).json({
@@ -193,7 +196,7 @@ export async function getVouchers(req, res) {
     const currentPage = parsePositiveInteger(page, 1);
     const pageSize = parsePositiveInteger(limit, 20);
 
-    const saleOrderFilter = applyTransactionCreatorScope(req, {
+    const timelineFilter = applyTransactionCreatorScope(req, {
       cmp_id: cmpId,
       date: {
         $gte: fromDate,
@@ -201,83 +204,37 @@ export async function getVouchers(req, res) {
       },
     });
     const skip = (currentPage - 1) * pageSize;
-    const receiptFilter = applyTransactionCreatorScope(req, {
-      cmp_id: cmpId,
-      date: {
-        $gte: fromDate,
-        $lte: toDate,
-      },
-    });
 
-    const fetchSaleOrders = voucherTypes.includes("saleOrder")
-      ? SaleOrder.find(saleOrderFilter, {
-          _id: 1,
-          voucher_type: 1,
-          date: 1,
-          voucher_number: 1,
-          status: 1,
-          "party_snapshot.name": 1,
-          "totals.final_amount": 1,
-        }).lean()
-      : Promise.resolve([]);
+    if (!voucherTypes.includes("all")) {
+      timelineFilter.voucher_type = { $in: voucherTypes };
+    }
 
-    const fetchReceipts = voucherTypes.includes("receipt")
-        ? Receipt.find(
-            {
-              ...receiptFilter,
-              voucher_type: "receipt",
-            },
-            {
-              _id: 1,
-              voucher_type: 1,
-              date: 1,
-              voucher_number: 1,
-              status: 1,
-              party_name: 1,
-              amount: 1,
-            }
-          ).lean()
-        : Promise.resolve([]);
-
-    const [saleOrders, receipts] = await Promise.all([
-      fetchSaleOrders,
-      fetchReceipts,
+    const [totalCount, timelineRows] = await Promise.all([
+      VoucherTimeline.countDocuments(timelineFilter),
+      VoucherTimeline.find(timelineFilter, {
+        voucher_id: 1,
+        voucher_type: 1,
+        date: 1,
+        voucher_number: 1,
+        party_name: 1,
+        amount: 1,
+        status: 1,
+      })
+        .sort({ created_at: -1, _id: -1 })
+        .skip(skip)
+        .limit(pageSize)
+        .lean(),
     ]);
 
-    const vouchers = [
-      ...saleOrders.map((doc) => ({
-        _id: doc._id,
-        voucher_type: doc.voucher_type,
-        date: doc.date,
-        voucher_number: doc.voucher_number,
-        party_name: doc.party_snapshot?.name || null,
-        amount: Number(doc.totals?.final_amount) || 0,
-        status: doc.status || null,
-      })),
-      ...receipts.map((doc) => ({
-        _id: doc._id,
-        voucher_type: doc.voucher_type,
-        date: doc.date,
-        voucher_number: doc.voucher_number,
-        party_name: doc.party_name || null,
-        amount: Number(doc.amount) || 0,
-        status: doc.status || null,
-      })),
-    ].sort((left, right) => {
-      const leftDate = new Date(left.date).getTime();
-      const rightDate = new Date(right.date).getTime();
-
-      if (leftDate !== rightDate) {
-        return rightDate - leftDate;
-      }
-
-      return String(left.voucher_number || "").localeCompare(
-        String(right.voucher_number || "")
-      );
-    });
-
-    const totalCount = vouchers.length;
-    const paginatedVouchers = vouchers.slice(skip, skip + pageSize);
+    const paginatedVouchers = timelineRows.map((doc) => ({
+      _id: doc.voucher_id,
+      voucher_type: doc.voucher_type,
+      date: doc.date,
+      voucher_number: doc.voucher_number,
+      party_name: doc.party_name || null,
+      amount: Number(doc.amount) || 0,
+      status: doc.status || null,
+    }));
 
     return res.json({
       success: true,

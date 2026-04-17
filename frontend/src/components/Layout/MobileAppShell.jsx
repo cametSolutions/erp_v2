@@ -8,7 +8,10 @@ function MobileAppShell({ title, tabs }) {
           <h1 className="text-base font-semibold text-slate-900">{title}</h1>
         </header>
 
-        <main className="flex-1 overflow-y-auto px-4 py-4 pb-28">
+        <main
+          className="flex-1 overflow-y-auto px-4 py-4 pb-28"
+          data-route-scroll-reset="true"
+        >
           <Outlet />
         </main>
 

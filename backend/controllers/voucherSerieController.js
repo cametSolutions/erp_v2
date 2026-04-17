@@ -10,7 +10,7 @@ export const getSeriesByVoucher = async (req, res) => {
 
 
     const { voucherType } = req.query;
-    const cmp_id = req.params.cmp_id;
+    const cmp_id = req.companyId;
 
     if (!voucherType || !cmp_id) {
       return res
@@ -46,7 +46,7 @@ export const getSeriesByVoucher = async (req, res) => {
 
 export const createVoucherSeries = async (req, res) => {
   try {
-    const { cmp_id } = req.params;
+    const cmp_id = req.companyId;
     const primary_user_id = resolveAdminOwnerId(req);
     const {
       voucherType,
@@ -116,7 +116,8 @@ export const createVoucherSeries = async (req, res) => {
 
 export const updateVoucherSeries = async (req, res) => {
   try {
-    const { cmp_id, seriesId } = req.params;
+    const { seriesId } = req.params;
+    const cmp_id = req.companyId;
     const {
       voucherType,
       seriesName,
@@ -170,7 +171,7 @@ export const updateVoucherSeries = async (req, res) => {
 
 export const deleteVoucherSeriesById = async (req, res) => {
   try {
-    const { cmp_id } = req.params;
+    const cmp_id = req.companyId;
     const { voucherType, seriesId } = req.body;
 
     if (!voucherType || !seriesId) {
@@ -214,7 +215,7 @@ export const deleteVoucherSeriesById = async (req, res) => {
 // controller: getNextVoucherSeriesNumber
 export const getNextVoucherSeriesNumber = async (req, res) => {
   try {
-    const { cmp_id } = req.params;
+    const cmp_id = req.companyId;
     const { voucherType } = req.query;
 
     if (!cmp_id || !voucherType) {

@@ -11,13 +11,13 @@ export const getOutstandingByParty = async (req, res) => {
     const { partyId } = req.params;
 
     const {
-      cmp_id,
       page = 1,
       limit = 20,
       classification = "",
       isCancelled,
       positiveOnly = "",
     } = req.query;
+    const cmp_id = req.companyId;
 
     if (!cmp_id) {
       return res

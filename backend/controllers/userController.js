@@ -98,7 +98,7 @@ export const updateStaffUser = async (req, res) => {
   try {
     const adminId = req.user.id;
     const { id } = req.params;
-    const { userName, email, mobileNumber, role, password } = req.body;
+    const { userName, email, mobileNumber, password } = req.body;
 
     // Find staff belonging to this admin
     const user = await User.findOne({
@@ -114,7 +114,6 @@ export const updateStaffUser = async (req, res) => {
     if (userName) user.userName = userName.trim();
     if (email) user.email = email.trim();
     if (mobileNumber) user.mobileNumber = mobileNumber.trim();
-    if (role) user.role = role; // or drop this line if role must stay 'staff'
 
     // Only update password when a new one is provided;
     // pre('save') will hash it

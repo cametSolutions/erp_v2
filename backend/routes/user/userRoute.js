@@ -5,14 +5,15 @@ import { createStaffUser, listStaffUsers,
   updateStaffUser,
   deleteStaffUser, } from "../../controllers/userController.js";
 import { protect } from "../../middleware/authMiddleware.js";
+import { requireAdmin } from "../../middleware/adminMiddleware.js";
 
 const router = express.Router();
 
 
-router.post("/staff", protect, createStaffUser);
-router.get("/staff", protect, listStaffUsers);         // list
-router.get("/staff/:id", protect, getStaffUserById);   // get one
-router.put("/staff/:id", protect, updateStaffUser);    // update
-router.delete("/staff/:id", protect, deleteStaffUser); // delete
+router.post("/staff", protect, requireAdmin, createStaffUser);
+router.get("/staff", protect, requireAdmin, listStaffUsers);         // list
+router.get("/staff/:id", protect, requireAdmin, getStaffUserById);   // get one
+router.put("/staff/:id", protect, requireAdmin, updateStaffUser);    // update
+router.delete("/staff/:id", protect, requireAdmin, deleteStaffUser); // delete
 export default router;
 

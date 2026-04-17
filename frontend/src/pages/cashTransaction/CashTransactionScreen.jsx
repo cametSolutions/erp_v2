@@ -197,7 +197,10 @@ function AmountSettlementStep({
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto py-4">
+      <main
+        className="flex-1 overflow-y-auto py-4"
+        data-route-scroll-reset="true"
+      >
         <div className="mx-auto flex max-w-4xl flex-col gap-4">
           <DetailCard
             title="Settlement"
@@ -571,7 +574,10 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
         voucherTypeOverride={voucher_type}
       />
 
-      <main className="flex-1 overflow-y-auto px-3 py-4">
+      <main
+        className="flex-1 overflow-y-auto px-3 py-4"
+        data-route-scroll-reset="true"
+      >
         <div className="mx-auto flex max-w-4xl flex-col gap-4">
           <DetailCard
             title="Party"
