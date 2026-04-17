@@ -1,5 +1,6 @@
 // routes/tallyDataRoute.js
 import express from "express";
+import { validateTallyApiKey } from "../../middleware/tallyApiKeyMiddleware.js";
 import {
   addAccountGroups,
   addSubGroups,
@@ -11,9 +12,13 @@ import { addGodowns } from "../../controllers/tallyDataController.js/tallyGodown
 import { addProducts } from "../../controllers/tallyDataController.js/tallyProductController.js";
 import { saveAdditionalChargesFromTally } from "../../controllers/tallyDataController.js/additionalChargeController.js";
 import { importOutstandingFromTally } from "../../controllers/tallyDataController.js/outstandingController.js";
-import { getSaleOrdersForTally } from "../../controllers/tallyDataController.js/tallyExportController.js";
+import {
+  getReceiptsForTally,
+  getSaleOrdersForTally,
+} from "../../controllers/tallyDataController.js/tallyExportController.js";
 
 const router = express.Router();
+router.use(validateTallyApiKey);
 
 /**
  * Tally Data Routes
@@ -46,5 +51,6 @@ router.post("/outstanding", importOutstandingFromTally);
 /// tally export routes 
 // Sale Order export to Tally
 router.get("/get-sale-orders/:cmp_id/:sno", getSaleOrdersForTally);
+router.get("/get-receipts/:cmp_id/:sno", getReceiptsForTally);
 
 export default router;

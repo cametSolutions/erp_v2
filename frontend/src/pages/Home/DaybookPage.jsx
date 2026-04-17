@@ -70,6 +70,16 @@ function VoucherTypeBadge({ type }) {
   );
 }
 
+function CancelledBadge({ status }) {
+  if (status !== "cancelled") return null;
+
+  return (
+    <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">
+      Cancelled
+    </span>
+  );
+}
+
 export default function DaybookPage() {
   const cmpId = useSelector((state) => state.company.selectedCompanyId);
   const navigate = useNavigate();
@@ -261,6 +271,7 @@ export default function DaybookPage() {
                         {formatDateDisplay(voucher.date)}
                       </span>
                       <VoucherTypeBadge type={voucher.voucher_type} />
+                      <CancelledBadge status={voucher.status} />
                     </div>
                   </div>
 

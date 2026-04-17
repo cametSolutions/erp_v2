@@ -387,7 +387,7 @@ export const updateParty = async (req, res) => {
     const party = await Party.findOneAndUpdate(
       { _id: id, Primary_user_id: owner },
       updatePayload,
-      { new: true, runValidators: true },
+      { returnDocument: "after", runValidators: true },
     );
 
     res.json({ message: "Party updated", party });

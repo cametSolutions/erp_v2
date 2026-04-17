@@ -3,7 +3,7 @@ import { Landmark } from "lucide-react";
 import { useSelector } from "react-redux";
 
 import ErrorRetryState from "@/components/common/ErrorRetryState";
-import { usePartyListQuery } from "@/hooks/queries/partyQueries";
+import { useCashBankLedgerBalancesQuery } from "@/hooks/queries/cashTransactionQueries";
 
 function formatCurrency(value) {
   return `Rs. ${Number(value || 0).toLocaleString("en-IN", {
@@ -14,17 +14,13 @@ function formatCurrency(value) {
 
 export default function BankBalanceListPage() {
   const cmp_id = useSelector((state) => state.company?.selectedCompanyId || "");
-  const query = usePartyListQuery({
-    cmp_id,
-    page: 1,
-    limit: 1000,
-    partyType: "bank",
+  const query = useCashBankLedgerBalancesQuery(cmp_id, "bank", {
     enabled: Boolean(cmp_id),
   });
 
-  const items = query.data?.items || [];
+  const items = query.data || [];
   const total = useMemo(
-    () => items.reduce((sum, item) => sum + (Number(item?.openingBalanceAmount) || 0), 0),
+    () => items.reduce((sum, item) => sum + (Number(item?.current_balance) || 0), 0),
     [items],
   );
 
@@ -96,7 +92,7 @@ export default function BankBalanceListPage() {
                     <Landmark className="h-4 w-4" />
                   </span>
                   <span className="truncate max-w-[200px] text-sm font-semibold text-slate-900">
-                    {item.partyName || "--"}
+                    {item.cash_bank_name || "--"}
                   </span>
                 </span>
                 {/* <p className="mt-1 truncate pl-10 text-xs text-slate-500">
@@ -105,7 +101,7 @@ export default function BankBalanceListPage() {
                 </p> */}
               </div>
               <span className="pl-3 text-sm font-semibold text-slate-800">
-                {formatCurrency(item?.openingBalanceAmount)}
+                {formatCurrency(item?.current_balance)}
               </span>
             </div>
           ))

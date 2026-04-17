@@ -32,5 +32,6 @@ router.get(
 );
 router.get("/saleOrders/:saleOrderId", protect, saleOrderController.getSaleOrderById);
 router.put("/saleOrders/:id", protect, saleOrderController.updateSaleOrder);
+router.put("/saleOrders/:id/cancel", protect, saleOrderController.cancelSaleOrder);
 router.post("/createSaleOrder", protect, saleOrderController.createSaleOrder);
 export default router;

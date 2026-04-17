@@ -10,8 +10,14 @@ export const getOutstandingByParty = async (req, res) => {
     const owner = resolveAdminOwnerId(req);
     const { partyId } = req.params;
 
-    // NEW: read page and limit from query
-    const { cmp_id, page = 1, limit = 20 } = req.query;
+    const {
+      cmp_id,
+      page = 1,
+      limit = 20,
+      classification = "",
+      isCancelled,
+      positiveOnly = "",
+    } = req.query;
 
     if (!cmp_id) {
       return res
@@ -30,16 +36,25 @@ export const getOutstandingByParty = async (req, res) => {
       Primary_user_id: owner,
       cmp_id: cmpObjectId,
       party_id: partyObjectId,
-      isCancelled: false,
+      isCancelled:
+        isCancelled === undefined ? false : String(isCancelled).toLowerCase() === "true",
     };
 
-    // NEW: use skip + limit and also count total
+    if (classification) {
+      baseFilter.classification = classification;
+    }
+
+    if (String(positiveOnly).toLowerCase() === "true") {
+      baseFilter.bill_pending_amt = { $gt: 0 };
+    }
+
     const [items, total] = await Promise.all([
       Outstanding.find(
         baseFilter,
         {
           bill_no: 1,
           bill_date: 1,
+          bill_amount: 1,
           bill_pending_amt: 1,
           classification: 1,
           _id: 1,
@@ -54,7 +69,6 @@ export const getOutstandingByParty = async (req, res) => {
 
     const hasMore = skip + items.length < total;
 
-    // NEW: return page + hasMore for useInfiniteQuery
     return res.json({
       items,
       total,

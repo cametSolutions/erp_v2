@@ -1,7 +1,7 @@
 // controllers/tallyController.js
 import mongoose from "mongoose";
+import Receipt from "../../Model/Receipt.js";
 import SaleOrder from "../../Model/SaleOrder.js";
-// import receiptModel from "../../Model/"; // adjust path/name
 
 const fetchBySerial = async (Model, cmp_id, sno, res, label) => {
   try {
@@ -56,5 +56,5 @@ export const getSaleOrdersForTally = async (req, res) => {
 
 export const getReceiptsForTally = async (req, res) => {
   const { cmp_id, sno } = req.params;
-  return fetchBySerial(receiptModel, cmp_id, sno, res, "receipt");
+  return fetchBySerial(Receipt, cmp_id, sno, res, "receipt");
 };

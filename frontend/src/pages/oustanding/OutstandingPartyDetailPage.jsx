@@ -34,6 +34,7 @@ export default function OutstandingPartyDetailPage() {
     partyId,
     cmp_id: cmp_id,
     limit: 20,
+    positiveOnly: true,
   });
 
   useEffect(() => {
@@ -67,7 +68,10 @@ export default function OutstandingPartyDetailPage() {
     return () => observer.disconnect();
   }, [fetchNextPage, hasNextPage, isFetchingNextPage]);
 
-  const bills = data?.pages?.flatMap((page) => page?.items || []) || [];
+  const bills =
+    data?.pages
+      ?.flatMap((page) => page?.items || [])
+      .filter((bill) => Math.abs(Number(bill?.bill_pending_amt) || 0) > 0) || [];
 
   const { filteredBills, total, partyName } = useMemo(() => {
     const resolvedPartyName =
