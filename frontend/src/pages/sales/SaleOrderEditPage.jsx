@@ -152,7 +152,10 @@ export default function SaleOrderEditPage() {
         lockedSeries={transaction.selectedSeries}
       />
 
-      <main className="flex-1 overflow-y-auto px-1 py-4">
+      <main
+        className="flex-1 overflow-y-auto px-1 py-4"
+        data-route-scroll-reset="true"
+      >
         <div className="mx-auto flex max-w-5xl flex-col gap-4">
           <PartySection locked />
           <DetailsSection />

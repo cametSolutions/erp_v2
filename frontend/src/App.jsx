@@ -3,6 +3,7 @@ import { Suspense, useEffect } from "react";
 import { useDispatch } from "react-redux";
 
 import { authService } from "./api/services/auth.service";
+import RouteScrollReset from "./components/Layout/RouteScrollReset";
 import CustomMoonLoader from "./components/Loaders/CustomMoonLoader";
 import { appRoutes } from "./routes/appRoutes";
 import { authRoutes } from "./routes/authRoutes";
@@ -44,12 +45,15 @@ function App() {
 
   return (
     <Suspense fallback={<CustomMoonLoader />}>
-      <Routes>
-        {authRoutes}
-        {appRoutes}
-        {masterRoutes}
-        <Route path="*" element={<Navigate to={ROUTES.login} replace />} />
-      </Routes>
+      <>
+        <RouteScrollReset />
+        <Routes>
+          {authRoutes}
+          {appRoutes}
+          {masterRoutes}
+          <Route path="*" element={<Navigate to={ROUTES.login} replace />} />
+        </Routes>
+      </>
     </Suspense>
   );
 }
