@@ -93,8 +93,8 @@ export const addParty = async (req, res) => {
   try {
     const owner = resolveAdminOwnerId(req);
     const createdBy = resolveCurrentUserId(req);
+    const cmp_id = req.companyId;
     let {
-      cmp_id,
       accountGroup,
       subGroup,
       partyName,
@@ -172,13 +172,13 @@ export const listParties = async (req, res) => {
   try {
     const owner = resolveAdminOwnerId(req);
     const {
-      cmp_id,
       page = 1,
       limit = 20,
       search = "",
       partyType = "",
       ledgerType = "all", // all | receivable | payable
     } = req.query;
+    const cmp_id = req.companyId;
 
     if (!cmp_id) {
       return res.status(400).json({ message: "cmp_id (company) is required" });
@@ -364,7 +364,7 @@ export const updateParty = async (req, res) => {
     }
 
     const accountGroup = await resolveAccountGroupId({
-      cmp_id: req.body?.cmp_id || existingParty.cmp_id,
+      cmp_id: existingParty.cmp_id,
       accountGroup: req.body?.accountGroup,
       owner,
     });
@@ -377,6 +377,9 @@ export const updateParty = async (req, res) => {
 
     const updatePayload = {
       ...req.body,
+      cmp_id: existingParty.cmp_id,
+      Primary_user_id: existingParty.Primary_user_id,
+      created_by: existingParty.created_by,
       accountGroup,
       subGroup:
         req.body?.subGroup === "" || req.body?.subGroup == null

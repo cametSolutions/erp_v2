@@ -94,7 +94,8 @@ function parsePositiveInteger(value, fallback) {
 
 export async function getVoucherTotalsSummary(req, res) {
   try {
-    const { cmpId, date } = req.query;
+    const { date } = req.query;
+    const cmpId = req.companyId;
 
     if (!cmpId) {
       return res.status(400).json({
@@ -179,7 +180,8 @@ export async function getVoucherTotalsSummary(req, res) {
 
 export async function getVouchers(req, res) {
   try {
-    const { cmpId, from, to, voucherType, page, limit } = req.query;
+    const { from, to, voucherType, page, limit } = req.query;
+    const cmpId = req.companyId;
 
     if (!cmpId) {
       return res.status(400).json({

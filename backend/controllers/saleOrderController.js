@@ -1,9 +1,9 @@
 import mongoose from "mongoose";
 
+import Party from "../Model/partySchema.js";
 import SaleOrder from "../Model/SaleOrder.js";
 import {
   applyTransactionCreatorScope,
-  getAccessibleCompanyIds,
 } from "../utils/authScope.js";
 import { calculateSaleOrderTotals } from "../services/calculation.service.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
@@ -300,13 +300,26 @@ export async function createSaleOrder(req, res) {
   try {
     let createdSaleOrder = null;
     const body = req.body || {};
-    const cmpId = body.cmpId || body.cmp_id;
+    const cmpId = req.companyId;
     const selectedSeries = normalizeSelectedSeries(body);
     const userId = req.user?._id || req.user?.id || null;
+    const partyId = body.party?._id || body.party?.id || null;
 
     logTotalsMismatch(body);
 
     await session.withTransaction(async () => {
+      const party = await Party.findOne({
+        _id: partyId,
+        cmp_id: cmpId,
+      })
+        .select("_id")
+        .session(session)
+        .lean();
+
+      if (!party) {
+        throw new Error("PARTY_NOT_FOUND");
+      }
+
       const nextVoucher = await getNextVoucherNumber({
         cmpId,
         voucherType: "saleOrder",
@@ -341,6 +354,14 @@ export async function createSaleOrder(req, res) {
     });
   } catch (error) {
     console.error("createSaleOrder error:", error);
+
+    if (error.message === "PARTY_NOT_FOUND") {
+      return res.status(400).json({
+        success: false,
+        message: "Selected party does not belong to this company",
+      });
+    }
+
     return res.status(500).json({
       success: false,
       message: error.message || "Failed to create sale order",
@@ -353,7 +374,7 @@ export async function createSaleOrder(req, res) {
 export async function getSaleOrderById(req, res) {
   try {
     const { saleOrderId } = req.params;
-    const cmpId = req.query.cmpId;
+    const cmpId = req.companyId;
 
     if (!saleOrderId) {
       return res.status(400).json({
@@ -363,12 +384,7 @@ export async function getSaleOrderById(req, res) {
     }
 
     const filter = applyTransactionCreatorScope(req, { _id: saleOrderId });
-    if (cmpId) {
-      filter.cmp_id = cmpId;
-    } else {
-      const accessibleCompanyIds = await getAccessibleCompanyIds(req);
-      filter.cmp_id = { $in: accessibleCompanyIds };
-    }
+    filter.cmp_id = cmpId;
 
     const saleOrder = await SaleOrder.findOne(filter).lean();
 
@@ -400,8 +416,9 @@ export async function updateSaleOrder(req, res) {
   try {
     const saleOrderId = req.params.saleOrderId || req.params.id;
     const body = req.body || {};
-    const cmpId = body.cmpId || body.cmp_id;
+    const cmpId = req.companyId;
     const userId = req.user?._id || req.user?.id || null;
+    const partyId = body.party?._id || body.party?.id || null;
 
     if (!saleOrderId || !cmpId) {
       return res.status(400).json({
@@ -415,6 +432,20 @@ export async function updateSaleOrder(req, res) {
     logTotalsMismatch(body);
 
     await session.withTransaction(async () => {
+      if (partyId) {
+        const party = await Party.findOne({
+          _id: partyId,
+          cmp_id: cmpId,
+        })
+          .select("_id")
+          .session(session)
+          .lean();
+
+        if (!party) {
+          throw new Error("PARTY_NOT_FOUND");
+        }
+      }
+
       const saleOrder = await SaleOrder.findOne(
         applyTransactionCreatorScope(req, {
         _id: saleOrderId,
@@ -465,6 +496,13 @@ export async function updateSaleOrder(req, res) {
       });
     }
 
+    if (error.message === "PARTY_NOT_FOUND") {
+      return res.status(400).json({
+        success: false,
+        message: "Selected party does not belong to this company",
+      });
+    }
+
     if (error.message?.startsWith("CANNOT_EDIT_")) {
       const status = error.message.replace("CANNOT_EDIT_", "");
       return res.status(400).json({
@@ -487,8 +525,7 @@ export async function cancelSaleOrder(req, res) {
 
   try {
     const saleOrderId = req.params.saleOrderId || req.params.id;
-    const body = req.body || {};
-    const cmpId = body.cmpId || body.cmp_id;
+    const cmpId = req.companyId;
     const userId = req.user?._id || req.user?.id || null;
 
     if (!saleOrderId || !cmpId) {

@@ -172,6 +172,30 @@ export async function createCashTransaction(data = {}, req) {
     let createdCashTransaction = null;
 
     await session.withTransaction(async () => {
+      const [party, cashBank] = await Promise.all([
+        Party.findOne({ _id: data.party_id, cmp_id: data.cmp_id })
+          .session(session)
+          .lean(),
+        Party.findOne({
+          _id: data.cash_bank_id,
+          cmp_id: data.cmp_id,
+          partyType: data.cash_bank_type,
+        })
+          .session(session)
+          .lean(),
+      ]);
+
+      if (!party) {
+        throw createHttpError("Selected party does not belong to this company", 400);
+      }
+
+      if (!cashBank) {
+        throw createHttpError(
+          "Selected cash/bank ledger does not belong to this company",
+          400
+        );
+      }
+
       const nextVoucher = await getNextVoucherNumber({
         cmpId: data.cmp_id,
         voucherType: data.voucher_type,
@@ -287,11 +311,32 @@ export async function createCashTransaction(data = {}, req) {
           continue;
         }
 
-        await Outstanding.findByIdAndUpdate(
-          item.outstanding,
-          { $inc: { bill_pending_amt: -Number(item.settled_amount) || 0 } },
-          { session }
-        );
+        const outstanding = await Outstanding.findOne({
+          _id: item.outstanding,
+          cmp_id: data.cmp_id,
+          party_id: data.party_id,
+          isCancelled: false,
+        }).session(session);
+
+        if (!outstanding) {
+          throw createHttpError(
+            "Outstanding bill not found for the selected company and party",
+            400
+          );
+        }
+
+        const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
+        const settledAmount = Number(item.settled_amount) || 0;
+
+        if (settledAmount <= 0 || settledAmount > currentPendingAmount) {
+          throw createHttpError(
+            "Settled amount cannot exceed the current pending amount",
+            400
+          );
+        }
+
+        outstanding.bill_pending_amt = currentPendingAmount - settledAmount;
+        await outstanding.save({ session });
       }
 
       await createAdvanceReceiptOutstanding({

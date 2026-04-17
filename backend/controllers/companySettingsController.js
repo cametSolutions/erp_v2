@@ -5,7 +5,7 @@ import Party from "../Model/partySchema.js";
 
 const resolveScope = (req) => ({
   Primary_user_id: req.user?.owner || req.user?.id || null,
-  cmp_id: req.user?.cmp_id || null,
+  cmp_id: req.companyId || null,
 });
 
 const buildUpdateFields = (payload = {}) => {
