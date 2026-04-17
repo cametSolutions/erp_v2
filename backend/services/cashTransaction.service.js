@@ -9,6 +9,10 @@ import Receipt from "../Model/Receipt.js";
 import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import {
+  createVoucherTimelineEntry,
+  updateVoucherTimelineEntry,
+} from "./voucherTimeline.service.js";
+import {
   applyTransactionCreatorScope,
   getAccessibleCompanyIds,
   resolveAdminOwnerId,
@@ -354,6 +358,21 @@ export async function createCashTransaction(data = {}, req) {
       createdCashTransaction = await Receipt.findById(cashTransaction._id)
         .session(session)
         .lean();
+
+      await createVoucherTimelineEntry(
+        {
+          cmp_id: cashTransaction.cmp_id,
+          voucher_type: cashTransaction.voucher_type,
+          voucher_id: cashTransaction._id,
+          date: cashTransaction.date,
+          party_id: cashTransaction.party_id,
+          party_name: cashTransaction.party_name,
+          voucher_number: cashTransaction.voucher_number,
+          amount: Number(cashTransaction.amount) || 0,
+          status: cashTransaction.status || null,
+        },
+        session
+      );
     });
 
     return createdCashTransaction;
@@ -476,6 +495,17 @@ export async function cancelCashTransaction(id, data = {}, req) {
       });
 
       updatedCashTransaction = transaction.toObject();
+
+      await updateVoucherTimelineEntry(
+        {
+          voucher_id: transaction._id,
+          voucher_type: transaction.voucher_type,
+        },
+        {
+          status: transaction.status || null,
+        },
+        session
+      );
     });
 
     return updatedCashTransaction;

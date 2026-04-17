@@ -87,10 +87,9 @@ export default function TransactionHeader({
   } = useVoucherSeries({ cmp_id, voucherType, enabled: !editMode });
 
   const seriesList = data?.series || [];
-  const hydratedSeries =
+  const matchedSelectedSeries =
     !editMode && selectedSeries?._id
-      ? seriesList.find((series) => series._id === selectedSeries._id) ||
-        selectedSeries
+      ? seriesList.find((series) => series._id === selectedSeries._id) || null
       : null;
   const apiDefault =
     !editMode
@@ -98,7 +97,9 @@ export default function TransactionHeader({
         seriesList[0] ||
         null
       : null;
-  const effectiveSeries = editMode ? lockedSeries || selectedSeries : hydratedSeries || apiDefault;
+  const effectiveSeries = editMode
+    ? lockedSeries || selectedSeries
+    : matchedSelectedSeries || apiDefault;
 
   const selectedDate = getSafeDate(transactionDate);
   const voucherParts = editMode
@@ -126,7 +127,7 @@ export default function TransactionHeader({
   useEffect(() => {
     if (editMode) return;
     if (!cmp_id || !effectiveSeries) return;
-    if (hydratedSeries?._id === effectiveSeries._id) return;
+    if (matchedSelectedSeries?._id === effectiveSeries._id) return;
 
     dispatch(
       setSelectedSeries({
@@ -134,7 +135,7 @@ export default function TransactionHeader({
         series: effectiveSeries,
       })
     );
-  }, [cmp_id, dispatch, editMode, effectiveSeries, hydratedSeries]);
+  }, [cmp_id, dispatch, editMode, effectiveSeries, matchedSelectedSeries]);
 
   // expose clean data to parent (separated prefix/number/suffix)
   useEffect(() => {

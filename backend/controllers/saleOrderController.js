@@ -6,6 +6,10 @@ import {
   applyTransactionCreatorScope,
 } from "../utils/authScope.js";
 import { calculateSaleOrderTotals } from "../services/calculation.service.js";
+import {
+  createVoucherTimelineEntry,
+  updateVoucherTimelineEntry,
+} from "../services/voucherTimeline.service.js";
 import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
 
@@ -344,6 +348,21 @@ export async function createSaleOrder(req, res) {
 
       const [created] = await SaleOrder.create([saleOrderDoc], { session });
       createdSaleOrder = await SaleOrder.findById(created._id).session(session).lean();
+
+      await createVoucherTimelineEntry(
+        {
+          cmp_id: created.cmp_id,
+          voucher_type: created.voucher_type,
+          voucher_id: created._id,
+          date: created.date,
+          party_id: created.party_id,
+          party_name: created.party_snapshot?.name || "",
+          voucher_number: created.voucher_number,
+          amount: Number(created.totals?.final_amount) || 0,
+          status: created.status || null,
+        },
+        session
+      );
     });
 
     return res.status(201).json({
@@ -478,6 +497,22 @@ export async function updateSaleOrder(req, res) {
 
       await saleOrder.save({ session });
       updatedSaleOrder = saleOrder.toObject();
+
+      await updateVoucherTimelineEntry(
+        {
+          voucher_id: saleOrder._id,
+          voucher_type: saleOrder.voucher_type,
+        },
+        {
+          date: saleOrder.date,
+          party_id: saleOrder.party_id,
+          party_name: saleOrder.party_snapshot?.name || "",
+          voucher_number: saleOrder.voucher_number,
+          amount: Number(saleOrder.totals?.final_amount) || 0,
+          status: saleOrder.status || null,
+        },
+        session
+      );
     });
 
     return res.status(200).json({
@@ -558,6 +593,17 @@ export async function cancelSaleOrder(req, res) {
 
       await saleOrder.save({ session });
       cancelledSaleOrder = saleOrder.toObject();
+
+      await updateVoucherTimelineEntry(
+        {
+          voucher_id: saleOrder._id,
+          voucher_type: saleOrder.voucher_type,
+        },
+        {
+          status: saleOrder.status || null,
+        },
+        session
+      );
     });
 
     return res.status(200).json({
