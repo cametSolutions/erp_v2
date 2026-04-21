@@ -148,17 +148,10 @@ export const registerCompany = async (req, res) => {
       });
     }
 
+    await seedDefaultPrintConfigs(company._id, { session });
+
     await session.commitTransaction();
     session.endSession();
-
-    try {
-      await seedDefaultPrintConfigs(company._id);
-    } catch (seedError) {
-      console.error(
-        `Failed to seed print configs for cmp_id: ${company._id}`,
-        seedError
-      );
-    }
 
     return res.status(201).json({
       message: "Company registered successfully",
