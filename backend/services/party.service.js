@@ -3,6 +3,12 @@ import mongoose from "mongoose";
 import Party from "../Model/partySchema.js";
 import AccountGroup from "../Model/AccountGroup.js";
 import Outstanding from "../Model/oustandingShcema.js";
+import SaleOrder from "../Model/SaleOrder.js";
+import Receipt from "../Model/Receipt.js";
+import PartyLedger from "../Model/PartyLedger.js";
+import CashBankLedger from "../Model/CashBankLedger.js";
+import PartyMonthlyBalance from "../Model/PartyMonthlyBalance.js";
+import VoucherTimeline from "../Model/VoucherTimeline.js";
 import {
   resolveAdminOwnerId,
   resolveCurrentUserId,
@@ -308,14 +314,42 @@ export async function updateParty(id, data = {}, req) {
 
 export async function deleteParty(id, req) {
   const owner = resolveAdminOwnerId(req);
-  const party = await Party.findOneAndDelete({
+  const party = await Party.findOne({
     _id: id,
     Primary_user_id: owner,
-  });
+  }).lean();
 
   if (!party) {
     throw createHttpError("Party not found", 404);
   }
+
+  const dependencyChecks = await Promise.all([
+    SaleOrder.exists({ cmp_id: party.cmp_id, party_id: party._id }),
+    Receipt.exists({
+      cmp_id: party.cmp_id,
+      $or: [{ party_id: party._id }, { cash_bank_id: party._id }],
+    }),
+    Outstanding.exists({ cmp_id: party.cmp_id, party_id: party._id }),
+    PartyLedger.exists({ cmp_id: party.cmp_id, party_id: party._id }),
+    CashBankLedger.exists({
+      cmp_id: party.cmp_id,
+      $or: [{ party_id: party._id }, { cash_bank_id: party._id }],
+    }),
+    PartyMonthlyBalance.exists({ cmp_id: party.cmp_id, party_id: party._id }),
+    VoucherTimeline.exists({ cmp_id: party.cmp_id, party_id: party._id }),
+  ]);
+
+  if (dependencyChecks.some(Boolean)) {
+    throw createHttpError(
+      "Cannot delete party because financial records exist",
+      409,
+    );
+  }
+
+  await Party.deleteOne({
+    _id: party._id,
+    Primary_user_id: owner,
+  });
 
   return party;
 }

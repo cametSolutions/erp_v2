@@ -2,6 +2,17 @@ import { randomBytes } from "crypto";
 import mongoose from "mongoose";
 
 import Company from "../Model/CompanySchema.js";
+import Party from "../Model/partySchema.js";
+import Product from "../Model/ProductSchema.js";
+import Receipt from "../Model/Receipt.js";
+import SaleOrder from "../Model/SaleOrder.js";
+import Outstanding from "../Model/oustandingShcema.js";
+import PartyLedger from "../Model/PartyLedger.js";
+import CashBankLedger from "../Model/CashBankLedger.js";
+import VoucherSeries from "../Model/VoucherSeriesSchema.js";
+import VoucherTimeline from "../Model/VoucherTimeline.js";
+import CompanySettings from "../Model/CompanySettings.js";
+import PrintConfiguration from "../Model/PrintConfiguration.js";
 import { createDefaultVoucherSeries } from "../helpers/createDefaultVoucherSeries.js";
 import { seedDefaultPrintConfigs } from "../utils/seedPrintConfigs.js";
 
@@ -190,11 +201,35 @@ export async function updateCompany(id, data = {}, req) {
 }
 
 export async function deleteCompany(id, { owner } = {}) {
-  const company = await Company.findOneAndDelete({ _id: id, owner });
+  const company = await Company.findOne({ _id: id, owner }).lean();
 
   if (!company) {
     throw createHttpError("Company not found", 404);
   }
+
+  const companyId = company._id;
+  const dependencyChecks = await Promise.all([
+    SaleOrder.exists({ cmp_id: companyId }),
+    Receipt.exists({ cmp_id: companyId }),
+    Outstanding.exists({ cmp_id: companyId }),
+    PartyLedger.exists({ cmp_id: companyId }),
+    CashBankLedger.exists({ cmp_id: companyId }),
+    VoucherTimeline.exists({ cmp_id: companyId }),
+    Party.exists({ cmp_id: companyId }),
+    Product.exists({ cmp_id: companyId }),
+    // VoucherSeries.exists({ cmp_id: companyId }),
+    // CompanySettings.exists({ cmp_id: companyId }),
+    // PrintConfiguration.exists({ cmp_id: companyId }),
+  ]);
+
+  if (dependencyChecks.some(Boolean)) {
+    throw createHttpError(
+      "Cannot delete company because related transactional data exists",
+      409,
+    );
+  }
+
+  await Company.deleteOne({ _id: companyId, owner });
 
   return company;
 }
