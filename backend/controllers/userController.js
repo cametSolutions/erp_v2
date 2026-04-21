@@ -1,5 +1,10 @@
 // controllers/userController.js
 import User from "../Model/UserSchema.js";
+import Party from "../Model/partySchema.js";
+import SaleOrder from "../Model/SaleOrder.js";
+import Receipt from "../Model/Receipt.js";
+import PartyLedger from "../Model/PartyLedger.js";
+import CashBankLedger from "../Model/CashBankLedger.js";
 
 export const createStaffUser = async (req, res) => {
   try {
@@ -139,7 +144,7 @@ export const deleteStaffUser = async (req, res) => {
     const adminId = req.user.id;
     const { id } = req.params;
 
-    const user = await User.findOneAndDelete({
+    const user = await User.findOne({
       _id: id,
       owner: adminId,
       role: "staff",
@@ -149,8 +154,37 @@ export const deleteStaffUser = async (req, res) => {
       return res.status(404).json({ message: "User not found" });
     }
 
+    const dependencyChecks = await Promise.all([
+      SaleOrder.exists({
+        $or: [{ created_by: user._id }, { updated_by: user._id }],
+      }),
+      Receipt.exists({
+        $or: [
+          { created_by: user._id },
+          { updated_by: user._id },
+          { cancelled_by: user._id },
+        ],
+      }),
+      Party.exists({ created_by: user._id }),
+      PartyLedger.exists({ created_by: user._id }),
+      CashBankLedger.exists({ created_by: user._id }),
+    ]);
+
+    if (dependencyChecks.some(Boolean)) {
+      return res.status(409).json({
+        message: "Cannot delete user because related transactional data exists",
+      });
+    }
+
+    await User.deleteOne({
+      _id: user._id,
+      owner: adminId,
+      role: "staff",
+    });
+
     res.json({ message: "User deleted" });
   } catch (err) {
+    console.error("deleteStaffUser error:", err);
     res.status(500).json({ message: "Failed to delete user" });
   }
 };
