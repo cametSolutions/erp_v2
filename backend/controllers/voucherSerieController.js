@@ -2,7 +2,6 @@
 
 // controllers/voucherSeriesController.js
 import VoucherSeries from "../Model/VoucherSeriesSchema.js";
-import { createSaleOrder, getSaleOrderById } from "./saleOrderController.js";
 import { resolveAdminOwnerId } from "../utils/authScope.js";
 
 export const getSeriesByVoucher = async (req, res) => {
@@ -172,7 +171,8 @@ export const updateVoucherSeries = async (req, res) => {
 export const deleteVoucherSeriesById = async (req, res) => {
   try {
     const cmp_id = req.companyId;
-    const { voucherType, seriesId } = req.body;
+    const { voucherType } = req.body;
+    const seriesId = req.params.seriesId || req.body?.seriesId;
 
     if (!voucherType || !seriesId) {
       return res
@@ -233,4 +233,3 @@ export const getNextVoucherSeriesNumber = async (req, res) => {
   }
 };
 
-export { createSaleOrder, getSaleOrderById };

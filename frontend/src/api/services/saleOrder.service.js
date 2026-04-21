@@ -136,7 +136,7 @@ export function buildUpdateSaleOrderPayload({
 }
 
 export async function createSaleOrder(payload) {
-  const response = await api.post("/sUsers/createSaleOrder", payload, {
+  const response = await api.post("/sale-orders", payload, {
     headers: { "Content-Type": "application/json" },
     withCredentials: true,
   });
@@ -147,7 +147,7 @@ export async function createSaleOrder(payload) {
 export async function getSaleOrderById(saleOrderId, { cmpId, ...options } = {}) {
   if (!saleOrderId) return null;
 
-  const response = await api.get(`/sUsers/saleOrders/${saleOrderId}`, {
+  const response = await api.get(`/sale-orders/${saleOrderId}`, {
     params: cmpId ? { cmpId } : {},
     skipGlobalLoader: true,
     ...options,
@@ -157,7 +157,7 @@ export async function getSaleOrderById(saleOrderId, { cmpId, ...options } = {}) 
 }
 
 export async function updateSaleOrder(saleOrderId, payload) {
-  const response = await api.put(`/sUsers/saleOrders/${saleOrderId}`, payload, {
+  const response = await api.put(`/sale-orders/${saleOrderId}`, payload, {
     headers: { "Content-Type": "application/json" },
     withCredentials: true,
   });
@@ -166,7 +166,7 @@ export async function updateSaleOrder(saleOrderId, payload) {
 }
 
 export async function cancelSaleOrder(saleOrderId, payload) {
-  const response = await api.put(`/sUsers/saleOrders/${saleOrderId}/cancel`, payload, {
+  const response = await api.put(`/sale-orders/${saleOrderId}/cancel`, payload, {
     headers: { "Content-Type": "application/json" },
     withCredentials: true,
   });

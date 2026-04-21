@@ -15,14 +15,14 @@ export const voucherSeriesKeys = {
 
 async function fetchVoucherSeries({ cmp_id, voucherType }) {
   const res = await api.get(
-    `/sUsers/getSeriesByVoucher/${cmp_id}?voucherType=${voucherType}&restrict=true`,
+    `/voucher-series/${cmp_id}?voucherType=${voucherType}&restrict=true`,
     { withCredentials: true },
   );
   return res.data; // { series: [...] }
 }
 
 async function fetchNextVoucherSeriesNumber({ cmp_id, voucherType }) {
-  const res = await api.get(`/sUsers/nextVoucherSeriesNumber/${cmp_id}`, {
+  const res = await api.get(`/voucher-series/${cmp_id}/next-number`, {
     params: { voucherType },
     withCredentials: true,
   });
