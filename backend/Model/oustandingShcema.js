@@ -95,6 +95,40 @@ const outstandingSchema = new Schema(
   }
 );
 
+// Supports party outstanding lookups and per-party totals on active rows.
+outstandingSchema.index({
+  Primary_user_id: 1,
+  cmp_id: 1,
+  party_id: 1,
+  isCancelled: 1,
+});
+
+// Supports filtered outstanding lists that also sort by bill date.
+outstandingSchema.index({
+  Primary_user_id: 1,
+  cmp_id: 1,
+  party_id: 1,
+  classification: 1,
+  isCancelled: 1,
+  bill_date: 1,
+});
+
+// Supports active receivable/payable aggregation by company and party bucket.
+outstandingSchema.index({
+  Primary_user_id: 1,
+  cmp_id: 1,
+  isCancelled: 1,
+  classification: 1,
+  party_id: 1,
+});
+
+// Supports advance receipt cleanup and document-linked outstanding lookups.
+outstandingSchema.index({
+  cmp_id: 1,
+  billId: 1,
+  source: 1,
+});
+
 const Outstanding = model("Outstanding", outstandingSchema);
 
 export default Outstanding;
