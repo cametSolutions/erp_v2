@@ -8,7 +8,7 @@ import {
   ReceiptText,
   User2,
 } from "lucide-react";
-import { useDispatch, useSelector } from "react-redux";
+import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
 
 import { cashTransactionService } from "@/api/services/cashTransaction.service";
@@ -20,14 +20,10 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateCashTransaction } from "@/hooks/mutations/useCreateCashTransaction";
 import { useSettlementOutstandingQuery } from "@/hooks/queries/outstandingQueries";
+import useCashTransactionDraft from "@/hooks/useCashTransactionDraft";
 import { ROUTES } from "@/routes/paths";
-import { setCompany, setVoucherType } from "@/store/slices/transactionSlice";
 import calculateAutoSettlement from "@/utils/calculateAutoSettlement";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
-
-function getReceiptDraftStorageKey(cmp_id, voucher_type) {
-  return `cash-transaction-draft-${voucher_type || "receipt"}-${cmp_id || "default"}`;
-}
 
 function formatCurrency(value) {
   return `Rs. ${(Number(value) || 0).toFixed(2)}`;
@@ -320,37 +316,38 @@ function AmountSettlementStep({
 
 export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   const cmp_id = useSelector((state) => state.company.selectedCompanyId);
-  const transactionDate = useSelector((state) => state.transaction.transactionDate);
-  const dispatch = useDispatch();
   const navigate = useNavigate();
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
   const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
-  const [party, setParty] = useState(null);
-  const [cashBank, setCashBank] = useState(null);
   const [partySheetOpen, setPartySheetOpen] = useState(false);
   const [cashBankSheetOpen, setCashBankSheetOpen] = useState(false);
-  const [instrumentType, setInstrumentType] = useState("cash");
-  const [amount, setAmount] = useState(0);
-  const [bills, setBills] = useState([]);
-  const [settlementDetails, setSettlementDetails] = useState([]);
-  const [narration, setNarration] = useState("");
-  const [chequeNumber, setChequeNumber] = useState("");
-  const [chequeDate, setChequeDate] = useState(null);
-  const [step, setStep] = useState("main");
-  const draftStorageKey = getReceiptDraftStorageKey(cmp_id, voucher_type);
-
-  useEffect(() => {
-    if (!cmp_id) return;
-    dispatch(setCompany({ cmp_id }));
-  }, [cmp_id, dispatch]);
-
-  useEffect(() => {
-    dispatch(setVoucherType(voucher_type));
-
-    return () => {
-      dispatch(setVoucherType("saleOrder"));
-    };
-  }, [dispatch, voucher_type]);
+  const {
+    transactionDate,
+    setTransactionDate,
+    selectedSeries,
+    setSelectedSeries,
+    party,
+    setParty,
+    cashBank,
+    setCashBank,
+    instrumentType,
+    setInstrumentType,
+    amount,
+    setAmount,
+    bills,
+    setBills,
+    settlementDetails,
+    setSettlementDetails,
+    narration,
+    setNarration,
+    chequeNumber,
+    setChequeNumber,
+    chequeDate,
+    setChequeDate,
+    step,
+    setStep,
+    clearDraft,
+  } = useCashTransactionDraft({ cmp_id, voucher_type });
 
   useEffect(() => {
     if (instrumentType === "cash") {
@@ -368,69 +365,6 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
 
     return () => resetHeaderOptions();
   }, [resetHeaderOptions, setHeaderOptions, step]);
-
-  useEffect(() => {
-    if (!cmp_id) return;
-
-    try {
-      const rawDraft = localStorage.getItem(draftStorageKey);
-      if (!rawDraft) return;
-
-      const draft = JSON.parse(rawDraft);
-
-      setParty(draft?.party || null);
-      setCashBank(draft?.cashBank || null);
-      setInstrumentType(draft?.instrumentType || "cash");
-      setAmount(Number(draft?.amount) || 0);
-      setBills(Array.isArray(draft?.bills) ? draft.bills : []);
-      setSettlementDetails(
-        Array.isArray(draft?.settlementDetails) ? draft.settlementDetails : []
-      );
-      setNarration(draft?.narration || "");
-      setChequeNumber(draft?.chequeNumber || "");
-      setChequeDate(draft?.chequeDate ? new Date(draft.chequeDate) : null);
-      setStep(draft?.step || "main");
-    } catch (error) {
-      console.error("Failed to hydrate cash transaction draft", error);
-    }
-  }, [cmp_id, draftStorageKey]);
-
-  useEffect(() => {
-    if (!cmp_id) return;
-
-    try {
-      localStorage.setItem(
-        draftStorageKey,
-        JSON.stringify({
-          party,
-          cashBank,
-          instrumentType,
-          amount,
-          bills,
-          settlementDetails,
-          narration,
-          chequeNumber,
-          chequeDate: chequeDate ? chequeDate.toISOString() : null,
-          step,
-        })
-      );
-    } catch (error) {
-      console.error("Failed to persist cash transaction draft", error);
-    }
-  }, [
-    amount,
-    bills,
-    cashBank,
-    chequeDate,
-    chequeNumber,
-    cmp_id,
-    draftStorageKey,
-    instrumentType,
-    narration,
-    party,
-    settlementDetails,
-    step,
-  ]);
 
   const outstandingClassification = voucher_type === "receipt" ? "dr" : "cr";
   const outstandingQuery = useSettlementOutstandingQuery({
@@ -452,11 +386,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
       const cashTransaction = data?.data?.cashTransaction;
 
       if (cashTransaction?._id) {
-        try {
-          localStorage.removeItem(draftStorageKey);
-        } catch (error) {
-          console.error("Failed to clear cash transaction draft", error);
-        }
+        clearDraft();
 
         navigate(
           ROUTES.transactionDetail
@@ -572,6 +502,10 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
         numberField={voucher_type === "payment" ? "paymentNumber" : "receiptNumber"}
         onHeaderReady={setBuildHeaderPayload}
         voucherTypeOverride={voucher_type}
+        transactionDate={transactionDate}
+        onTransactionDateChange={setTransactionDate}
+        selectedSeries={selectedSeries}
+        onSelectedSeriesChange={setSelectedSeries}
       />
 
       <main

@@ -1,4 +1,4 @@
-import { forwardRef, useEffect, useState } from "react";
+import { forwardRef, useCallback, useEffect, useState } from "react";
 import DatePicker from "react-datepicker";
 import "react-datepicker/dist/react-datepicker.css";
 import {
@@ -67,18 +67,34 @@ export default function TransactionHeader({
   editMode = false,
   lockedSeries = null,
   voucherTypeOverride = null,
+  transactionDate: controlledTransactionDate,
+  onTransactionDateChange,
+  selectedSeries: controlledSelectedSeries,
+  onSelectedSeriesChange,
 }) {
   const dispatch = useDispatch();
   const [isSeriesModalOpen, setIsSeriesModalOpen] = useState(false);
+  const isSeriesControlled =
+    controlledSelectedSeries !== undefined &&
+    typeof onSelectedSeriesChange === "function";
+  const isDateControlled =
+    controlledTransactionDate !== undefined &&
+    typeof onTransactionDateChange === "function";
 
   const transactionVoucherType = useSelector((state) => state.transaction.voucherType);
   const voucherType = voucherTypeOverride || transactionVoucherType;
-  const transactionDate = useSelector(
+  const reduxTransactionDate = useSelector(
     (state) => state.transaction.transactionDate
   );
-  const selectedSeries = useSelector(
+  const reduxSelectedSeries = useSelector(
     (state) => state.transaction.selectedSeries
   );
+  const transactionDate = isDateControlled
+    ? controlledTransactionDate
+    : reduxTransactionDate;
+  const selectedSeries = isSeriesControlled
+    ? controlledSelectedSeries
+    : reduxSelectedSeries;
 
   const {
     data,
@@ -112,7 +128,30 @@ export default function TransactionHeader({
     ? effectiveSeries?.voucherNumber || ""
     : formatVoucherForUi(voucherParts);
 
+  const handleSeriesChange = useCallback((series) => {
+    if (isSeriesControlled) {
+      onSelectedSeriesChange(series);
+      return;
+    }
+
+    dispatch(setSelectedSeries({ series }));
+  }, [dispatch, isSeriesControlled, onSelectedSeriesChange]);
+
+  const handleTransactionDateChange = useCallback((nextTransactionDate) => {
+    if (isDateControlled) {
+      onTransactionDateChange(nextTransactionDate);
+      return;
+    }
+
+    dispatch(
+      setTransactionDate({
+        transactionDate: nextTransactionDate,
+      })
+    );
+  }, [dispatch, isDateControlled, onTransactionDateChange]);
+
   useEffect(() => {
+    if (isSeriesControlled) return;
     if (editMode) return;
     if (!cmp_id) return;
 
@@ -120,36 +159,29 @@ export default function TransactionHeader({
     if (!storedSeries?._id) return;
     if (selectedSeries?._id === storedSeries._id) return;
 
-    dispatch(setSelectedSeries({ series: storedSeries }));
-  }, [cmp_id, dispatch, editMode, selectedSeries?._id, voucherType]);
+    handleSeriesChange(storedSeries);
+  }, [cmp_id, editMode, handleSeriesChange, isSeriesControlled, selectedSeries?._id, voucherType]);
 
   useEffect(() => {
     if (transactionDate) return;
-    dispatch(
-      setTransactionDate({
-        transactionDate: new Date().toISOString(),
-      })
-    );
-  }, [transactionDate, dispatch]);
+    handleTransactionDateChange(new Date().toISOString());
+  }, [handleTransactionDateChange, transactionDate]);
 
   useEffect(() => {
     if (editMode) return;
     if (!cmp_id || !effectiveSeries) return;
     if (matchedSelectedSeries?._id === effectiveSeries._id) return;
 
-    dispatch(
-      setSelectedSeries({
-        series: effectiveSeries,
-      })
-    );
-  }, [cmp_id, dispatch, editMode, effectiveSeries, matchedSelectedSeries]);
+    handleSeriesChange(effectiveSeries);
+  }, [cmp_id, editMode, effectiveSeries, handleSeriesChange, matchedSelectedSeries]);
 
   useEffect(() => {
+    if (isSeriesControlled) return;
     if (editMode) return;
     if (!cmp_id || !effectiveSeries?._id) return;
 
     persistStoredSeries(voucherType, cmp_id, effectiveSeries);
-  }, [cmp_id, editMode, effectiveSeries, voucherType]);
+  }, [cmp_id, editMode, effectiveSeries, isSeriesControlled, voucherType]);
 
   // expose clean data to parent (separated prefix/number/suffix)
   useEffect(() => {
@@ -184,16 +216,12 @@ export default function TransactionHeader({
 
   const handleSelectSeries = (series) => {
     if (editMode) return;
-    dispatch(setSelectedSeries({ series }));
+    handleSeriesChange(series);
   };
 
   const handleDateChange = (date) => {
     if (!date) return;
-    dispatch(
-      setTransactionDate({
-        transactionDate: date.toISOString(),
-      })
-    );
+    handleTransactionDateChange(date.toISOString());
   };
 
   const headerMessage = editMode
