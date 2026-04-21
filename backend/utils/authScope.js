@@ -1,17 +1,10 @@
 import mongoose from "mongoose";
 import Company from "../Model/CompanySchema.js";
-
-export function resolveAdminOwnerId(req) {
-  return req?.user?.owner || req?.user?.id || null;
-}
-
-export function resolveCurrentUserId(req) {
-  return req?.user?.id || null;
-}
-
-export function isStaffUser(req) {
-  return req?.user?.role === "staff";
-}
+import {
+  isStaffUser,
+  resolveAdminOwnerId,
+  resolveCurrentUserId,
+} from "./companyScope.js";
 
 export function applyTransactionCreatorScope(req, filter = {}) {
   if (isStaffUser(req)) {
@@ -39,3 +32,5 @@ export async function getAccessibleCompanyIds(req) {
 
   return Company.find({ owner: adminOwnerId }).distinct("_id");
 }
+
+export { isStaffUser, resolveAdminOwnerId, resolveCurrentUserId };

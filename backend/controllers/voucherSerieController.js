@@ -2,14 +2,14 @@
 
 // controllers/voucherSeriesController.js
 import VoucherSeries from "../Model/VoucherSeriesSchema.js";
-import { resolveAdminOwnerId } from "../utils/authScope.js";
+import { resolveCompanyScope } from "../utils/companyScope.js";
 
 export const getSeriesByVoucher = async (req, res) => {
   try {
-
-
     const { voucherType } = req.query;
-    const cmp_id = req.companyId;
+    const { cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+    });
 
     if (!voucherType || !cmp_id) {
       return res
@@ -36,7 +36,9 @@ export const getSeriesByVoucher = async (req, res) => {
     });
   } catch (error) {
     console.error("Error fetching series:", error);
-    return res.status(500).json({ message: "Server error" });
+    return res
+      .status(error.statusCode || 500)
+      .json({ message: error.statusCode ? error.message : "Server error" });
   }
 };
 
@@ -45,8 +47,9 @@ export const getSeriesByVoucher = async (req, res) => {
 
 export const createVoucherSeries = async (req, res) => {
   try {
-    const cmp_id = req.companyId;
-    const primary_user_id = resolveAdminOwnerId(req);
+    const { cmp_id, Primary_user_id: primary_user_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+    });
     const {
       voucherType,
       seriesName,
@@ -108,7 +111,9 @@ export const createVoucherSeries = async (req, res) => {
     });
   } catch (error) {
     console.error("Error creating voucher series:", error);
-    return res.status(500).json({ message: "Server error" });
+    return res
+      .status(error.statusCode || 500)
+      .json({ message: error.statusCode ? error.message : "Server error" });
   }
 };
 
@@ -116,7 +121,9 @@ export const createVoucherSeries = async (req, res) => {
 export const updateVoucherSeries = async (req, res) => {
   try {
     const { seriesId } = req.params;
-    const cmp_id = req.companyId;
+    const { cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+    });
     const {
       voucherType,
       seriesName,
@@ -162,7 +169,9 @@ export const updateVoucherSeries = async (req, res) => {
     });
   } catch (error) {
     console.error("Error updating voucher series:", error);
-    return res.status(500).json({ message: "Server error" });
+    return res
+      .status(error.statusCode || 500)
+      .json({ message: error.statusCode ? error.message : "Server error" });
   }
 };
 
@@ -170,7 +179,9 @@ export const updateVoucherSeries = async (req, res) => {
 
 export const deleteVoucherSeriesById = async (req, res) => {
   try {
-    const cmp_id = req.companyId;
+    const { cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+    });
     const { voucherType } = req.body;
     const seriesId = req.params.seriesId || req.body?.seriesId;
 
@@ -207,7 +218,9 @@ export const deleteVoucherSeriesById = async (req, res) => {
     });
   } catch (error) {
     console.error("Error deleting voucher series:", error);
-    return res.status(500).json({ message: "Server error" });
+    return res
+      .status(error.statusCode || 500)
+      .json({ message: error.statusCode ? error.message : "Server error" });
   }
 };
 
@@ -215,7 +228,9 @@ export const deleteVoucherSeriesById = async (req, res) => {
 // controller: getNextVoucherSeriesNumber
 export const getNextVoucherSeriesNumber = async (req, res) => {
   try {
-    const cmp_id = req.companyId;
+    const { cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+    });
     const { voucherType } = req.query;
 
     if (!cmp_id || !voucherType) {
@@ -229,7 +244,9 @@ export const getNextVoucherSeriesNumber = async (req, res) => {
     });
   } catch (error) {
     console.error("Error getting next voucher series number:", error);
-    return res.status(500).json({ message: "Server error" });
+    return res
+      .status(error.statusCode || 500)
+      .json({ message: error.statusCode ? error.message : "Server error" });
   }
 };
 

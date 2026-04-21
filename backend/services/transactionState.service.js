@@ -1,0 +1,64 @@
+function createHttpError(message, statusCode = 500) {
+  const error = new Error(message);
+  error.statusCode = statusCode;
+  return error;
+}
+
+const TRANSACTION_STATUS = {
+  saleOrder: {
+    initial: "open",
+    cancelled: "cancelled",
+    editableStatuses: ["open"],
+  },
+  receipt: {
+    initial: "active",
+    cancelled: "cancelled",
+    editableStatuses: [],
+  },
+  payment: {
+    initial: "active",
+    cancelled: "cancelled",
+    editableStatuses: [],
+  },
+};
+
+function getConfig(transactionType) {
+  return TRANSACTION_STATUS[transactionType] || null;
+}
+
+export function getInitialTransactionStatus(transactionType) {
+  return getConfig(transactionType)?.initial || null;
+}
+
+export function getCancelledTransactionStatus(transactionType) {
+  return getConfig(transactionType)?.cancelled || "cancelled";
+}
+
+export function assertTransactionEditable(transactionType, status) {
+  const editableStatuses = getConfig(transactionType)?.editableStatuses || [];
+
+  if (!editableStatuses.includes(status)) {
+    throw createHttpError(`Cannot edit a ${status} ${transactionType}`, 400);
+  }
+}
+
+export function assertTransactionNotAlreadyCancelled(transactionType, status) {
+  const cancelledStatus = getCancelledTransactionStatus(transactionType);
+
+  if (status === cancelledStatus) {
+    throw createHttpError(`${transactionType} is already cancelled`, 400);
+  }
+}
+
+export function markTransactionCancelled(doc, transactionType) {
+  doc.status = getCancelledTransactionStatus(transactionType);
+  return doc.status;
+}
+
+export default {
+  assertTransactionEditable,
+  assertTransactionNotAlreadyCancelled,
+  getCancelledTransactionStatus,
+  getInitialTransactionStatus,
+  markTransactionCancelled,
+};
