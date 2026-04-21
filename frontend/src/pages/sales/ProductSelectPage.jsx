@@ -5,6 +5,7 @@ import {
   Package,
   Pencil,
   Search,
+  X,
   SlidersHorizontal,
 } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
@@ -73,7 +74,9 @@ function persistProductFilters(cmp_id, filters) {
       `${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`,
       JSON.stringify(filters),
     );
-  } catch {}
+  } catch {
+    return;
+  }
 }
 
 function getProductId(product) {
@@ -1155,8 +1158,18 @@ export default function ProductSelectPage() {
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="Search products by name or code"
-                className="min-h-11 pl-9 text-sm"
+                className="min-h-11 pl-9 pr-10 text-sm"
               />
+              {search ? (
+                <button
+                  type="button"
+                  onClick={() => setSearch("")}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
             </div>
           </div>
         </header>

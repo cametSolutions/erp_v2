@@ -7,6 +7,7 @@ import {
   Bell,
   Boxes,
   FileText,
+  Loader2,
   Package,
   Users,
 } from "lucide-react";
@@ -296,9 +297,13 @@ export default function MobileWalletCard({
               {activeCard.label}
             </p>
             <p className="text-3xl font-bold tracking-tight">
-              {totalsSummaryQuery.isLoading
-                ? "Loading..."
-                : formatCurrency(activeCard.value)}
+              {totalsSummaryQuery.isLoading ? (
+                <span className="inline-flex min-h-9 items-center justify-center">
+                  <Loader2 className="h-7 w-7 animate-spin text-blue-100" />
+                </span>
+              ) : (
+                formatCurrency(activeCard.value)
+              )}
             </p>
             <p className="mt-1 text-[11px] text-blue-300">
               {totalsSummaryQuery.isError
