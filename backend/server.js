@@ -40,12 +40,29 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+const mongoSanitizeOptions = {
+  replaceWith: "_",
+  onSanitize: ({ req, key }) => {
+    console.warn(`Sanitized request[${key}]`);
+  },
+};
+
 app.use((req, res, next) => {
-  Object.defineProperty(req, "query", {
-    ...Object.getOwnPropertyDescriptor(req, "query"),
-    value: req.query,
-    writable: true,
+  ["body", "params", "headers", "query"].forEach((key) => {
+    if (!req[key]) return;
+
+    const wasSanitized = mongoSanitize.has(
+      req[key],
+      mongoSanitizeOptions.allowDots,
+    );
+
+    mongoSanitize.sanitize(req[key], mongoSanitizeOptions);
+
+    if (wasSanitized && typeof mongoSanitizeOptions.onSanitize === "function") {
+      mongoSanitizeOptions.onSanitize({ req, key });
+    }
   });
+
   next();
 });
 
@@ -54,14 +71,6 @@ app.use(cookieParser());
 
 // Security
 app.use(helmet());
-app.use(
-  mongoSanitize({
-    replaceWith: "_",
-    onSanitize: ({ req, key }) => {
-      console.warn(`Sanitized request[${key}]`);
-    },
-  })
-);
 app.use(hpp());
 
 // Body parser
