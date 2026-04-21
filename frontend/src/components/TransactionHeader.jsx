@@ -154,10 +154,10 @@ export default function TransactionHeader({
     if (isSeriesControlled) return;
     if (editMode) return;
     if (!cmp_id) return;
+    if (selectedSeries?._id) return;
 
     const storedSeries = readStoredSeries(voucherType, cmp_id);
     if (!storedSeries?._id) return;
-    if (selectedSeries?._id === storedSeries._id) return;
 
     handleSeriesChange(storedSeries);
   }, [cmp_id, editMode, handleSeriesChange, isSeriesControlled, selectedSeries?._id, voucherType]);
@@ -185,12 +185,16 @@ export default function TransactionHeader({
 
   // expose clean data to parent (separated prefix/number/suffix)
   useEffect(() => {
-    if (!onHeaderReady || !effectiveSeries || !transactionDate) return;
+    if (!onHeaderReady) return;
+    if (!effectiveSeries || !transactionDate) {
+      onHeaderReady(null);
+      return;
+    }
 
     const voucherPrefix = voucherParts.prefix || undefined;
     const voucherSuffix = voucherParts.suffix || undefined;
 
-    onHeaderReady(() => () => ({
+    onHeaderReady(() => ({
       transactionDate,
       voucherType,
       series_id: effectiveSeries?._id || null,

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft } from "lucide-react";
 import { useDispatch, useSelector } from "react-redux";
 import { useNavigate, useParams } from "react-router-dom";
@@ -22,7 +22,8 @@ export default function SaleOrderEditPage() {
   const { id } = useParams();
   const dispatch = useDispatch();
   const navigate = useNavigate();
-  const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
+  const buildHeaderPayloadRef = useRef(null);
+  const [headerReady, setHeaderReady] = useState(false);
 
   const selectedCompanyId = useSelector(
     (state) => state.company.selectedCompanyId,
@@ -48,6 +49,11 @@ export default function SaleOrderEditPage() {
     dispatch(loadSaleOrderForEdit(saleOrder));
   }, [dispatch, saleOrder]);
 
+  const handleHeaderReady = useCallback((builder) => {
+    buildHeaderPayloadRef.current = builder;
+    setHeaderReady(Boolean(builder));
+  }, []);
+
   const updateSaleOrderMutation = useUpdateSaleOrder({
     cmp_id: effectiveCmpId,
   });
@@ -55,7 +61,9 @@ export default function SaleOrderEditPage() {
   const handleUpdateSaleOrder = () => {
     if (!saleOrder?._id) return;
 
-    const headerPayload = buildHeaderPayload ? buildHeaderPayload() : {};
+    const headerPayload = buildHeaderPayloadRef.current
+      ? buildHeaderPayloadRef.current()
+      : {};
     const payload = saleOrderService.buildUpdateSaleOrderPayload({
       cmp_id: effectiveCmpId,
       taxType: transaction.taxType,
@@ -77,7 +85,6 @@ export default function SaleOrderEditPage() {
 
   const updateLoading =
     updateSaleOrderMutation.isPending || updateSaleOrderMutation.isLoading;
-  const headerReady = Boolean(buildHeaderPayload);
   const hasParty = Boolean(party?._id || party?.id);
   const hasItems = items.length > 0;
   const disableUpdate = !effectiveCmpId || !headerReady || !hasParty || !hasItems;
@@ -147,7 +154,7 @@ export default function SaleOrderEditPage() {
       <TransactionHeader
         cmp_id={effectiveCmpId}
         numberField="salesOrderNumber"
-        onHeaderReady={setBuildHeaderPayload}
+        onHeaderReady={handleHeaderReady}
         editMode
         lockedSeries={transaction.selectedSeries}
       />

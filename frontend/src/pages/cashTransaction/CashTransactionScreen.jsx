@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import {
   AlertCircle,
   BadgeIndianRupee,
@@ -318,7 +318,8 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   const cmp_id = useSelector((state) => state.company.selectedCompanyId);
   const navigate = useNavigate();
   const { setHeaderOptions, resetHeaderOptions } = useMobileHeader();
-  const [buildHeaderPayload, setBuildHeaderPayload] = useState(null);
+  const buildHeaderPayloadRef = useRef(null);
+  const [headerReady, setHeaderReady] = useState(false);
   const [partySheetOpen, setPartySheetOpen] = useState(false);
   const [cashBankSheetOpen, setCashBankSheetOpen] = useState(false);
   const {
@@ -348,6 +349,11 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     setStep,
     clearDraft,
   } = useCashTransactionDraft({ cmp_id, voucher_type });
+
+  const handleHeaderReady = useCallback((builder) => {
+    buildHeaderPayloadRef.current = builder;
+    setHeaderReady(Boolean(builder));
+  }, []);
 
   useEffect(() => {
     if (instrumentType === "cash") {
@@ -424,7 +430,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     null;
   const disableCreate =
     !cmp_id ||
-    !buildHeaderPayload ||
+    !headerReady ||
     !party?._id ||
     !cashBank?._id ||
     (Number(amount) || 0) <= 0 ||
@@ -457,7 +463,9 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   };
 
   const handleCreate = () => {
-    const headerPayload = buildHeaderPayload ? buildHeaderPayload() : {};
+    const headerPayload = buildHeaderPayloadRef.current
+      ? buildHeaderPayloadRef.current()
+      : {};
     const payload = cashTransactionService.buildCreateCashTransactionPayload({
       cmp_id,
       voucher_type,
@@ -500,7 +508,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
         cmp_id={cmp_id}
         title={title}
         numberField={voucher_type === "payment" ? "paymentNumber" : "receiptNumber"}
-        onHeaderReady={setBuildHeaderPayload}
+        onHeaderReady={handleHeaderReady}
         voucherTypeOverride={voucher_type}
         transactionDate={transactionDate}
         onTransactionDateChange={setTransactionDate}
