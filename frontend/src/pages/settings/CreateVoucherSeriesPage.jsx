@@ -101,7 +101,7 @@ const CreateVoucherSeriesPage = () => {
 
       if (mode === "edit" && editingSeries?._id) {
         const res = await api.put(
-          `/sUsers/updateVoucherSeries/${cmp_id}/${editingSeries._id}`,
+          `/voucher-series/${cmp_id}/${editingSeries._id}`,
           payload,
           { withCredentials: true }
         );
@@ -109,7 +109,7 @@ const CreateVoucherSeriesPage = () => {
         toast.success("Series updated successfully");
       } else {
         const res = await api.post(
-          `/sUsers/createVoucherSeries/${cmp_id}`,
+          `/voucher-series/${cmp_id}`,
           payload,
           { withCredentials: true }
         );

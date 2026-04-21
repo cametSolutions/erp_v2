@@ -1,5 +1,5 @@
 import * as React from "react";
-import { Search } from "lucide-react";
+import { Search, X } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -17,6 +17,9 @@ function Command({ className, ...props }) {
 }
 
 function CommandInput({ className, ...props }) {
+  const inputValue = props.value;
+  const hasValue = typeof inputValue === "string" && inputValue.length > 0;
+
   return (
     <div className="flex items-center gap-2 border-b border-slate-200 px-3">
       <Search className="h-4 w-4 text-slate-400" />
@@ -28,6 +31,21 @@ function CommandInput({ className, ...props }) {
         )}
         {...props}
       />
+      {hasValue && typeof props.onChange === "function" ? (
+        <button
+          type="button"
+          aria-label="Clear search"
+          onClick={() =>
+            props.onChange({
+              target: { value: "" },
+              currentTarget: { value: "" },
+            })
+          }
+          className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+        >
+          <X className="h-3.5 w-3.5" />
+        </button>
+      ) : null}
     </div>
   );
 }

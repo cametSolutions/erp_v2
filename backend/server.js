@@ -20,6 +20,7 @@ import productRoute from "./routes/product/productRoute.js";
 import accountGroupRoute from "./routes/accountGroup/accountGroupRoute.js";
 import subGroupRoute from "./routes/subGroup/subGroupRoute.js";
 import voucherRoute from "./routes/voucherSeries/voucherRoute.js";
+import saleOrderRoute from "./routes/saleOrder/saleOrderRoute.js";
 import voucherListRoute from "./routes/voucher/voucherRoute.js";
 import outstandingRoute from "./routes/outstanding/outstandingRoute.js";
 import tallyDataRoute from "./routes/tallyData/tallyDataRoutes.js";
@@ -39,12 +40,29 @@ const corsOptions = {
 };
 app.use(cors(corsOptions));
 
+const mongoSanitizeOptions = {
+  replaceWith: "_",
+  onSanitize: ({ req, key }) => {
+    console.warn(`Sanitized request[${key}]`);
+  },
+};
+
 app.use((req, res, next) => {
-  Object.defineProperty(req, "query", {
-    ...Object.getOwnPropertyDescriptor(req, "query"),
-    value: req.query,
-    writable: true,
+  ["body", "params", "headers", "query"].forEach((key) => {
+    if (!req[key]) return;
+
+    const wasSanitized = mongoSanitize.has(
+      req[key],
+      mongoSanitizeOptions.allowDots,
+    );
+
+    mongoSanitize.sanitize(req[key], mongoSanitizeOptions);
+
+    if (wasSanitized && typeof mongoSanitizeOptions.onSanitize === "function") {
+      mongoSanitizeOptions.onSanitize({ req, key });
+    }
   });
+
   next();
 });
 
@@ -53,14 +71,6 @@ app.use(cookieParser());
 
 // Security
 app.use(helmet());
-app.use(
-  mongoSanitize({
-    replaceWith: "_",
-    onSanitize: ({ req, key }) => {
-      console.warn(`Sanitized request[${key}]`);
-    },
-  })
-);
 app.use(hpp());
 
 // Body parser
@@ -89,7 +99,8 @@ app.use("/api/price-levels", priceLevelRoute);
 app.use("/api/product", productRoute);
 app.use("/api/account-group", accountGroupRoute);
 app.use("/api/subgroup", subGroupRoute);
-app.use("/api/sUsers", voucherRoute);
+app.use("/api/voucher-series", voucherRoute);
+app.use("/api/sale-orders", saleOrderRoute);
 app.use("/api/vouchers", voucherListRoute);
 app.use("/api/outstanding", outstandingRoute);
 app.use("/api/cash-transactions", cashTransactionRoute);

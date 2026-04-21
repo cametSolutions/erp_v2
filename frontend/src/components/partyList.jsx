@@ -2,7 +2,7 @@
 import { useEffect, useState, useMemo, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { Pencil, Trash2, Users } from "lucide-react";
+import { Pencil, Search, Trash2, Users, X } from "lucide-react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useSelector } from "react-redux";
 
@@ -534,15 +534,28 @@ export function PartyList({
             <p className="mb-2 text-[11px] font-medium uppercase tracking-[0.14em] text-slate-500">
               Search Party
             </p>
-            <input
-              type="text"
-              value={searchText}
-              onChange={(e) =>
-                setSearchText(e.target.value)
-              }
-              placeholder="Search parties"
-              className="w-full rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-700 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-200"
-            />
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+              <input
+                type="text"
+                value={searchText}
+                onChange={(e) =>
+                  setSearchText(e.target.value)
+                }
+                placeholder="Search parties"
+                className="w-full rounded-lg border border-slate-200 bg-white py-2 pl-9 pr-10 text-xs text-slate-700 shadow-sm focus:border-violet-400 focus:outline-none focus:ring-1 focus:ring-violet-200"
+              />
+              {searchText ? (
+                <button
+                  type="button"
+                  onClick={() => setSearchText("")}
+                  aria-label="Clear search"
+                  className="absolute right-3 top-1/2 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-600"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              ) : null}
+            </div>
           </div>
         )}
 

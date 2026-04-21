@@ -22,12 +22,12 @@ const partySchema = new mongoose.Schema(
     // ---- Identity ----
     Primary_user_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "PrimaryUser",
+      ref: "User",
       required: true,
     },
     Secondary_user_id: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "SecondaryUser",
+      ref: "User",
     },
     cmp_id: {
       type: mongoose.Schema.Types.ObjectId,

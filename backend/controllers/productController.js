@@ -2,7 +2,7 @@ import mongoose from "mongoose";
 
 import Product from "../Model/ProductSchema.js";
 import { Brand, Category, Subcategory } from "../Model/ProductSubDetails.js";
-import { resolveAdminOwnerId } from "../utils/authScope.js";
+import { resolveCompanyScope } from "../utils/companyScope.js";
 
 const PRODUCT_POPULATE = [
   { path: "brand", select: "brand brand_id" },
@@ -40,12 +40,10 @@ async function resolveMasterFilterId({
 
 async function listProductMasters(Model, fieldName, req, res) {
   try {
-    const owner = resolveAdminOwnerId(req);
-    const { cmp_id, search = "" } = req.query;
-
-    if (!cmp_id) {
-      return res.status(400).json({ message: "cmp_id (company) is required" });
-    }
+    const { Primary_user_id: owner, cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+    });
+    const { search = "" } = req.query;
 
     const filter = {
       Primary_user_id: owner,
@@ -66,15 +64,20 @@ async function listProductMasters(Model, fieldName, req, res) {
     return res.json({ items });
   } catch (error) {
     console.error(`list ${fieldName} error:`, error);
-    return res.status(500).json({ message: `Failed to fetch ${fieldName}` });
+    return res
+      .status(error.statusCode || 500)
+      .json({
+        message: error.statusCode ? error.message : `Failed to fetch ${fieldName}`,
+      });
   }
 }
 
 export const listProducts = async (req, res) => {
   try {
-    const owner = resolveAdminOwnerId(req);
+    const { Primary_user_id: owner, cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+    });
     const {
-      cmp_id,
       page = 1,
       limit = 20,
       search = "",
@@ -82,10 +85,6 @@ export const listProducts = async (req, res) => {
       category = "",
       subcategory = "",
     } = req.query;
-
-    if (!cmp_id) {
-      return res.status(400).json({ message: "cmp_id (company) is required" });
-    }
 
     const pageNum = Number.parseInt(page, 10) || 1;
     const limitNum = Number.parseInt(limit, 10) || 20;
@@ -165,13 +164,17 @@ export const listProducts = async (req, res) => {
     });
   } catch (error) {
     console.error("listProducts error:", error);
-    return res.status(500).json({ message: "Failed to fetch products" });
+    return res
+      .status(error.statusCode || 500)
+      .json({
+        message: error.statusCode ? error.message : "Failed to fetch products",
+      });
   }
 };
 
 export const getProductById = async (req, res) => {
   try {
-    const owner = resolveAdminOwnerId(req);
+    const { Primary_user_id: owner } = resolveCompanyScope(req);
     const { id } = req.params;
 
     const product = await Product.findOne({
@@ -188,7 +191,11 @@ export const getProductById = async (req, res) => {
     return res.json(product);
   } catch (error) {
     console.error("getProductById error:", error);
-    return res.status(500).json({ message: "Failed to fetch product" });
+    return res
+      .status(error.statusCode || 500)
+      .json({
+        message: error.statusCode ? error.message : "Failed to fetch product",
+      });
   }
 };
 

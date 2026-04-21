@@ -80,7 +80,7 @@ export default function VoucherSeriesList() {
 
     try {
       const res = await api.delete(
-        `/sUsers/deleteVoucherSeriesById/${cmp_id}`,
+        `/voucher-series/${cmp_id}/${seriesId}`,
         {
           data: { voucherType, seriesId },
           withCredentials: true,

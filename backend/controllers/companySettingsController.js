@@ -2,11 +2,7 @@ import mongoose from "mongoose";
 
 import CompanySettings from "../Model/CompanySettings.js";
 import Party from "../Model/partySchema.js";
-
-const resolveScope = (req) => ({
-  Primary_user_id: req.user?.owner || req.user?.id || null,
-  cmp_id: req.companyId || null,
-});
+import { resolveCompanyScope } from "../utils/companyScope.js";
 
 const buildUpdateFields = (payload = {}) => {
   const updateFields = {};
@@ -41,14 +37,13 @@ const buildUpdateFields = (payload = {}) => {
 
 export const getCompanySettings = async (req, res) => {
   try {
-    const { Primary_user_id, cmp_id } = resolveScope(req);
+    const { Primary_user_id, cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+      validateCompanyId: true,
+    });
 
-    if (!Primary_user_id || !cmp_id) {
-      return res.status(400).json({ message: "cmp_id is required" });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(cmp_id)) {
-      return res.status(400).json({ message: "Invalid cmp_id" });
+    if (!Primary_user_id) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     const settings = await CompanySettings.findOne({
@@ -73,20 +68,23 @@ export const getCompanySettings = async (req, res) => {
     return res.status(200).json(settings);
   } catch (error) {
     console.error("getCompanySettings error:", error);
-    return res.status(500).json({ message: "Failed to fetch company settings" });
+    return res
+      .status(error.statusCode || 500)
+      .json({
+        message: error.statusCode ? error.message : "Failed to fetch company settings",
+      });
   }
 };
 
 export const updateCompanySettings = async (req, res) => {
   try {
-    const { Primary_user_id, cmp_id } = resolveScope(req);
+    const { Primary_user_id, cmp_id } = resolveCompanyScope(req, {
+      requireCompanyId: true,
+      validateCompanyId: true,
+    });
 
-    if (!Primary_user_id || !cmp_id) {
-      return res.status(400).json({ message: "cmp_id is required" });
-    }
-
-    if (!mongoose.Types.ObjectId.isValid(cmp_id)) {
-      return res.status(400).json({ message: "Invalid cmp_id" });
+    if (!Primary_user_id) {
+      return res.status(401).json({ message: "Unauthorized" });
     }
 
     const updateFields = buildUpdateFields(req.body);
@@ -160,6 +158,10 @@ export const updateCompanySettings = async (req, res) => {
     return res.status(200).json(settings);
   } catch (error) {
     console.error("updateCompanySettings error:", error);
-    return res.status(500).json({ message: "Failed to update company settings" });
+    return res
+      .status(error.statusCode || 500)
+      .json({
+        message: error.statusCode ? error.message : "Failed to update company settings",
+      });
   }
 };

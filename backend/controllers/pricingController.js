@@ -1,98 +1,7 @@
-import mongoose from "mongoose";
-
-import SaleOrder from "../Model/SaleOrder.js";
 import {
-  getAccessibleCompanyIds,
-  isStaffUser,
-  resolveCurrentUserId,
-} from "../utils/authScope.js";
-
-function toObjectId(value) {
-  if (!value || !mongoose.Types.ObjectId.isValid(value)) return null;
-  return new mongoose.Types.ObjectId(value);
-}
-
-async function getLatestPrice({ req, partyId, productId }) {
-  const productObjectId = toObjectId(productId);
-  const partyObjectId = partyId ? toObjectId(partyId) : null;
-  const currentUserId = resolveCurrentUserId(req);
-  const currentUserObjectId = toObjectId(currentUserId);
-
-  if (!productObjectId || (partyId && !partyObjectId)) {
-    return null;
-  }
-
-  const accessibleCompanyIds = await getAccessibleCompanyIds(req);
-  if (!accessibleCompanyIds.length) {
-    return null;
-  }
-
-  const matchStage = {
-    $and: [
-      {
-        cmp_id: { $in: accessibleCompanyIds },
-      },
-      {
-        $or: [
-          { "items._id": productObjectId },
-          { "items.item_id": productObjectId },
-        ],
-      },
-    ],
-  };
-
-  if (isStaffUser(req)) {
-    if (!currentUserObjectId) {
-      return null;
-    }
-
-    matchStage.$and.push({
-      created_by: currentUserObjectId,
-    });
-  }
-
-  if (partyObjectId) {
-    matchStage.$and.push({
-      $or: [{ "party._id": partyObjectId }, { party_id: partyObjectId }],
-    });
-  }
-
-  const records = await SaleOrder.aggregate([
-    { $match: matchStage },
-    { $sort: { _id: -1 } },
-    { $unwind: "$items" },
-    {
-      $match: {
-        $or: [
-          { "items._id": productObjectId },
-          { "items.item_id": productObjectId },
-        ],
-      },
-    },
-    {
-      $project: {
-        partyId: { $ifNull: ["$party._id", "$party_id"] },
-        productId: { $ifNull: ["$items._id", "$items.item_id"] },
-        transactionDate: { $ifNull: ["$transactionDate", "$date"] },
-        price: {
-          $ifNull: [
-            "$items.rate",
-            {
-              $ifNull: [
-                { $arrayElemAt: ["$items.GodownList.selectedPriceRate", 0] },
-                "$items.purchase_price",
-              ],
-            },
-          ],
-        },
-      },
-    },
-    { $match: { price: { $ne: null } } },
-    { $limit: 1 },
-  ]);
-
-  return records[0] || null;
-}
+  getGlobalLsp as getGlobalLspService,
+  getPartyLsp as getPartyLspService,
+} from "../services/pricing.service.js";
 
 export const getPartyLsp = async (req, res) => {
   try {
@@ -104,17 +13,8 @@ export const getPartyLsp = async (req, res) => {
         .json({ message: "partyId and productId are required" });
     }
 
-    const latest = await getLatestPrice({
-      req,
-      partyId,
-      productId,
-    });
-
-    return res.json({
-      partyId,
-      productId,
-      price: latest?.price ?? null,
-    });
+    const result = await getPartyLspService({ partyId, productId }, req);
+    return res.json(result);
   } catch (error) {
     console.error("getPartyLsp error:", error);
     return res.status(500).json({ message: "Failed to fetch party LSP" });
@@ -129,15 +29,8 @@ export const getGlobalLsp = async (req, res) => {
       return res.status(400).json({ message: "productId is required" });
     }
 
-    const latest = await getLatestPrice({
-      req,
-      productId,
-    });
-
-    return res.json({
-      productId,
-      price: latest?.price ?? null,
-    });
+    const result = await getGlobalLspService({ productId }, req);
+    return res.json(result);
   } catch (error) {
     console.error("getGlobalLsp error:", error);
     return res.status(500).json({ message: "Failed to fetch global LSP" });

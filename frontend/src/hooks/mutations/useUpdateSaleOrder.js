@@ -7,6 +7,7 @@ import { saleOrderService } from "@/api/services/saleOrder.service";
 import { saleOrderQueryKeys } from "@/hooks/queries/saleOrderQueries";
 import { ROUTES } from "@/routes/paths";
 import { resetSaleOrderDraft } from "@/store/slices/transactionSlice";
+import { clearSaleOrderDraftStorage } from "@/utils/transactionStorage";
 
 export function useUpdateSaleOrder(options = {}) {
   const { cmp_id = "", onSuccess, onError, ...mutationOptions } = options;
@@ -32,6 +33,7 @@ export function useUpdateSaleOrder(options = {}) {
         queryKey: saleOrderQueryKeys.all,
       });
 
+      clearSaleOrderDraftStorage(resolvedCmpId);
       dispatch(resetSaleOrderDraft());
       toast.success(data?.message || "Sales order updated");
 

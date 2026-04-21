@@ -6,12 +6,26 @@ import Party from "../Model/partySchema.js";
 import PartyLedger from "../Model/PartyLedger.js";
 import PartyMonthlyBalance from "../Model/PartyMonthlyBalance.js";
 import Receipt from "../Model/Receipt.js";
-import getNextTransactionSerialNumbers from "../utils/getNextTransactionSerialNumbers.js";
-import getNextVoucherNumber from "../utils/getNextVoucherNumber.js";
 import {
   createVoucherTimelineEntry,
   updateVoucherTimelineEntry,
 } from "./voucherTimeline.service.js";
+import {
+  buildCashBankLedgerDocument,
+  buildCashTransactionDocument,
+  buildPartyLedgerDocument,
+  normalizeSettlementDetails,
+} from "./cashTransactionDocument.service.js";
+import {
+  assertTransactionNotAlreadyCancelled,
+  getCancelledTransactionStatus,
+  markTransactionCancelled,
+} from "./transactionState.service.js";
+import { issueVoucherIdentity } from "./voucherIdentity.service.js";
+import {
+  buildVoucherTimelinePayload,
+  buildVoucherTimelineUpdatePayload,
+} from "./voucherTimelinePayload.service.js";
 import {
   applyTransactionCreatorScope,
   getAccessibleCompanyIds,
@@ -29,22 +43,6 @@ function createHttpError(message, statusCode = 500) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
-}
-
-function normalizeSettlementDetails(settlement_details = [], transactionDate) {
-  return settlement_details.map((item) => ({
-    outstanding: item?.outstanding,
-    outstanding_number: item?.outstanding_number,
-    outstanding_date: new Date(item?.outstanding_date),
-    outstanding_type: item?.outstanding_type,
-    previous_outstanding_amount: Number(item?.previous_outstanding_amount) || 0,
-    settled_amount: Number(item?.settled_amount) || 0,
-    remaining_outstanding_amount:
-      Number(item?.remaining_outstanding_amount) || 0,
-    settlement_date: item?.settlement_date
-      ? new Date(item.settlement_date)
-      : new Date(transactionDate),
-  }));
 }
 
 function resolveLedgerSides(voucher_type) {
@@ -200,15 +198,10 @@ export async function createCashTransaction(data = {}, req) {
         );
       }
 
-      const nextVoucher = await getNextVoucherNumber({
+      const voucherIdentity = await issueVoucherIdentity({
         cmpId: data.cmp_id,
         voucherType: data.voucher_type,
         seriesId: data.series_id,
-        session,
-      });
-      const serialNumbers = await getNextTransactionSerialNumbers({
-        cmpId: data.cmp_id,
-        transactionType: data.voucher_type,
         userId: data.created_by,
         session,
       });
@@ -229,50 +222,26 @@ export async function createCashTransaction(data = {}, req) {
 
       const [cashTransaction] = await Receipt.create(
         [
-          {
-            cmp_id: data.cmp_id,
-            voucher_type: data.voucher_type,
-            voucher_number: nextVoucher.voucherNumber,
-            company_level_serial_number: serialNumbers.companyLevelSerialNumber,
-            user_level_serial_number: serialNumbers.userLevelSerialNumber,
-            date,
-            party_id: data.party_id,
-            party_name: data.party_name,
-            cash_bank_id: data.cash_bank_id,
-            cash_bank_name: data.cash_bank_name,
-            cash_bank_type: data.cash_bank_type,
-            instrument_type: data.instrument_type || "cash",
-            amount: Number(data.amount) || 0,
-            advance_amount,
+          buildCashTransactionDocument(
+            data,
+            voucherIdentity,
             settlement_details,
-            narration: data.narration || null,
-            cheque_number: data.cheque_number || null,
-            cheque_date: data.cheque_date ? new Date(data.cheque_date) : null,
-            status: "active",
-            created_by: data.created_by || null,
-            updated_by: data.updated_by || data.created_by || null,
-          },
+            advance_amount,
+            date,
+          ),
         ],
         { session }
       );
 
       await PartyLedger.create(
         [
-          {
-            cmp_id: data.cmp_id,
-            voucher_type: data.voucher_type,
-            voucher_id: cashTransaction._id,
-            voucher_number: cashTransaction.voucher_number,
+          buildPartyLedgerDocument(
+            data,
+            cashTransaction._id,
+            cashTransaction.voucher_number,
             date,
-            party_id: data.party_id,
-            party_name: data.party_name,
-            amount: Number(data.amount) || 0,
-            ledger_side: party_ledger_side,
-            against_id: data.cash_bank_id,
-            narration: data.narration || null,
-            status: "active",
-            created_by: data.created_by || null,
-          },
+            party_ledger_side
+          ),
         ],
         { session }
       );
@@ -288,24 +257,13 @@ export async function createCashTransaction(data = {}, req) {
 
       await CashBankLedger.create(
         [
-          {
-            cmp_id: data.cmp_id,
-            voucher_type: data.voucher_type,
-            voucher_id: cashTransaction._id,
-            voucher_number: cashTransaction.voucher_number,
+          buildCashBankLedgerDocument(
+            data,
+            cashTransaction._id,
+            cashTransaction.voucher_number,
             date,
-            cash_bank_id: data.cash_bank_id,
-            cash_bank_name: data.cash_bank_name,
-            cash_bank_type: data.cash_bank_type,
-            amount: Number(data.amount) || 0,
-            ledger_side: cash_bank_ledger_side,
-            party_id: data.party_id,
-            party_name: data.party_name,
-            instrument_type: data.instrument_type || "cash",
-            narration: data.narration || null,
-            status: "active",
-            created_by: data.created_by || null,
-          },
+            cash_bank_ledger_side
+          ),
         ],
         { session }
       );
@@ -359,20 +317,7 @@ export async function createCashTransaction(data = {}, req) {
         .session(session)
         .lean();
 
-      await createVoucherTimelineEntry(
-        {
-          cmp_id: cashTransaction.cmp_id,
-          voucher_type: cashTransaction.voucher_type,
-          voucher_id: cashTransaction._id,
-          date: cashTransaction.date,
-          party_id: cashTransaction.party_id,
-          party_name: cashTransaction.party_name,
-          voucher_number: cashTransaction.voucher_number,
-          amount: Number(cashTransaction.amount) || 0,
-          status: cashTransaction.status || null,
-        },
-        session
-      );
+      await createVoucherTimelineEntry(buildVoucherTimelinePayload(cashTransaction), session);
     });
 
     return createdCashTransaction;
@@ -399,11 +344,9 @@ export async function cancelCashTransaction(id, data = {}, req) {
         throw createHttpError("Cash transaction not found", 404);
       }
 
-      if (transaction.status === "cancelled") {
-        throw createHttpError("Cash transaction is already cancelled", 400);
-      }
+      assertTransactionNotAlreadyCancelled("receipt", transaction.status);
 
-      transaction.status = "cancelled";
+      markTransactionCancelled(transaction, "receipt");
       transaction.cancelled_at = new Date();
       transaction.cancelled_by = data.cancelled_by || null;
       transaction.cancellation_reason = data.cancellation_reason || null;
@@ -416,7 +359,7 @@ export async function cancelCashTransaction(id, data = {}, req) {
           voucher_id: transaction._id,
           voucher_type: transaction.voucher_type,
         },
-        { $set: { status: "cancelled" } },
+        { $set: { status: getCancelledTransactionStatus(transaction.voucher_type) } },
         { session }
       );
 
@@ -435,7 +378,7 @@ export async function cancelCashTransaction(id, data = {}, req) {
           voucher_id: transaction._id,
           voucher_type: transaction.voucher_type,
         },
-        { $set: { status: "cancelled" } },
+        { $set: { status: getCancelledTransactionStatus(transaction.voucher_type) } },
         { session }
       );
 
@@ -444,45 +387,27 @@ export async function cancelCashTransaction(id, data = {}, req) {
           continue;
         }
 
-        const outstanding = await Outstanding.findById(item.outstanding).session(session);
+        const outstanding = await Outstanding.findOne({
+          _id: item.outstanding,
+          cmp_id: transaction.cmp_id,
+          party_id: transaction.party_id,
+          isCancelled: false,
+        }).session(session);
 
-        if (!outstanding || outstanding.isCancelled) {
-          continue;
+        if (!outstanding) {
+          throw createHttpError(
+            "Outstanding bill not found for the selected company and party",
+            400
+          );
         }
 
-        const settledSummary = await Receipt.aggregate([
-          {
-            $match: {
-              cmp_id: transaction.cmp_id,
-              status: "active",
-            },
-          },
-          { $unwind: "$settlement_details" },
-          {
-            $match: {
-              "settlement_details.outstanding": outstanding._id,
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              totalSettled: {
-                $sum: { $ifNull: ["$settlement_details.settled_amount", 0] },
-              },
-            },
-          },
-        ]).session(session);
+        const settledAmount = Number(item.settled_amount) || 0;
+        if (settledAmount <= 0) {
+          throw createHttpError("Settled amount must be greater than zero", 400);
+        }
 
-        const activeSettledAmount = Number(settledSummary?.[0]?.totalSettled) || 0;
-        const billAmount = Number(outstanding.bill_amount) || 0;
-        const classification = String(outstanding.classification || "dr").toLowerCase();
-
-        // DR pending = bill_amount - settled_receipts
-        // CR pending = -(bill_amount + settled_receipts)
-        outstanding.bill_pending_amt =
-          classification === "cr"
-            ? -(billAmount + activeSettledAmount)
-            : billAmount - activeSettledAmount;
+        const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
+        outstanding.bill_pending_amt = currentPendingAmount + settledAmount;
         outstanding.classification =
           Number(outstanding.bill_pending_amt) < 0 ? "cr" : "dr";
         await outstanding.save({ session });
@@ -501,9 +426,7 @@ export async function cancelCashTransaction(id, data = {}, req) {
           voucher_id: transaction._id,
           voucher_type: transaction.voucher_type,
         },
-        {
-          status: transaction.status || null,
-        },
+        buildVoucherTimelineUpdatePayload(transaction, { status: transaction.status || null }),
         session
       );
     });

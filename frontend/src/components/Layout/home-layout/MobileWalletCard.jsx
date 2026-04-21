@@ -7,6 +7,7 @@ import {
   Bell,
   Boxes,
   FileText,
+  Loader2,
   Package,
   Users,
 } from "lucide-react";
@@ -139,7 +140,9 @@ export default function MobileWalletCard({
 }) {
   const navigate = useNavigate();
   const user = useSelector((state) => state.auth.user);
-  const selectedCompanyId = useSelector((state) => state.company.selectedCompanyId);
+  const selectedCompanyId = useSelector(
+    (state) => state.company.selectedCompanyId,
+  );
   const displayName = getUserDisplayName(user);
   const initials = getInitials(displayName);
   const { logoutUser } = useLogoutUser();
@@ -152,7 +155,10 @@ export default function MobileWalletCard({
     gcTime: isAdminUser ? 20 * 60 * 1000 : 10 * 60 * 1000,
     refetchInterval: isAdminUser ? 10 * 60 * 1000 : false,
   });
-  const totals = totalsSummaryQuery.data?.totals || { saleOrder: 0, receipt: 0 };
+  const totals = totalsSummaryQuery.data?.totals || {
+    saleOrder: 0,
+    receipt: 0,
+  };
 
   const totalCards = useMemo(
     () => [
@@ -172,7 +178,9 @@ export default function MobileWalletCard({
     [totals.receipt, totals.saleOrder],
   );
 
-  const activeIndex = totalCards.findIndex((card) => card.key === activeTotalType);
+  const activeIndex = totalCards.findIndex(
+    (card) => card.key === activeTotalType,
+  );
   const activeCard = totalCards[activeIndex] || totalCards[0];
 
   const onLogout = useCallback(() => {
@@ -195,11 +203,15 @@ export default function MobileWalletCard({
   );
 
   const showPreviousTotal = useCallback(() => {
-    setActiveTotalType((current) => (current === "receipt" ? "saleOrder" : current));
+    setActiveTotalType((current) =>
+      current === "receipt" ? "saleOrder" : current,
+    );
   }, []);
 
   const showNextTotal = useCallback(() => {
-    setActiveTotalType((current) => (current === "saleOrder" ? "receipt" : current));
+    setActiveTotalType((current) =>
+      current === "saleOrder" ? "receipt" : current,
+    );
   }, []);
 
   const handleTouchStart = useCallback((event) => {
@@ -272,13 +284,13 @@ export default function MobileWalletCard({
             </div>
 
             <div className="flex items-center gap-2">
-              <button
+              {/* <button
                 type="button"
                 className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition-colors hover:bg-white/20"
               >
                 <Bell className="h-4 w-4" />
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-sky-400 ring-1 ring-blue-900" />
-              </button>
+              </button> */}
               <MobileHeaderActions options={walletHeaderOptions} tone="dark" />
             </div>
           </div>
@@ -296,9 +308,13 @@ export default function MobileWalletCard({
               {activeCard.label}
             </p>
             <p className="text-3xl font-bold tracking-tight">
-              {totalsSummaryQuery.isLoading
-                ? "Loading..."
-                : formatCurrency(activeCard.value)}
+              {totalsSummaryQuery.isLoading ? (
+                <span className="inline-flex min-h-9 items-center justify-center">
+                  <Loader2 className="h-7 w-7 animate-spin text-blue-100" />
+                </span>
+              ) : (
+                formatCurrency(activeCard.value)
+              )}
             </p>
             <p className="mt-1 text-[11px] text-blue-300">
               {totalsSummaryQuery.isError
@@ -367,6 +383,15 @@ export default function MobileWalletCard({
               className="border-pink-100 bg-gradient-to-br from-pink-50 to-white  !h-26"
               layout="vertical"
             />
+            <QuickActionCard
+              title="Daybook"
+              icon={FileText}
+              onClick={() => navigate(ROUTES.daybook)}
+              iconClassName="rounded-xl bg-indigo-100 text-indigo-500"
+              className="border-slate-100 bg-white !h-18"
+              wide
+              showArrow={true}
+            />
 
             <QuickActionCard
               title="Outstandings"
@@ -374,21 +399,11 @@ export default function MobileWalletCard({
               icon={AlertCircle}
               onClick={() => navigate(ROUTES.outstanding)}
               iconClassName="rounded-xl bg-red-100 text-red-500"
-              className="border-slate-100 bg-white"
-              wide
-            />
-
-            <QuickActionCard
-              title="Daybook"
-              icon={FileText}
-              onClick={() => navigate(ROUTES.daybook)}
-              iconClassName="rounded-xl bg-indigo-100 text-indigo-500"
               className="border-slate-100 bg-white !h-18"
-              layout="horizontal" // icon + text in a row
-              showArrow={true}
+               layout="horizontal"
             />
 
-            <QuickActionCard
+            {/* <QuickActionCard
               title="Stock register"
               icon={Boxes}
               onClick={() => navigate(ROUTES.stockRegister)}
@@ -396,7 +411,7 @@ export default function MobileWalletCard({
               className="border-slate-100 bg-white !h-18"
               layout="horizontal"
               showArrow={true}
-            />
+            /> */}
 
             <QuickActionCard
               title="Cash / Bank"
@@ -404,8 +419,9 @@ export default function MobileWalletCard({
               icon={Banknote}
               onClick={() => navigate(ROUTES.CashBankBalancePage)}
               iconClassName="rounded-xl bg-teal-100 text-teal-500"
-              className="border-slate-100 bg-gradient-to-r from-teal-50/80 to-white"
-              wide
+              className="border-slate-100 bg-gradient-to-r from-teal-50/80 to-white  !h-18"
+              layout="horizontal" // icon + text in a row
+              showArrow={true}
             />
           </div>
         </CardContent>

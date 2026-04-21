@@ -1,11 +1,11 @@
 import PrintConfiguration from "../Model/PrintConfiguration.js";
 import { getDefaultPrintConfigDocuments } from "./printConfigDefaults.js";
 
-export const seedDefaultPrintConfigs = async (cmp_id) => {
+export const seedDefaultPrintConfigs = async (cmp_id, { session } = {}) => {
   try {
     await PrintConfiguration.insertMany(
       getDefaultPrintConfigDocuments(cmp_id),
-      { ordered: false }
+      { ordered: false, ...(session ? { session } : {}) }
     );
 
     console.log(`Print configs seeded for cmp_id: ${cmp_id}`);
