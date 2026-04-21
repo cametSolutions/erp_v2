@@ -134,15 +134,15 @@ export const getPrintConfigurationItems = () => [
     },
     active: true,
   },
-  {
-    id: "print-config-receipt",
-    title: "Receipt",
-    description: "Configure print settings for receipts",
-    icon: TbFileInvoice,
-    action: {
-      type: "route",
-      to: ROUTES.settingsPrintConfigurationsReceipt,
-    },
-    active: true,
-  },
+  // {
+  //   id: "print-config-receipt",
+  //   title: "Receipt",
+  //   description: "Configure print settings for receipts",
+  //   icon: TbFileInvoice,
+  //   action: {
+  //     type: "route",
+  //     to: ROUTES.settingsPrintConfigurationsReceipt,
+  //   },
+  //   active: true,
+  // },
 ];
