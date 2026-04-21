@@ -39,7 +39,7 @@ const outstandingSchema = new Schema(
       required: true,
     },
     mobile_no: {
-      type: Number,
+      type: String,
     },
     email: {
       type: String,
