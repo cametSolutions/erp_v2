@@ -5,7 +5,7 @@ import {
   listParties,
   getPartyById,
   updateParty,
-  deleteParty,getParties
+  deleteParty,
 } from "../../controllers/partyController.js";
 import { protect } from "../../middleware/authMiddleware.js";
 import { requireCompanyAccess } from "../../middleware/companyAccessMiddleware.js";
@@ -17,6 +17,5 @@ router.get("/", protect, requireCompanyAccess, listParties);          // list (i
 router.get("/:id", protect, getPartyById);      // single
 router.put("/:id", protect, requireCompanyAccess, updateParty);       // edit
 router.delete("/:id", protect, deleteParty);    // delete
-router.get("/party", getParties);
 
 export default router;
