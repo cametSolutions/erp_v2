@@ -284,13 +284,13 @@ export default function MobileWalletCard({
             </div>
 
             <div className="flex items-center gap-2">
-              <button
+              {/* <button
                 type="button"
                 className="relative flex h-9 w-9 items-center justify-center rounded-full bg-white/10 backdrop-blur-sm transition-colors hover:bg-white/20"
               >
                 <Bell className="h-4 w-4" />
                 <span className="absolute right-1.5 top-1.5 h-2 w-2 rounded-full bg-sky-400 ring-1 ring-blue-900" />
-              </button>
+              </button> */}
               <MobileHeaderActions options={walletHeaderOptions} tone="dark" />
             </div>
           </div>
