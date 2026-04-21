@@ -444,45 +444,27 @@ export async function cancelCashTransaction(id, data = {}, req) {
           continue;
         }
 
-        const outstanding = await Outstanding.findById(item.outstanding).session(session);
+        const outstanding = await Outstanding.findOne({
+          _id: item.outstanding,
+          cmp_id: transaction.cmp_id,
+          party_id: transaction.party_id,
+          isCancelled: false,
+        }).session(session);
 
-        if (!outstanding || outstanding.isCancelled) {
-          continue;
+        if (!outstanding) {
+          throw createHttpError(
+            "Outstanding bill not found for the selected company and party",
+            400
+          );
         }
 
-        const settledSummary = await Receipt.aggregate([
-          {
-            $match: {
-              cmp_id: transaction.cmp_id,
-              status: "active",
-            },
-          },
-          { $unwind: "$settlement_details" },
-          {
-            $match: {
-              "settlement_details.outstanding": outstanding._id,
-            },
-          },
-          {
-            $group: {
-              _id: null,
-              totalSettled: {
-                $sum: { $ifNull: ["$settlement_details.settled_amount", 0] },
-              },
-            },
-          },
-        ]).session(session);
+        const settledAmount = Number(item.settled_amount) || 0;
+        if (settledAmount <= 0) {
+          throw createHttpError("Settled amount must be greater than zero", 400);
+        }
 
-        const activeSettledAmount = Number(settledSummary?.[0]?.totalSettled) || 0;
-        const billAmount = Number(outstanding.bill_amount) || 0;
-        const classification = String(outstanding.classification || "dr").toLowerCase();
-
-        // DR pending = bill_amount - settled_receipts
-        // CR pending = -(bill_amount + settled_receipts)
-        outstanding.bill_pending_amt =
-          classification === "cr"
-            ? -(billAmount + activeSettledAmount)
-            : billAmount - activeSettledAmount;
+        const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
+        outstanding.bill_pending_amt = currentPendingAmount + settledAmount;
         outstanding.classification =
           Number(outstanding.bill_pending_amt) < 0 ? "cr" : "dr";
         await outstanding.save({ session });

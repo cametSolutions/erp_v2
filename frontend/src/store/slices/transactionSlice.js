@@ -139,26 +139,6 @@ const initialState = {
   },
 };
 
-function clearSaleOrderStorage(cmp_id) {
-  if (!cmp_id) return;
-
-  try {
-    localStorage.removeItem(`sale-order-product-filters-${cmp_id}`);
-    localStorage.removeItem(`lastSeries_saleOrder_${cmp_id}`);
-    localStorage.removeItem(`lastSeriesId_saleOrder_${cmp_id}`);
-  } catch (error) {
-    console.error("Failed to clear sale order local storage", error);
-  }
-}
-
-function getSeriesStorageKey(voucherType, cmp_id) {
-  return `lastSeries_${voucherType || "saleOrder"}_${cmp_id}`;
-}
-
-function getLegacySeriesStorageKey(voucherType, cmp_id) {
-  return `lastSeriesId_${voucherType || "saleOrder"}_${cmp_id}`;
-}
-
 function mapSaleOrderParty(doc = {}) {
   const snapshot = doc?.party_snapshot || {};
 
@@ -253,42 +233,9 @@ const transactionSlice = createSlice({
       state.transactionDate = action.payload?.transactionDate ?? null;
     },
     setSelectedSeries(state, action) {
-      const { series, cmp_id } = action.payload || {};
+      const { series } = action.payload || {};
       const enrichedSeries = enrichSelectedSeries(series);
       state.selectedSeries = enrichedSeries;
-
-      if (!enrichedSeries?._id || !cmp_id) return;
-
-      try {
-        localStorage.setItem(
-          getSeriesStorageKey(state.voucherType, cmp_id),
-          JSON.stringify(enrichedSeries),
-        );
-      } catch (error) {
-        console.error("Failed to persist last series id", error);
-      }
-    },
-    hydrateSelectedSeries(state, action) {
-      const { cmp_id } = action.payload || {};
-      if (!cmp_id) return;
-
-      try {
-        const raw = localStorage.getItem(
-          getSeriesStorageKey(state.voucherType, cmp_id)
-        );
-
-        if (raw) {
-          state.selectedSeries = enrichSelectedSeries(JSON.parse(raw));
-          return;
-        }
-
-        const legacyId = localStorage.getItem(
-          getLegacySeriesStorageKey(state.voucherType, cmp_id)
-        );
-        state.selectedSeries = legacyId ? { _id: legacyId } : null;
-      } catch (error) {
-        console.error("Failed to hydrate last series id", error);
-      }
     },
     setDespatchDetails(state, action) {
       state.despatchDetails = {
@@ -435,7 +382,6 @@ const transactionSlice = createSlice({
       recalculateTotals(state);
     },
     resetSaleOrderDraft(state) {
-      const cmp_id = state.cmp_id;
       state.cmp_id = initialState.cmp_id;
       state.voucherType = initialState.voucherType;
       state.transactionDate = initialState.transactionDate;
@@ -449,8 +395,6 @@ const transactionSlice = createSlice({
       state.items = [];
       state.additionalCharges = [];
       state.totals = { ...initialState.totals };
-
-      clearSaleOrderStorage(cmp_id);
     },
   },
 });
@@ -460,7 +404,6 @@ export const {
   setVoucherType,
   setTransactionDate,
   setSelectedSeries,
-  hydrateSelectedSeries,
   setDespatchDetails,
   resetDespatchDetails,
   setParty,

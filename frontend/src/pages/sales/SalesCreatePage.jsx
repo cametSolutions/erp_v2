@@ -12,6 +12,7 @@ import { useCreateSaleOrder } from "@/hooks/mutations/useCreateSaleOrder";
 import TransactionHeader from "@/components/TransactionHeader";
 import { ROUTES } from "@/routes/paths";
 import { resetSaleOrderDraft, setCompany } from "@/store/slices/transactionSlice";
+import { clearSaleOrderDraftStorage } from "@/utils/transactionStorage";
 
 
 export default function SalesCreatePage() {
@@ -42,6 +43,7 @@ export default function SalesCreatePage() {
     onSuccess: (data) => {
       const saleOrder = data?.data?.saleOrder;
       if (saleOrder?._id) {
+        clearSaleOrderDraftStorage(cmp_id);
         dispatch(resetSaleOrderDraft());
         navigate(
           ROUTES.transactionDetail

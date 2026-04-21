@@ -11,7 +11,10 @@ import { useVoucherSeries } from "@/hooks/queries/voucherSeriesQueries";
 import VoucherSeriesModal from "@/components/VoucherSeriesModal";
 import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 import {
-  hydrateSelectedSeries,
+  persistStoredSeries,
+  readStoredSeries,
+} from "@/utils/transactionStorage";
+import {
   setTransactionDate,
   setSelectedSeries,
 } from "@/store/slices/transactionSlice";
@@ -112,8 +115,13 @@ export default function TransactionHeader({
   useEffect(() => {
     if (editMode) return;
     if (!cmp_id) return;
-    dispatch(hydrateSelectedSeries({ cmp_id }));
-  }, [cmp_id, editMode, voucherType, dispatch]);
+
+    const storedSeries = readStoredSeries(voucherType, cmp_id);
+    if (!storedSeries?._id) return;
+    if (selectedSeries?._id === storedSeries._id) return;
+
+    dispatch(setSelectedSeries({ series: storedSeries }));
+  }, [cmp_id, dispatch, editMode, selectedSeries?._id, voucherType]);
 
   useEffect(() => {
     if (transactionDate) return;
@@ -131,11 +139,17 @@ export default function TransactionHeader({
 
     dispatch(
       setSelectedSeries({
-        cmp_id,
         series: effectiveSeries,
       })
     );
   }, [cmp_id, dispatch, editMode, effectiveSeries, matchedSelectedSeries]);
+
+  useEffect(() => {
+    if (editMode) return;
+    if (!cmp_id || !effectiveSeries?._id) return;
+
+    persistStoredSeries(voucherType, cmp_id, effectiveSeries);
+  }, [cmp_id, editMode, effectiveSeries, voucherType]);
 
   // expose clean data to parent (separated prefix/number/suffix)
   useEffect(() => {
@@ -170,7 +184,7 @@ export default function TransactionHeader({
 
   const handleSelectSeries = (series) => {
     if (editMode) return;
-    dispatch(setSelectedSeries({ cmp_id, series }));
+    dispatch(setSelectedSeries({ series }));
   };
 
   const handleDateChange = (date) => {

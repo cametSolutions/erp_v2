@@ -13,6 +13,7 @@ import {
 } from "@/hooks/queries/companyQueries";
 import { ROUTES } from "@/routes/paths";
 import { resetSaleOrderDraft } from "@/store/slices/transactionSlice";
+import { clearSaleOrderDraftStorage } from "@/utils/transactionStorage";
 
 import CompanyDrawer from "./home-layout/CompanyDrawer";
 import CompanySwitchOverlay from "./home-layout/CompanySwitchOverlay";
@@ -42,6 +43,7 @@ function useHomeLayoutState() {
     (state) => state.company.selectedCompanyId,
   );
   const selectedCompany = useSelector((state) => state.company.selectedCompany);
+  const transactionCompanyId = useSelector((state) => state.transaction.cmp_id);
   const role = user?.role || "staff";
   const canCreateCompany = role === "admin";
   const [headerOptionsByPath, setHeaderOptionsByPath] = useState({});
@@ -110,11 +112,12 @@ function useHomeLayoutState() {
       isSaleOrderContextPath(previousPathname) &&
       !isSaleOrderContextPath(currentPathname)
     ) {
+      clearSaleOrderDraftStorage(transactionCompanyId || selectedCompanyId);
       dispatch(resetSaleOrderDraft());
     }
 
     previousPathnameRef.current = currentPathname;
-  }, [dispatch, location.pathname]);
+  }, [dispatch, location.pathname, selectedCompanyId, transactionCompanyId]);
 
   useEffect(() => {
     if (!switchingCompanyId || !selectedCompanyDetails) return;
