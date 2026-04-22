@@ -20,6 +20,9 @@ import {
 import { useAdditionalChargesQuery } from "@/hooks/queries/additionalChargeQueries";
 import { setAdditionalCharges } from "@/store/slices/transactionSlice";
 
+// Additional charges block.
+// Charges are selected from masters and then captured as transaction snapshots
+// with amount/action/tax impact at order time.
 export default function AdditionalChargesSection() {
   const dispatch = useDispatch();
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
@@ -32,6 +35,7 @@ export default function AdditionalChargesSection() {
 
   const { data: charges = [], isLoading, isError, error } = useAdditionalChargesQuery({
     cmp_id,
+    // Avoid charge queries until company and at least one item exist.
     enabled: Boolean(cmp_id) && hasItems,
   });
 
@@ -68,6 +72,7 @@ export default function AdditionalChargesSection() {
   };
 
   const handleSave = () => {
+    // Persist draft charges into transaction slice; totals are recalculated there.
     dispatch(setAdditionalCharges(draftCharges));
     setOpen(false);
   };

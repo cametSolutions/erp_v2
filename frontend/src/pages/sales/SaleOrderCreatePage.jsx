@@ -14,9 +14,15 @@ import { ROUTES } from "@/routes/paths";
 import { resetSaleOrderDraft, setCompany } from "@/store/slices/transactionSlice";
 import { clearSaleOrderDraftStorage } from "@/utils/transactionStorage";
 
-
-export default function SalesCreatePage() {
+// Sale-order creation page (frontend entry point).
+// This page does not do heavy calculations by itself; it orchestrates:
+// - UI sections (party/details/items/charges/summary)
+// - draft state from Redux
+// - final payload build + create mutation
+export default function SaleOrderCreatePage() {
+  // Company id decides tenant scope for all downstream APIs.
   const cmp_id = useSelector((state) => state.company.selectedCompanyId);
+  // Transaction draft pieces collected from individual sections.
   const party = useSelector((state) => state.transaction.party);
   const items = useSelector((state) => state.transaction.items);
   const despatchDetails = useSelector((state) => state.transaction.despatchDetails);
@@ -29,16 +35,19 @@ export default function SalesCreatePage() {
   const buildHeaderPayloadRef = useRef(null);
   const [headerReady, setHeaderReady] = useState(false);
 
-
-  // console.log(buildHeaderPayload());
-  
-
+  // Keep transaction slice company context aligned with currently selected company.
+  // This helps when user switches company and then opens create order directly.
   useEffect(() => {
     if (!cmp_id) return;
 
     dispatch(setCompany({ cmp_id }));
   }, [cmp_id, dispatch]);
 
+  // API mutation for creating order.
+  // On success:
+  // 1) clear draft cache
+  // 2) reset Redux draft state
+  // 3) navigate to transaction detail page
   const createSaleOrderMutation = useCreateSaleOrder({
     cmp_id,
     onSuccess: (data) => {
@@ -58,11 +67,17 @@ export default function SalesCreatePage() {
     },
   });
 
+  // TransactionHeader exposes a callback that returns latest date/series/number payload.
+  // We store that callback in a ref so submit handler can read it synchronously.
   const handleHeaderReady = useCallback((builder) => {
     buildHeaderPayloadRef.current = builder;
     setHeaderReady(Boolean(builder));
   }, []);
 
+  // Final "Create" action:
+  // 1) collect dynamic header payload from TransactionHeader
+  // 2) normalize request shape using API service builder
+  // 3) trigger mutation
   const handleCreateSaleOrder = () => {
     const headerPayload = buildHeaderPayloadRef.current
       ? buildHeaderPayloadRef.current()
@@ -84,6 +99,7 @@ export default function SalesCreatePage() {
 
   const createLoading =
     createSaleOrderMutation.isPending || createSaleOrderMutation.isLoading;
+  // Guard rails for create CTA.
   const hasParty = Boolean(party?._id || party?.id);
   const hasItems = items.length > 0;
   const disableCreate = !cmp_id || !headerReady || !hasParty || !hasItems;

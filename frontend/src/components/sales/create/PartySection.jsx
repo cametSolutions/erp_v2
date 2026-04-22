@@ -6,6 +6,10 @@ import PartySelectSheet from "@/components/PartySelectSheet";
 import { formatCurrency } from "@/components/sales/create/helpers";
 import SectionCard from "@/components/sales/create/SectionCard";
 
+// Party selection block.
+// Party is a mandatory dependency for sale order because:
+// - it drives tax type (IGST vs CGST/SGST)
+// - it is required before item selection/rate resolution
 export default function PartySection({ locked = false }) {
   const [open, setOpen] = useState(false);
   const party = useSelector((state) => state.transaction.party);
@@ -88,6 +92,7 @@ export default function PartySection({ locked = false }) {
         )}
       </SectionCard>
 
+      {/* Selection sheet is disabled in edit mode where party is locked. */}
       {!locked && <PartySelectSheet open={open} onOpenChange={setOpen} />}
     </>
   );

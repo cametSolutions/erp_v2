@@ -49,7 +49,25 @@ const PRODUCT_FILTERS_STORAGE_KEY = "sale-order-product-filters";
 // Pure helpers
 // ---------------------------------------------------------------------------
 
+/**
+ * Reads previously saved product filter values for a specific company.
+ *
+ * Why this exists:
+ * - Filters must persist when user leaves and returns to this page.
+ * - Filters are company-specific, so key includes `cmp_id`.
+ *
+ * @param {string} cmp_id - Active company id.
+ * @returns {{
+ *   search: string,
+ *   priceLevel: string,
+ *   brandId: string,
+ *   categoryId: string,
+ *   subcategoryId: string,
+ * } | null}
+ * Returns normalized filter object or `null` when absent/invalid.
+ */
 function getStoredProductFilters(cmp_id) {
+  // Company-scoped localStorage keeps filter state isolated between companies.
   if (!cmp_id) return null;
   try {
     const raw = localStorage.getItem(`${PRODUCT_FILTERS_STORAGE_KEY}-${cmp_id}`);
@@ -67,6 +85,19 @@ function getStoredProductFilters(cmp_id) {
   }
 }
 
+/**
+ * Persists filter state to localStorage for the active company.
+ *
+ * @param {string} cmp_id - Active company id.
+ * @param {{
+ *   search: string,
+ *   priceLevel: string,
+ *   brandId: string,
+ *   categoryId: string,
+ *   subcategoryId: string,
+ * }} filters - Current filter selection.
+ * @returns {void}
+ */
 function persistProductFilters(cmp_id, filters) {
   if (!cmp_id) return;
   try {
@@ -79,10 +110,22 @@ function persistProductFilters(cmp_id, filters) {
   }
 }
 
+/**
+ * Normalizes product identifier from mixed API shapes.
+ *
+ * @param {object} product - Product record from list/detail endpoint.
+ * @returns {string|undefined} Canonical product id when available.
+ */
 function getProductId(product) {
   return product?._id || product?.id || product?.product_master_id;
 }
 
+/**
+ * Extracts id from option rows used by Brand/Category/Subcategory dropdowns.
+ *
+ * @param {object} option - Master option row with variable field names.
+ * @returns {string|undefined}
+ */
 function getMasterOptionId(option) {
   return (
     option?.value ||
@@ -94,6 +137,12 @@ function getMasterOptionId(option) {
   );
 }
 
+/**
+ * Extracts display label for dropdown options.
+ *
+ * @param {object} option - Master option row with variable label keys.
+ * @returns {string} User-facing label.
+ */
 function getMasterOptionLabel(option) {
   return (
     option?.label ||
@@ -105,6 +154,12 @@ function getMasterOptionLabel(option) {
   );
 }
 
+/**
+ * Resolves which category a subcategory belongs to.
+ *
+ * @param {object} subcategory
+ * @returns {string} Category id or empty string when unknown.
+ */
 function getSubcategoryCategoryId(subcategory) {
   return (
     subcategory?.categoryId ||
@@ -115,13 +170,47 @@ function getSubcategoryCategoryId(subcategory) {
   );
 }
 
+/**
+ * Resolves total tax rate for a product.
+ *
+ * Expected precedence:
+ * 1) explicit `taxRate`
+ * 2) `igst`
+ * 3) `cgst + sgst`
+ *
+ * @param {object} productDetail
+ * @returns {number} Tax rate percentage.
+ */
 function getProductTaxRate(productDetail) {
+  // Prefer explicit taxRate if backend already provides it;
+  // otherwise derive from IGST or CGST+SGST fields.
   if (productDetail?.taxRate != null) return Number(productDetail.taxRate) || 0;
   if (productDetail?.igst != null) return Number(productDetail.igst) || 0;
   return (Number(productDetail?.cgst) || 0) + (Number(productDetail?.sgst) || 0);
 }
 
+/**
+ * Converts product data from any source into a normalized "product detail" shape
+ * used by staging, rate lookups, and item editing.
+ *
+ * @param {object} product - List row, detail response, or staged sub-object.
+ * @returns {{
+ *   _id: string|undefined,
+ *   product_name: string,
+ *   hsn: string,
+ *   unit: string,
+ *   cgst: number,
+ *   sgst: number,
+ *   igst: number,
+ *   cess: number,
+ *   addl_cess: number,
+ *   taxRate: number,
+ *   priceLevels: Array
+ * } & object}
+ */
 function buildProductDetail(product) {
+  // Normalize product shape from different endpoints/list responses into one
+  // local format used by staged-item calculations and edit sheet.
   const { rate: _ignored, ...detail } = product || {};
   return {
     ...detail,
@@ -140,7 +229,15 @@ function buildProductDetail(product) {
   };
 }
 
+/**
+ * Finds the configured rate for a product under a selected price level.
+ *
+ * @param {{ priceLevels?: Array<{priceLevel?: string, priceRate?: number}> }} productDetail
+ * @param {string} priceLevelId
+ * @returns {number|null} Rate when match exists, else `null`.
+ */
 function getPriceLevelRate(productDetail, priceLevelId) {
+  // Price-level rates are stored as `{ priceLevel, priceRate }` array.
   if (!priceLevelId || !Array.isArray(productDetail?.priceLevels)) return null;
   const match = productDetail.priceLevels.find(
     (l) => l?.priceLevel?.toString() === priceLevelId?.toString(),
@@ -148,6 +245,13 @@ function getPriceLevelRate(productDetail, priceLevelId) {
   return match?.priceRate ?? null;
 }
 
+/**
+ * Converts staged item state into a minimal input object expected by
+ * `recalculateItem` for live row-total preview in product list rows.
+ *
+ * @param {object} stagedItem
+ * @returns {object|null} Calculation-ready item object or `null`.
+ */
 function buildCalcItemFromStaged(stagedItem) {
   if (!stagedItem) return null;
   return {
@@ -175,6 +279,29 @@ function buildCalcItemFromStaged(stagedItem) {
   };
 }
 
+/**
+ * Converts an already-added transaction item into local "staged item" shape.
+ * Used when user re-enters item selector while editing an existing draft.
+ *
+ * @param {object} item - Transaction slice item shape.
+ * @returns {{
+ *   quantity: number,
+ *   originalQuantity: number,
+ *   productDetail: object,
+ *   rate: number,
+ *   taxType: string,
+ *   initialPriceSource: string,
+ *   taxInclusive: boolean,
+ *   actualQty: number,
+ *   billedQty: number,
+ *   discountType: string,
+ *   discountPercentage: number,
+ *   discountAmount: number,
+ *   description: string,
+ *   warrantyCardId: string|null,
+ *   originalSnapshot: object
+ * }}
+ */
 function createStagedItemFromTransactionItem(item) {
   const billedQty = Number(item?.billedQty) || 0;
   const actualQty = Number(item?.actualQty ?? item?.billedQty) || 0;
@@ -220,6 +347,13 @@ function createStagedItemFromTransactionItem(item) {
   };
 }
 
+/**
+ * Builds the item payload consumed by `ItemEditSheet`.
+ *
+ * @param {string} productId
+ * @param {object} stagedItem
+ * @returns {object} Editable item object with full tax/rate/qty fields.
+ */
 function buildEditableItem(productId, stagedItem) {
   const detail = buildProductDetail(stagedItem?.productDetail);
   return {
@@ -252,15 +386,50 @@ function buildEditableItem(productId, stagedItem) {
   };
 }
 
+/**
+ * Fetches party-specific last sale price (LSP) for a product.
+ *
+ * @param {string|null} partyId
+ * @param {string} productId
+ * @returns {Promise<number|null>}
+ */
 async function fetchPartyLsp(partyId, productId) {
   return productService.fetchPartyLsp(partyId, productId, { skipGlobalLoader: true });
 }
 
+/**
+ * Fetches global last sale price (GSP) for a product.
+ *
+ * @param {string} productId
+ * @returns {Promise<number|null>}
+ */
 async function fetchGlobalLsp(productId) {
   return productService.fetchGlobalLsp(productId, { skipGlobalLoader: true });
 }
 
+/**
+ * Resolves the initial rate while adding a new item row.
+ *
+ * Resolution strategy:
+ * 1) selected price-level rate
+ * 2) party LSP
+ * 3) global LSP
+ * 4) manual 0
+ *
+ * @param {{
+ *   partyId: string|null,
+ *   productId: string,
+ *   productDetail: object,
+ *   priceLevel: string
+ * }} params
+ * @returns {Promise<{source: "priceLevel"|"lsp"|"gsp"|"manual", rate: number}>}
+ */
 async function resolveInitialRate({ partyId, productId, productDetail, priceLevel }) {
+  // Rate resolution priority used while adding a brand new item row:
+  // 1) price level rate (if price level selected)
+  // 2) party LSP
+  // 3) global LSP
+  // 4) fallback manual 0
   if (priceLevel) {
     const levelRate = getPriceLevelRate(productDetail, priceLevel);
     return { source: "priceLevel", rate: levelRate != null ? Number(levelRate) || 0 : 0 };
@@ -278,6 +447,19 @@ async function resolveInitialRate({ partyId, productId, productDetail, priceLeve
 // FilterDropdown
 // ---------------------------------------------------------------------------
 
+/**
+ * Generic dropdown used by filter sheet.
+ *
+ * @param {{
+ *   label: string,
+ *   value: string,
+ *   onChange: (next: string) => void,
+ *   options: Array<object>,
+ *   placeholder: string,
+ *   disabled?: boolean
+ * }} props
+ * @returns {JSX.Element}
+ */
 function FilterDropdown({ label, value, onChange, options, placeholder, disabled = false }) {
   return (
     <div className="space-y-2">
@@ -311,6 +493,30 @@ function FilterDropdown({ label, value, onChange, options, placeholder, disabled
 // FilterSheet
 // ---------------------------------------------------------------------------
 
+/**
+ * Right-side filter sheet used to choose product filters before applying.
+ * Keeps local draft state so user can cancel without mutating applied filters.
+ *
+ * @param {{
+ *   open: boolean,
+ *   onOpenChange: (open: boolean) => void,
+ *   appliedPriceLevel: string,
+ *   appliedBrandId: string,
+ *   appliedCategoryId: string,
+ *   appliedSubcategoryId: string,
+ *   priceLevels: Array<object>,
+ *   brands: Array<object>,
+ *   categories: Array<object>,
+ *   subcategories: Array<object>,
+ *   onApply: (filters: {
+ *     priceLevel: string,
+ *     brandId: string,
+ *     categoryId: string,
+ *     subcategoryId: string,
+ *   }) => void
+ * }} props
+ * @returns {JSX.Element}
+ */
 function FilterSheet({
   open,
   onOpenChange,
@@ -456,6 +662,21 @@ function FilterSheet({
 // ProductRow
 // ---------------------------------------------------------------------------
 
+/**
+ * One product tile in list view with quantity controls and quick edit.
+ *
+ * @param {{
+ *   product: object,
+ *   stagedItem?: object,
+ *   loading: boolean,
+ *   priceLevel: string,
+ *   onAdd: (product: object) => void,
+ *   onEdit: (product: object) => void,
+ *   onIncrement: (product: object) => void,
+ *   onDecrement: (product: object) => void
+ * }} props
+ * @returns {JSX.Element}
+ */
 function ProductRow({ product, stagedItem, loading, priceLevel, onAdd, onEdit, onIncrement, onDecrement }) {
   const quantity = Number(stagedItem?.quantity) || 0;
   const displayRate =
@@ -548,6 +769,17 @@ function ProductRow({ product, stagedItem, loading, priceLevel, onAdd, onEdit, o
 // ProductSelectPage
 // ---------------------------------------------------------------------------
 
+/**
+ * Main sale-order item selection page.
+ *
+ * Responsibilities:
+ * - fetch and filter products
+ * - stage item changes locally (without immediately mutating transaction items)
+ * - resolve initial rates and allow row editing
+ * - commit staged changes back to Redux on "Continue"
+ *
+ * @returns {JSX.Element}
+ */
 export default function ProductSelectPage() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -616,6 +848,9 @@ export default function ProductSelectPage() {
   // Effects
   // ---------------------------------------------------------------------------
 
+  // Re-hydrate filters whenever company changes.
+  // Input: `cmp_id` and stored localStorage values.
+  // Output: updates local filter states + committed price-level ref.
   useEffect(() => {
     if (!cmp_id) return;
     const nextFilters = getStoredProductFilters(cmp_id);
@@ -629,6 +864,7 @@ export default function ProductSelectPage() {
     setSubcategoryId(nextFilters.subcategoryId || "");
   }, [cmp_id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  // Persist latest applied filters for current company.
   useEffect(() => {
     persistProductFilters(cmp_id, {
       search,
@@ -639,9 +875,12 @@ export default function ProductSelectPage() {
     });
   }, [appliedPriceLevel, brandId, categoryId, cmp_id, search, subcategoryId]);
 
+  // Seed local staged map from already selected transaction items (once per mount).
   useEffect(() => {
     if (didSeedRef.current) return;
     if (!Array.isArray(transactionItems) || transactionItems.length === 0) return;
+    // Seed staged state from existing transaction items when user re-opens
+    // the item selector during create/edit flow.
     const seeded = transactionItems.reduce((acc, item) => {
       if (!item?.id) return acc;
       acc[item.id] = createStagedItemFromTransactionItem(item);
@@ -651,6 +890,7 @@ export default function ProductSelectPage() {
     didSeedRef.current = true;
   }, [transactionItems]);
 
+  // Show toast for product-list query failures.
   useEffect(() => {
     if (!isError) return;
     toast.error(
@@ -658,6 +898,7 @@ export default function ProductSelectPage() {
     );
   }, [error, isError]);
 
+  // Infinite scroll observer: when sentinel enters viewport, fetch next page.
   useEffect(() => {
     const node = loadMoreRef.current;
     if (!node || !hasNextPage) return;
@@ -678,7 +919,9 @@ export default function ProductSelectPage() {
   );
 
   const [products, setProducts] = useState([]);
+  // Clear product list on filter signature change to avoid stale visual carryover.
   useEffect(() => { setProducts([]); }, [filterSignature]);
+  // Flatten paginated query response into render-ready array.
   useEffect(() => {
     setProducts(data?.pages?.flatMap((page) => page?.items || []) || []);
   }, [data, filterSignature]);
@@ -687,6 +930,21 @@ export default function ProductSelectPage() {
   // applyFilters — THE ONLY PLACE committedPriceLevelRef IS WRITTEN
   // ---------------------------------------------------------------------------
 
+  /**
+   * Applies final filter values to state + Redux.
+   *
+   * Input shape:
+   * - `priceLevel`: selected price-level id
+   * - `brandId`, `categoryId`, `subcategoryId`: selected master ids
+   *
+   * Side effects:
+   * - updates local filter states used by product query
+   * - updates committed price-level ref (synchronous read safety)
+   * - updates Redux price-level fields for downstream sale-order payload flow
+   *
+   * @param {{ priceLevel?: string, brandId?: string, categoryId?: string, subcategoryId?: string }} candidate
+   * @returns {void}
+   */
   const applyFilters = useCallback(
     ({ priceLevel, brandId: nb, categoryId: nc, subcategoryId: ns }) => {
       const pl = priceLevel || "";
@@ -703,6 +961,8 @@ export default function ProductSelectPage() {
       const matchedPriceLevel = priceLevelsData.find(
         (level) => (level?._id || level?.id)?.toString() === pl,
       );
+      // Keep Redux price-level identifiers in sync so other sale-order screens
+      // and payload builders use the same selected level.
       dispatch(setPriceLevel(pl || null));
       dispatch(setPriceLevelObject(matchedPriceLevel ?? null));
     },
@@ -716,6 +976,16 @@ export default function ProductSelectPage() {
   // No closures over stale state, no useEffect timing gaps.
   // ---------------------------------------------------------------------------
 
+  /**
+   * Handles filter-sheet Apply action.
+   *
+   * Behavior:
+   * - If price level changed and staged rows exist, asks for confirmation before re-pricing.
+   * - Otherwise applies filters immediately.
+   *
+   * @param {{ priceLevel?: string, brandId?: string, categoryId?: string, subcategoryId?: string }} candidate
+   * @returns {void}
+   */
   const handleFilterApply = useCallback(
     (candidate) => {
       // Read the ref directly — this always reflects the last committed value
@@ -742,11 +1012,18 @@ export default function ProductSelectPage() {
   // Confirm / cancel price level change
   // ---------------------------------------------------------------------------
 
+  /**
+   * Confirms pending price-level change and re-prices staged rows.
+   *
+   * @returns {Promise<void>}
+   */
   const confirmPriceLevelChange = useCallback(async () => {
     if (!pendingPriceLevelChange) return;
     const { priceLevel } = pendingPriceLevelChange;
 
     try {
+      // Re-price all currently staged rows against the newly selected level.
+      // Items missing that level will end up with rate 0 (intentional).
       const repricedEntries = await Promise.all(
         Object.entries(stagedItemsRef.current).map(async ([productId, staged]) => {
           const productDetail = await ensureProductDetail(staged?.productDetail, staged);
@@ -772,6 +1049,11 @@ export default function ProductSelectPage() {
     setPendingPriceLevelChange(null);
   }, [applyFilters, pendingPriceLevelChange]);
 
+  /**
+   * Dismisses pending price-level change confirmation dialog.
+   *
+   * @returns {void}
+   */
   const cancelPriceLevelChange = useCallback(() => {
     setPendingPriceLevelChange(null);
   }, []);
@@ -780,6 +1062,14 @@ export default function ProductSelectPage() {
   // Product detail helpers
   // ---------------------------------------------------------------------------
 
+  /**
+   * Ensures a product has detail-level pricing metadata (unit + priceLevels etc).
+   * Uses staged/cache data when sufficient; otherwise fetches by id.
+   *
+   * @param {object} product - Product/list/detail object.
+   * @param {object|null} stagedItem - Existing staged row for this product, if any.
+   * @returns {Promise<object>} Normalized product detail object.
+   */
   const ensureProductDetail = async (product, stagedItem) => {
     const productId = getProductId(product) || stagedItem?.productDetail?._id;
     const existingDetail = stagedItem?.productDetail;
@@ -788,6 +1078,7 @@ export default function ProductSelectPage() {
       Array.isArray(existingDetail?.priceLevels) &&
       existingDetail.priceLevels.length > 0
     ) {
+      // Avoid extra API call when staged detail already has enough pricing metadata.
       return buildProductDetail(existingDetail);
     }
     const fetched = await getProductById(productId, { skipGlobalLoader: true });
@@ -798,6 +1089,13 @@ export default function ProductSelectPage() {
     });
   };
 
+  /**
+   * Marks/unmarks a product row as loading during async add/edit operations.
+   *
+   * @param {string} productId
+   * @param {boolean} val
+   * @returns {void}
+   */
   const setLoading = (productId, val) => {
     setLoadingProductIds((cur) => {
       const next = { ...cur };
@@ -811,12 +1109,20 @@ export default function ProductSelectPage() {
   // Add / increment / decrement
   // ---------------------------------------------------------------------------
 
+  /**
+   * Adds product to staged rows (or increments quantity if already staged).
+   * For brand-new rows, resolves rate + source via `resolveInitialRate`.
+   *
+   * @param {object} product
+   * @returns {Promise<void>}
+   */
   const handleAddOrIncrement = async (product) => {
     const productId = getProductId(product);
     if (!productId) return;
 
     const existingItem = stagedItemsRef.current[productId];
     if (existingItem) {
+      // Fast path: item already staged, only bump quantity.
       const nextQty = (Number(existingItem?.quantity) || 0) + 1;
       setStagedItems((cur) => ({
         ...cur,
@@ -833,6 +1139,7 @@ export default function ProductSelectPage() {
     setLoading(productId, true);
     try {
       const productDetail = await ensureProductDetail(product, null);
+      // Determine initial rate using the priority rule in `resolveInitialRate`.
       const { rate, source } = await resolveInitialRate({
         partyId: party?._id || party?.id || null,
         productId,
@@ -866,6 +1173,16 @@ export default function ProductSelectPage() {
     }
   };
 
+  /**
+   * Decrements staged quantity for a product.
+   *
+   * Removal rule:
+   * - For items that originally existed in transaction, keep row with qty=0.
+   * - For newly staged items, remove row from staged map when qty reaches 0.
+   *
+   * @param {object} product
+   * @returns {void}
+   */
   const handleDecrement = (product) => {
     const productId = getProductId(product);
     if (!productId || !stagedItemsRef.current[productId]) return;
@@ -899,6 +1216,13 @@ export default function ProductSelectPage() {
   // Edit sheet
   // ---------------------------------------------------------------------------
 
+  /**
+   * Opens item edit sheet for one staged product.
+   * Ensures full product detail is loaded first.
+   *
+   * @param {object} product
+   * @returns {Promise<void>}
+   */
   const openEditSheet = async (product) => {
     const productId = getProductId(product);
     const stagedItem = stagedItemsRef.current[productId];
@@ -915,6 +1239,12 @@ export default function ProductSelectPage() {
     }
   };
 
+  /**
+   * Applies edits coming from ItemEditSheet into local staged state.
+   *
+   * @param {object} changes - Partial editable item changes from sheet.
+   * @returns {void}
+   */
   const handleStagedSave = (changes) => {
     if (!editingProductId) return;
     setStagedItems((cur) => {
@@ -939,6 +1269,12 @@ export default function ProductSelectPage() {
     });
   };
 
+  /**
+   * Removes one staged row (or sets qty=0 for originally existing rows).
+   *
+   * @param {{id?: string}|null} item
+   * @returns {void}
+   */
   const handleStagedRemove = useCallback((item) => {
     const productId = item?.id || editingProductId;
     if (!productId) return;
@@ -969,6 +1305,15 @@ export default function ProductSelectPage() {
   // Continue / Done
   // ---------------------------------------------------------------------------
 
+  /**
+   * Commits staged changes back to Redux transaction state and returns.
+   *
+   * Commit behavior:
+   * - Existing rows -> `updateItem`
+   * - New rows -> batched through `addItemsFromSelection`
+   *
+   * @returns {void}
+   */
   const handleContinue = useCallback(() => {
     const payload = [];
 
@@ -987,6 +1332,7 @@ export default function ProductSelectPage() {
       };
 
       if (originalQuantity > 0) {
+        // Existing item from transaction: update in-place instead of re-adding.
         const nextActualQty =
           quantity > 0
             ? Number(staged?.actualQty ?? quantity) || quantity
@@ -1007,9 +1353,11 @@ export default function ProductSelectPage() {
       }
 
       if (quantity <= 0) {
+        // Skip rows user removed down to zero quantity.
         return;
       }
 
+      // Brand-new staged row: convert to transaction item shape for reducer.
       payload.push({
         id: productId,
         name: detail?.product_name || "Untitled Product",
@@ -1049,8 +1397,14 @@ export default function ProductSelectPage() {
   // Mobile header
   // ---------------------------------------------------------------------------
 
+  /**
+   * Opens filter sheet from mobile/desktop header action.
+   *
+   * @returns {void}
+   */
   const openFilterSheet = useCallback(() => setIsFilterSheetOpen(true), []);
 
+  // Registers page-specific mobile header controls and search binding.
   useEffect(() => {
     setHeaderOptions({
       showMenuDots: true,

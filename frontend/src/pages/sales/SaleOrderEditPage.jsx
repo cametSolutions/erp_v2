@@ -18,6 +18,12 @@ import {
   setCompany,
 } from "@/store/slices/transactionSlice";
 
+// Sale-order edit page.
+// Flow:
+// 1) fetch existing order
+// 2) hydrate Redux draft from saved document
+// 3) allow edits only when status is `open`
+// 4) build update payload and submit
 export default function SaleOrderEditPage() {
   const { id } = useParams();
   const dispatch = useDispatch();
@@ -29,26 +35,32 @@ export default function SaleOrderEditPage() {
     (state) => state.company.selectedCompanyId,
   );
   const transaction = useSelector((state) => state.transaction);
+  // Draft values read by shared create/edit sections.
   const { party, items, despatchDetails, additionalCharges, totals, priceLevelObject } =
     transaction;
 
+  // Query original document for editing.
   const saleOrderQuery = useGetSaleOrder(id, selectedCompanyId || "", {
     enabled: Boolean(id),
     skipGlobalLoader: true,
   });
   const saleOrder = saleOrderQuery.data || null;
+  // Fallback to document company if selector is not ready yet.
   const effectiveCmpId = selectedCompanyId || saleOrder?.cmp_id || "";
 
+  // Keep transaction slice company context in sync with the editable document.
   useEffect(() => {
     if (!effectiveCmpId) return;
     dispatch(setCompany({ cmp_id: effectiveCmpId }));
   }, [dispatch, effectiveCmpId]);
 
+  // One-time hydration of Redux draft from fetched sale order.
   useEffect(() => {
     if (!saleOrder) return;
     dispatch(loadSaleOrderForEdit(saleOrder));
   }, [dispatch, saleOrder]);
 
+  // Header builder callback from TransactionHeader.
   const handleHeaderReady = useCallback((builder) => {
     buildHeaderPayloadRef.current = builder;
     setHeaderReady(Boolean(builder));
@@ -58,6 +70,7 @@ export default function SaleOrderEditPage() {
     cmp_id: effectiveCmpId,
   });
 
+  // Build update payload using the same mapper used in create flow.
   const handleUpdateSaleOrder = () => {
     if (!saleOrder?._id) return;
 
@@ -85,6 +98,7 @@ export default function SaleOrderEditPage() {
 
   const updateLoading =
     updateSaleOrderMutation.isPending || updateSaleOrderMutation.isLoading;
+  // Prevent invalid submit until core prerequisites exist.
   const hasParty = Boolean(party?._id || party?.id);
   const hasItems = items.length > 0;
   const disableUpdate = !effectiveCmpId || !headerReady || !hasParty || !hasItems;

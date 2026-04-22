@@ -5,6 +5,9 @@ import { useSelector } from "react-redux";
 import DespatchDetailsSheet from "@/components/DespatchDetailsSheet";
 import SectionCard from "@/components/sales/create/SectionCard";
 
+// Despatch/order metadata block.
+// This section captures logistics fields that are stored with the voucher
+// and used in detail/print views.
 export default function DetailsSection() {
   const [open, setOpen] = useState(false);
   const despatch = useSelector((state) => state.transaction.despatchDetails);

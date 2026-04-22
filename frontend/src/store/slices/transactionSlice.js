@@ -2,6 +2,7 @@ import { createSlice } from "@reduxjs/toolkit";
 import { calculateItemAmounts, calculateItemsWithTotals } from "@/utils/salesCalculation";
 import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
+// Normalize and compute derived values of a single additional-charge row.
 function normalizeAdditionalCharge(row) {
   const baseValue = Number(row?.value) || 0;
   const taxPercentage = Number(row?.taxPercentage) || 0;
@@ -42,10 +43,12 @@ function enrichSelectedSeries(series) {
 }
 
 export function recalculateItem(item) {
+  // Shared wrapper so reducers use one canonical row-calculation path.
   return calculateItemAmounts(item, item?.taxType || "igst");
 }
 
 function resolveItemPriceLevelRate(item, nextPriceLevel) {
+  // Find rate override from price-level matrix for a given item.
   if (!nextPriceLevel || !Array.isArray(item?.priceLevels)) return null;
 
   const match = item.priceLevels.find(
@@ -57,6 +60,7 @@ function resolveItemPriceLevelRate(item, nextPriceLevel) {
 }
 
 function repriceAllItemsInternal(state) {
+  // Re-price every current line item when price level changes globally.
   state.items = state.items.map((item) => {
     const nextItem = {
       ...item,
@@ -79,6 +83,7 @@ function repriceAllItemsInternal(state) {
 }
 
 function recalculateTotals(state) {
+  // Recalculate line totals first, then add additional charges.
   const { items, totals: itemTotals } = calculateItemsWithTotals(
     state.items,
     state.taxType,
@@ -140,6 +145,7 @@ const initialState = {
 };
 
 function mapSaleOrderParty(doc = {}) {
+  // Convert backend saved shape into UI party state shape.
   const snapshot = doc?.party_snapshot || {};
 
   return {
@@ -154,6 +160,8 @@ function mapSaleOrderParty(doc = {}) {
 }
 
 function mapSaleOrderItem(row = {}, taxType = "igst") {
+  // Convert backend item row to UI item row and immediately recalculate so
+  // computed fields are normalized with current calculator implementation.
   return recalculateItem({
     _id: row?._id || null,
     id: row?.item_id || null,
@@ -249,6 +257,7 @@ const transactionSlice = createSlice({
     setParty(state, action) {
       const party = action.payload || null;
       state.party = party;
+      // Party selection drives tax type and therefore per-line tax calculation.
       state.taxType = party?.taxType || "igst";
       state.items = state.items.map((item) => ({
         ...item,
@@ -285,6 +294,7 @@ const transactionSlice = createSlice({
         const incomingBilledQty = Number(incomingItem.billedQty) || 0;
 
         if (existingItem) {
+          // If already present, add quantities instead of duplicating line.
           Object.assign(
             existingItem,
             recalculateItem({
@@ -300,6 +310,7 @@ const transactionSlice = createSlice({
         state.items.push(
           recalculateItem({
             ...incomingItem,
+            // Save currently selected price-level id on new line.
             priceLevel: state.priceLevel,
             taxType: incomingItem?.taxType || state.taxType,
           })
@@ -309,6 +320,7 @@ const transactionSlice = createSlice({
       recalculateTotals(state);
     },
     loadSaleOrderForEdit(state, action) {
+      // Protect against re-hydrating same document repeatedly.
       const incomingId = action.payload?._id?.toString();
       if (!incomingId) return;
       if (state.editingOrderId === incomingId) return;
@@ -357,6 +369,7 @@ const transactionSlice = createSlice({
       const nextActualQty = Number(nextItem?.actualQty) || 0;
 
       if (nextBilledQty <= 0 && nextActualQty <= 0) {
+        // Remove row completely if both operational and billed qty are zero.
         state.items.splice(existingItemIndex, 1);
       } else {
         Object.assign(existingItem, nextItem);
@@ -378,6 +391,7 @@ const transactionSlice = createSlice({
       state.priceLevelObject = action.payload || null;
     },
     repriceAllItems(state) {
+      // Explicit global re-price action (e.g. price-level change workflow).
       repriceAllItemsInternal(state);
       recalculateTotals(state);
     },
