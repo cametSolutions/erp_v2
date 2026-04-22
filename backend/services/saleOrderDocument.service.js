@@ -3,10 +3,19 @@ import mongoose from "mongoose";
 import { calculateSaleOrderTotals } from "./calculation.service.js";
 import { getInitialTransactionStatus } from "./transactionState.service.js";
 
+// Return the first non-`undefined` value.
+// Important: `null`, `0`, false are considered defined and will be returned.
+// This is used heavily to support multiple incoming payload naming conventions.
 function firstDefined(...values) {
   return values.find((value) => value !== undefined);
 }
 
+// Normalize totals from incoming request into a single internal shape.
+// Frontend/API currently sends a mix of:
+// - nested `totals.*`
+// - top-level camelCase
+// - top-level snake_case
+// This mapper keeps compatibility while the API evolves.
 function normalizeTotals(body = {}) {
   const totals = body.totals || {};
 
@@ -65,6 +74,7 @@ function normalizeTotals(body = {}) {
   };
 }
 
+// Snapshot only the high-level totals fields needed for client/server drift logging.
 function buildClientTotalsSnapshot(body = {}) {
   const totals = normalizeTotals(body);
 
@@ -76,6 +86,7 @@ function buildClientTotalsSnapshot(body = {}) {
   };
 }
 
+// Accept both explicit `selectedSeries` object and legacy flat fields.
 export function normalizeSelectedSeries(body = {}) {
   return (
     body.selectedSeries || {
@@ -85,14 +96,18 @@ export function normalizeSelectedSeries(body = {}) {
   );
 }
 
+// Price level may arrive under different keys depending on UI screen/state.
 function normalizePriceLevelObject(body = {}) {
   return body.priceLevelObject || body.selectedPriceLevel || null;
 }
 
+// Tax type defaults to IGST to keep calculations deterministic if field is missing.
 function normalizeTaxType(body = {}) {
   return body.tax_type || body.taxType || "igst";
 }
 
+// Convert incoming item rows into schema-compliant order item subdocuments.
+// `preserveIds` is used in update flow so existing line-item `_id` values survive edits.
 function mapSaleOrderItems(items = [], { preserveIds = false } = {}) {
   return items.map((row) => ({
     _id:
@@ -152,6 +167,8 @@ function mapSaleOrderItems(items = [], { preserveIds = false } = {}) {
   }));
 }
 
+// Normalize additional charges and fix known legacy typo:
+// `substract` -> `subtract`
 function mapAdditionalCharges(additionalCharges = []) {
   return additionalCharges.map((charge) => ({
     option: charge?.option || "",
@@ -166,6 +183,7 @@ function mapAdditionalCharges(additionalCharges = []) {
   }));
 }
 
+// Convert UI dispatch object into backend snake_case schema fields.
 function mapDespatchDetails(despatchDetails = {}) {
   return {
     challan_no: despatchDetails?.challanNo || null,
@@ -179,10 +197,13 @@ function mapDespatchDetails(despatchDetails = {}) {
   };
 }
 
+// Keep currency math consistent to 2 decimals where tax split is derived.
 function roundMoney(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
+// Canonical totals builder used by both create and update flows.
+// We recalculate on server side from items/charges to avoid trusting client math.
 export function buildSaleOrderTotals(body = {}) {
   const calculatedTotals = calculateSaleOrderTotals(
     body.items || [],
@@ -215,6 +236,9 @@ export function buildSaleOrderTotals(body = {}) {
   };
 }
 
+// Debug-only guard:
+// If client-submitted totals differ significantly from server recomputation,
+// we log it for investigation. Save operation still continues.
 export function logSaleOrderTotalsMismatch(body = {}) {
   const clientTotals = buildClientTotalsSnapshot(body);
   const serverTotals = calculateSaleOrderTotals(
@@ -238,6 +262,8 @@ export function logSaleOrderTotalsMismatch(body = {}) {
   }
 }
 
+// Build the full SaleOrder document for insert.
+// This is the single source of truth for request->schema transformation.
 export function buildSaleOrderPayload(body, voucher, serials, userId) {
   const {
     cmpId,
@@ -252,6 +278,7 @@ export function buildSaleOrderPayload(body, voucher, serials, userId) {
   const priceLevelObject = normalizePriceLevelObject(body);
 
   return {
+    // Ownership + voucher identity
     cmp_id: cmpId,
     voucher_type: "saleOrder",
     series_id: selectedSeries?._id,
@@ -260,6 +287,7 @@ export function buildSaleOrderPayload(body, voucher, serials, userId) {
     current_series_number: voucher.nextNumber,
     company_level_serial_number: serials.companyLevelSerialNumber,
     user_level_serial_number: serials.userLevelSerialNumber,
+    // Core transaction metadata
     date: new Date(transactionDate),
     party_id: party?._id,
     party_snapshot: {
@@ -271,20 +299,26 @@ export function buildSaleOrderPayload(body, voucher, serials, userId) {
       state: party?.state || null,
     },
     tax_type: normalizeTaxType(body),
+    // Price context at transaction time (snapshot-friendly)
     price_level_id: priceLevelObject?._id || null,
     price_level_name: priceLevelObject?.pricelevel || priceLevelObject?.name || null,
+    // Monetary details
     items: mapSaleOrderItems(items),
     additional_charges: mapAdditionalCharges(additionalCharges),
     despatch_details: mapDespatchDetails(despatchDetails),
     totals: buildSaleOrderTotals(body),
+    // Lifecycle + external sync placeholders
     status: getInitialTransactionStatus("saleOrder"),
     tally_ref: null,
     narration: null,
+    // Audit
     created_by: userId || null,
     updated_by: userId || null,
   };
 }
 
+// Mutate an existing SaleOrder mongoose doc for update operation.
+// Note: this function intentionally recalculates totals from latest line items/charges.
 export function applySaleOrderUpdate(saleOrder, data = {}, userId = null) {
   const priceLevelObject = normalizePriceLevelObject(data);
 

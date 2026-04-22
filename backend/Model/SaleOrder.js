@@ -1,4 +1,6 @@
-// models/saleOrder.js
+// Sale Order document schema.
+// This model stores the full transaction snapshot so sale orders remain stable even
+// if master data (party/product/price level names) changes later.
 
 import mongoose from "mongoose";
 const { Schema, model, models } = mongoose;
@@ -7,14 +9,17 @@ const { Schema, model, models } = mongoose;
 
 const ItemSchema = new Schema(
   {
+    // Product reference + snapshot text fields used in print/view layers
     item_id: { type: Schema.Types.ObjectId, ref: "Product", required: true },
     item_name: { type: String, required: true },
     hsn: { type: String, default: null },
     unit: { type: String, default: null },
 
+    // Quantity split allows operational quantity and billed quantity to differ
     actual_qty: { type: Number, required: true },
     billed_qty: { type: Number, required: true },
 
+    // Tax/discount metadata captured per-line
     rate: { type: Number, required: true },
     tax_rate: { type: Number, default: 0 },
     cess_rate: { type: Number, default: 0 },
@@ -41,11 +46,14 @@ const ItemSchema = new Schema(
     description: { type: String, default: null },
     warranty_card_id: { type: Schema.Types.ObjectId, default: null },
   },
-  { _id: true, strict: true } // row-level identity
+  // `_id: true` keeps row identity stable for edit screens and diffing.
+  // `strict: true` rejects accidental unknown keys in item rows.
+  { _id: true, strict: true }
 );
 
 const AdditionalChargeSchema = new Schema(
   {
+    // `option` is the label/source name of extra charge (freight, packing, etc.)
     option: { type: String, required: true },
     value: { type: Number, required: true },           // cast from string at API layer
     action: { type: String, enum: ["add", "subtract"], required: true }, // fix "substract" typo
@@ -108,9 +116,11 @@ const TotalsSchema = new Schema(
 const SaleOrderSchema = new Schema(
   {
     // Company
+    // Multi-tenant ownership boundary: every query must include this id.
     cmp_id: { type: Schema.Types.ObjectId, ref: "Company", required: true },
 
     // Voucher identity
+    // Stored identity fields allow deterministic reconstruction of voucher number history.
     voucher_type: { type: String, default: "saleOrder" },
     series_id: { type: Schema.Types.ObjectId, required: true },
     series_name: { type: String, required: true },
@@ -123,6 +133,7 @@ const SaleOrderSchema = new Schema(
     date: { type: Date, required: true },
 
     // Party
+    // `party_snapshot` intentionally denormalizes key fields to preserve historical context.
     party_id: { type: Schema.Types.ObjectId, ref: "Party", required: true },
     party_snapshot: { type: PartySnapshotSchema, required: true },
 
@@ -134,6 +145,7 @@ const SaleOrderSchema = new Schema(
     price_level_name: { type: String, default: null },
 
     // Core data
+    // `items` and `totals` together represent the monetary source of truth for this voucher.
     items: { type: [ItemSchema], required: true },
     additional_charges: { type: [AdditionalChargeSchema], default: [] },
     despatch_details: { type: DespatchSchema, default: {} },
@@ -151,10 +163,12 @@ const SaleOrderSchema = new Schema(
     narration: { type: String, default: null },
 
     // Audit
+    // User ids are optional to support system-created/imported records.
     created_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
     updated_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
   },
   {
+    // Keep audit timestamps with API-friendly snake_case field names.
     timestamps: { createdAt: "created_at", updatedAt: "updated_at" },
     strict: true,
   }
@@ -174,7 +188,7 @@ SaleOrderSchema.index({ cmp_id: 1, status: 1, date: -1 });
 // Item-wise order lookup (which orders contain this item)
 SaleOrderSchema.index({ cmp_id: 1, "items.item_id": 1, date: -1 });
 
-// Voucher number lookup + duplicate prevention
+// Voucher number lookup + duplicate prevention (company scoped)
 SaleOrderSchema.index({ cmp_id: 1, voucher_number: 1 }, { unique: true });
 SaleOrderSchema.index({ cmp_id: 1, company_level_serial_number: 1 }, { unique: true });
 SaleOrderSchema.index(
@@ -182,7 +196,7 @@ SaleOrderSchema.index(
   { unique: true },
 );
 
-// Series-level number tracking (for generating next number safely)
+// Series-level number tracking (supports "latest in series" reads)
 SaleOrderSchema.index({ cmp_id: 1, series_id: 1, current_series_number: -1 });
 
 // ─── Export ───────────────────────────────────────────────────
