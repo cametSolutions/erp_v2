@@ -8,10 +8,12 @@ import {
   getCashTransactions as getCashTransactionsService,
 } from "../services/cashTransaction.service.js";
 
+// Utility: returns first non-undefined value among candidates.
 function firstDefined(...values) {
   return values.find((value) => value !== undefined);
 }
 
+// Normalizes settlement rows from request into numeric-safe shape.
 function normalizeSettlementDetails(settlement_details = []) {
   return settlement_details.map((item) => ({
     outstanding: item?.outstanding,
@@ -26,6 +28,8 @@ function normalizeSettlementDetails(settlement_details = []) {
   }));
 }
 
+// Converts incoming request body into service payload.
+// Supports mixed key naming from UI (`camelCase` and `snake_case`).
 function buildCashTransactionPayload(body = {}, userId = null) {
   return {
     cmp_id: body.cmp_id,
@@ -52,6 +56,11 @@ function buildCashTransactionPayload(body = {}, userId = null) {
   };
 }
 
+// Controller: create receipt transaction.
+// Responsibility:
+// - validate required request fields
+// - enforce current product scope (`receipt` only)
+// - delegate transactional writes to service layer
 export async function createCashTransaction(req, res) {
   try {
     const body = req.body || {};
@@ -114,6 +123,7 @@ export async function createCashTransaction(req, res) {
   }
 }
 
+// Controller: cancel receipt transaction.
 export async function cancelCashTransaction(req, res) {
   try {
     const id = req.params.id;
@@ -154,6 +164,7 @@ export async function cancelCashTransaction(req, res) {
   }
 }
 
+// Controller: fetch one receipt by id.
 export async function getCashTransactionById(req, res) {
   try {
     const { id } = req.params;
@@ -197,6 +208,7 @@ export async function getCashTransactionById(req, res) {
   }
 }
 
+// Controller: list receipt/cash transactions with filters.
 export async function getCashTransactions(req, res) {
   try {
     const cashTransactions = await getCashTransactionsService(req.query || {}, req);
@@ -216,6 +228,7 @@ export async function getCashTransactions(req, res) {
   }
 }
 
+// Controller: aggregate and return current cash/bank ledger balances.
 export async function getCashBankLedgerBalances(req, res) {
   try {
     const { cash_bank_type, cashBankType } = req.query || {};

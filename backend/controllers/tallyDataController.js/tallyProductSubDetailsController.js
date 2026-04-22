@@ -4,6 +4,14 @@ import { Brand, Category, Subcategory } from "../../Model/ProductSubDetails.js";
 import { getApiLogs } from "../../utils/logs.js";
 import { buildBulkResponse } from "../../helpers/tallyDataHelpers.js";
 
+/**
+ * addSubDetails - Generic Tally importer for brand/category/subcategory.
+ *
+ * Model selection is route-driven:
+ * - /brands -> Brand
+ * - /categories -> Category
+ * - /subcategories -> Subcategory (with category reference resolution)
+ */
 export const addSubDetails = async (req, res) => {
   try {
     const { data } = req.body;
@@ -294,6 +302,5 @@ export const addSubDetails = async (req, res) => {
     });
   }
 };
-
 
 

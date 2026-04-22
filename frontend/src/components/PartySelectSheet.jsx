@@ -14,6 +14,26 @@ import { PartyList } from "@/components/partyList";
 import { setParty } from "@/store/slices/transactionSlice";
 import { resolveTaxType } from "@/utils/salesCalculation";
 
+/**
+ * Party selection bottom-sheet used by sale-order flow.
+ *
+ * Flow:
+ * 1) user picks party from list
+ * 2) component fetches full party document
+ * 3) derives tax type from company-state vs party-state
+ * 4) updates Redux (`setParty`) or forwards via `onSelectParty`
+ *
+ * @param {{
+ *   open: boolean,
+ *   onOpenChange: (open: boolean) => void,
+ *   title?: string,
+ *   partyType?: string,
+ *   outstandingFilter?: string,
+ *   hideZeroOutstanding?: boolean,
+ *   onSelectParty?: ((party: object) => Promise<void>|void)|null,
+ * }} props
+ * @returns {JSX.Element}
+ */
 export default function PartySelectSheet({
   open,
   onOpenChange,
@@ -27,6 +47,12 @@ export default function PartySelectSheet({
   const selectedCompany = useSelector((state) => state.company.selectedCompany);
   const [selectedPartyId, setSelectedPartyId] = useState(null);
 
+  /**
+   * Handles user party selection.
+   *
+   * @param {object} party - minimal party row selected from list.
+   * @returns {Promise<void>}
+   */
   const handleSelect = async (party) => {
     if (!party?._id) return;
 

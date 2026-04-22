@@ -7,6 +7,7 @@ function roundMoney(value) {
 }
 
 export function resolveTaxType(companyState, partyState) {
+  // Same-state -> intra-state tax split, else IGST.
   if (!companyState || !partyState) return "igst";
   return companyState === partyState ? "cgst_sgst" : "igst";
 }
@@ -20,6 +21,8 @@ function getApplicableGstRate(item, taxType) {
 }
 
 export function calculateItemAmounts(item, taxType = "igst") {
+  // This is the core per-row pricing engine used across create/edit flows.
+  // All UI totals are derived from this function, not manual arithmetic in components.
   const billedQty = toNumber(item?.billedQty ?? item?.billed_qty ?? item?.quantity);
   const rate = toNumber(item?.rate);
   const discountType = item?.discountType || "percentage";
@@ -33,6 +36,7 @@ export function calculateItemAmounts(item, taxType = "igst") {
   const lineTotal = rate * billedQty;
   const applicableGstRate = getApplicableGstRate(item, taxType);
 
+  // For tax-inclusive rate, remove GST portion first to derive taxable base.
   const basePrice = taxInclusive
     ? (1 + applicableGstRate / 100) !== 0
       ? lineTotal / (1 + applicableGstRate / 100)
@@ -100,6 +104,7 @@ export function calculateItemAmounts(item, taxType = "igst") {
 }
 
 export function calculateItemsWithTotals(items = [], taxType = "igst") {
+  // Recalculate every line to ensure totals and rows stay consistent.
   const nextItems = items.map((item) => calculateItemAmounts(item, item?.taxType || taxType));
 
   const rawTotals = nextItems.reduce(
@@ -145,6 +150,8 @@ export function calculateItemsWithTotals(items = [], taxType = "igst") {
     rawTotals.total_cgst_amt +
     rawTotals.total_sgst_amt;
 
+  // Return both snake_case and camelCase keys for compatibility with
+  // different consumers (reducers, payload builders, UI blocks).
   return {
     items: nextItems,
     totals: {
@@ -173,6 +180,7 @@ export function calculateItemsWithTotals(items = [], taxType = "igst") {
 }
 
 export function buildItemForCalculation(stagedItem) {
+  // Convert staged item object to minimal normalized shape consumed by calculator.
   return {
     billedQty: toNumber(stagedItem?.billedQty ?? stagedItem?.quantity),
     rate: toNumber(stagedItem?.rate),

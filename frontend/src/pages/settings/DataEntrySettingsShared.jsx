@@ -3,6 +3,15 @@ import { useNavigate } from "react-router-dom";
 
 import { Button } from "@/components/ui/button";
 
+/**
+ * Reusable header for data-entry detail pages.
+ *
+ * Accepts:
+ * - `title`: string displayed as section heading.
+ *
+ * Behavior:
+ * - Back button calls `navigate(-1)` to return to previous settings screen.
+ */
 export function DataEntryDetailHeader({ title }) {
   const navigate = useNavigate();
 
@@ -22,6 +31,18 @@ export function DataEntryDetailHeader({ title }) {
   );
 }
 
+/**
+ * Reusable action row card used across data-entry settings screens.
+ *
+ * Accepts:
+ * - `title`: primary label.
+ * - `description`: secondary helper text.
+ * - `icon`: Lucide icon component.
+ * - `onClick`: callback triggered when row is pressed.
+ *
+ * Returns:
+ * - A full-width button row with consistent visual style and chevron affordance.
+ */
 export function DataEntryActionRow({ title, description, icon: Icon, onClick }) {
   return (
     <button

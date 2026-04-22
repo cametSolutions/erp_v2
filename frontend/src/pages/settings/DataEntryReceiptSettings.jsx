@@ -15,6 +15,11 @@ import {
 } from "@/pages/settings/DataEntrySettingsShared";
 import { useState } from "react";
 
+/**
+ * Placeholder sheet for receipt data-entry settings.
+ * Kept as a dedicated component so real controls can be added later
+ * without changing page-level structure.
+ */
 function ReceiptSettingsSheet({ open, onOpenChange }) {
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -39,6 +44,13 @@ function ReceiptSettingsSheet({ open, onOpenChange }) {
   );
 }
 
+/**
+ * Receipt data-entry settings page.
+ *
+ * Current state:
+ * - Contains a single "Coming soon" entry point to maintain navigation parity
+ *   with Order and Voucher settings sections.
+ */
 export default function DataEntryReceiptSettings() {
   const [sheetOpen, setSheetOpen] = useState(false);
 

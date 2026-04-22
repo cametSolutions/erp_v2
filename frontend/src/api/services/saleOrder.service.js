@@ -1,5 +1,7 @@
 import api from "@/api/client/apiClient";
 
+// Voucher prefix/suffix are optional; normalize empty/whitespace to `undefined`
+// so backend can apply series defaults cleanly.
 function normalizeOptionalVoucherPart(value) {
   if (value == null) return undefined;
 
@@ -18,6 +20,7 @@ export function buildCreateSaleOrderPayload({
   selectedPriceLevel,
   headerPayload = {},
 }) {
+  // Header payload comes from `TransactionHeader` (date, voucher series, etc.).
   const sanitizedHeaderPayload = {
     ...headerPayload,
     voucherPrefix: normalizeOptionalVoucherPart(headerPayload?.voucherPrefix),
@@ -26,6 +29,7 @@ export function buildCreateSaleOrderPayload({
 
   return {
     ...sanitizedHeaderPayload,
+    // Keep both naming conventions for compatibility across backend mappers.
     cmp_id,
     cmpId: cmp_id,
     taxType: taxType || "igst",
@@ -38,6 +42,7 @@ export function buildCreateSaleOrderPayload({
             selectedPriceLevel?.pricelevel || selectedPriceLevel?.name || "",
         }
       : null,
+    // Normalize each item into API contract used by backend sale-order mapper.
     items: items.map((item) => ({
       _id: item?._id ?? null,
       id: item?.id ?? item?._id,
@@ -78,8 +83,11 @@ export function buildCreateSaleOrderPayload({
       taxInclusive: Boolean(item?.taxInclusive ?? item?.tax_inclusive),
       description: item?.description || "",
     })),
+    // Document-level sections
     despatchDetails,
     additionalCharges,
+    // Totals are still sent by frontend for transparency/debugging.
+    // Backend re-calculates and validates final numbers before save.
     subTotal: Number(totals?.subTotal) || 0,
     totalDiscount: Number(totals?.totalDiscount) || 0,
     taxableAmount: Number(totals?.taxableAmount) || 0,
@@ -111,6 +119,8 @@ export function buildUpdateSaleOrderPayload({
   selectedSeries,
   headerPayload = {},
 }) {
+  // Update payload extends create payload and adds selectedSeries to preserve
+  // existing voucher identity during edit.
   const basePayload = buildCreateSaleOrderPayload({
     cmp_id,
     taxType,
@@ -136,6 +146,7 @@ export function buildUpdateSaleOrderPayload({
 }
 
 export async function createSaleOrder(payload) {
+  // POST create sale-order document.
   const response = await api.post("/sale-orders", payload, {
     headers: { "Content-Type": "application/json" },
     withCredentials: true,
@@ -145,6 +156,7 @@ export async function createSaleOrder(payload) {
 }
 
 export async function getSaleOrderById(saleOrderId, { cmpId, ...options } = {}) {
+  // Return null when id is missing to simplify caller guards.
   if (!saleOrderId) return null;
 
   const response = await api.get(`/sale-orders/${saleOrderId}`, {
@@ -157,6 +169,7 @@ export async function getSaleOrderById(saleOrderId, { cmpId, ...options } = {}) 
 }
 
 export async function updateSaleOrder(saleOrderId, payload) {
+  // Update mutable fields of existing sale order.
   const response = await api.put(`/sale-orders/${saleOrderId}`, payload, {
     headers: { "Content-Type": "application/json" },
     withCredentials: true,
@@ -166,6 +179,7 @@ export async function updateSaleOrder(saleOrderId, payload) {
 }
 
 export async function cancelSaleOrder(saleOrderId, payload) {
+  // Soft cancel endpoint (status transition).
   const response = await api.put(`/sale-orders/${saleOrderId}/cancel`, payload, {
     headers: { "Content-Type": "application/json" },
     withCredentials: true,

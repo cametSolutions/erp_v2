@@ -32,6 +32,7 @@ import {
   resolveAdminOwnerId,
 } from "../utils/authScope.js";
 
+// Returns `YYYY-MM` monthly bucket key for party monthly balance rollups.
 function formatMonthKey(dateValue) {
   const date = new Date(dateValue);
   const year = date.getFullYear();
@@ -39,12 +40,16 @@ function formatMonthKey(dateValue) {
   return `${year}-${month}`;
 }
 
+// Local HTTP-aware error helper for controller response mapping.
 function createHttpError(message, statusCode = 500) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
 }
 
+// For receipt flow:
+// - party ledger receives credit
+// - cash/bank ledger receives debit
 function resolveLedgerSides(voucher_type) {
   return {
     party_ledger_side: "credit",
@@ -52,6 +57,8 @@ function resolveLedgerSides(voucher_type) {
   };
 }
 
+// Updates per-party monthly debit/credit aggregate used in outstanding analytics.
+// `reverse=true` is used while cancelling transactions.
 async function updatePartyMonthlyBalance({
   cmp_id,
   party_id,
@@ -98,6 +105,7 @@ async function updatePartyMonthlyBalance({
   );
 }
 
+// Creates outstanding row for advance amount (receipt amount not mapped to bill settlement).
 async function createAdvanceReceiptOutstanding({
   cmp_id,
   party_id,
@@ -146,6 +154,7 @@ async function createAdvanceReceiptOutstanding({
   );
 }
 
+// Zeroes advance-outstanding rows created for a receipt during cancellation.
 async function cancelAdvanceReceiptOutstanding({
   cmp_id,
   receipt_id,
@@ -167,6 +176,15 @@ async function cancelAdvanceReceiptOutstanding({
   );
 }
 
+// Receipt creation service (transactional).
+// Performs:
+// 1) company ownership validation for party + cash/bank ledger
+// 2) voucher identity issuance
+// 3) receipt insert
+// 4) party ledger + cash/bank ledger inserts
+// 5) outstanding adjustments for settled bills
+// 6) advance outstanding creation
+// 7) timeline entry creation
 export async function createCashTransaction(data = {}, req) {
   const session = await mongoose.startSession();
 
@@ -218,6 +236,7 @@ export async function createCashTransaction(data = {}, req) {
         (total, item) => total + (Number(item?.settled_amount) || 0),
         0
       );
+      // Remaining amount after bill settlements is tracked as advance.
       const advance_amount = Math.max((Number(data.amount) || 0) - settled_amount, 0);
 
       const [cashTransaction] = await Receipt.create(
@@ -326,6 +345,8 @@ export async function createCashTransaction(data = {}, req) {
   }
 }
 
+// Receipt cancellation service (transactional).
+// Reverses accounting and outstanding impacts made during creation.
 export async function cancelCashTransaction(id, data = {}, req) {
   const session = await mongoose.startSession();
 
@@ -407,6 +428,7 @@ export async function cancelCashTransaction(id, data = {}, req) {
         }
 
         const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
+        // Add back settled amount to pending because receipt is being reversed.
         outstanding.bill_pending_amt = currentPendingAmount + settledAmount;
         outstanding.classification =
           Number(outstanding.bill_pending_amt) < 0 ? "cr" : "dr";
@@ -437,6 +459,7 @@ export async function cancelCashTransaction(id, data = {}, req) {
   }
 }
 
+// Fetch one receipt with role/creator/company scoping.
 export async function getCashTransactionById(id, { cmp_id } = {}, req) {
   const filter = applyTransactionCreatorScope(req, { _id: id });
 
@@ -450,6 +473,7 @@ export async function getCashTransactionById(id, { cmp_id } = {}, req) {
   return Receipt.findOne(filter).lean();
 }
 
+// List receipts with filter support and creator/company scoping.
 export async function getCashTransactions(filters = {}, req) {
   const { cmp_id, voucher_type, party_id, status, from, to } = filters;
   const query = applyTransactionCreatorScope(req, {});
@@ -490,6 +514,8 @@ export async function getCashTransactions(filters = {}, req) {
   return Receipt.find(query).sort({ date: -1, voucher_number: 1 }).lean();
 }
 
+// Aggregates live balances from cash/bank ledger entries and merges with party masters
+// so ledgers with zero movement are still returned in response.
 export async function getCashBankLedgerBalances(filters = {}, req) {
   const { cmp_id, cash_bank_type } = filters;
   const scopedMatch = {

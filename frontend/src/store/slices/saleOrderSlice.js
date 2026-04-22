@@ -1,6 +1,11 @@
 // src/slices/voucherSlices/saleOrderSlice.js
 import { createSlice } from "@reduxjs/toolkit";
 
+// NOTE:
+// This appears to be a legacy/alternate sale-order slice.
+// Active create/edit flow currently uses `transactionSlice`.
+// Kept documented here because it still exists in codebase.
+
 const initialState = {
   // header
   transactionDate: "",          // string date from UI
@@ -85,20 +90,25 @@ const saleOrderSlice = createSlice({
     resetSaleOrder: () => initialState,
 
     // header
+    // payload: string date
     setTransactionDate: (state, action) => {
       state.transactionDate = action.payload;
     },
+    // payload: voucher type string
     setVoucherType: (state, action) => {
       state.voucherType = action.payload;
     },
+    // payload: voucher number string/number
     setVoucherNumber: (state, action) => {
       state.voucherNumber = action.payload;
     },
 
     // serials
+    // payload: company-level serial number
     setSerialNumber: (state, action) => {
       state.serialNumber = action.payload;
     },
+    // payload: user-level serial number
     setUserLevelSerialNumber: (state, action) => {
       state.userLevelSerialNumber = action.payload;
     },
@@ -123,6 +133,7 @@ const saleOrderSlice = createSlice({
     },
 
     // party
+    // payload: partial party object
     setParty: (state, action) => {
       state.party = { ...state.party, ...action.payload };
     },
@@ -136,17 +147,21 @@ const saleOrderSlice = createSlice({
     },
 
     // items CRUD (simple; you can reuse your existing item logic if needed)
+    // payload: full item array
     setItems: (state, action) => {
       state.items = action.payload || [];
     },
+    // payload: one item object
     addItem: (state, action) => {
       state.items.push(action.payload);
     },
+    // payload: { _id, item }
     updateItem: (state, action) => {
       const { _id, item } = action.payload;
       const idx = state.items.findIndex((i) => i._id === _id);
       if (idx !== -1) state.items[idx] = item;
     },
+    // payload: _id
     removeItem: (state, action) => {
       const id = action.payload;
       state.items = state.items.filter((i) => i._id !== id);
@@ -162,6 +177,7 @@ const saleOrderSlice = createSlice({
     },
 
     // additional charges
+    // payload: charge row array
     setAdditionalCharges: (state, action) => {
       state.additionalCharges = action.payload || [];
     },
@@ -185,6 +201,7 @@ const saleOrderSlice = createSlice({
     },
 
     // totals (and a helper to recalc finalAmount if you want)
+    // payload: number
     setSubTotal: (state, action) => {
       state.subTotal = action.payload || 0;
     },
@@ -196,11 +213,14 @@ const saleOrderSlice = createSlice({
       state.finalAmount = action.payload || 0;
     },
     recalcFinalAmount: (state) => {
+      // Legacy helper formula:
+      // finalAmount = subTotal + totalAdditionalCharge (rounded to 2 decimals)
       state.finalAmount =
         Number((state.subTotal + state.totalAdditionalCharge).toFixed(2));
     },
 
     // load whole document (for edit/view)
+    // payload: API document in sale-order-like structure
     loadSaleOrderFromApi: (state, action) => {
       const doc = action.payload || {};
       return {

@@ -18,6 +18,15 @@ import { useCompanySettingsMutation } from "@/hooks/mutations/useCompanySettings
 import { useCompanySettingsQuery } from "@/hooks/queries/companySettingsQueries";
 import { DataEntryActionRow } from "@/pages/settings/DataEntrySettingsShared";
 
+/**
+ * Bottom sheet editor for Order Terms & Conditions data-entry defaults.
+ *
+ * Accepts:
+ * - `open` / `onOpenChange`: sheet visibility control.
+ * - `initialTerms`: saved terms array from company settings.
+ * - `onSave`: async persistence callback.
+ * - `isSaving`: save loading state for button UX.
+ */
 function OrderSettingsSheet({
   open,
   onOpenChange,
@@ -27,12 +36,14 @@ function OrderSettingsSheet({
 }) {
   const [value, setValue] = useState("");
 
+  // Re-hydrate editor text each time sheet opens from currently saved terms.
   useEffect(() => {
     if (open) {
       setValue((initialTerms || []).join("\n"));
     }
   }, [open, initialTerms]);
 
+  // Derived read-only preview that mirrors what will be persisted.
   const previewLines = useMemo(
     () =>
       value
@@ -42,6 +53,12 @@ function OrderSettingsSheet({
     [value]
   );
 
+  /**
+   * Converts textarea content to normalized array payload and delegates save.
+   *
+   * Returns:
+   * - Promise from `onSave`.
+   */
   const handleSave = async () => {
     const lines = value
       .split("\n")
@@ -130,6 +147,14 @@ function OrderSettingsSheet({
   );
 }
 
+/**
+ * Data-entry settings screen for Order module.
+ *
+ * Flow:
+ * 1. Read company-scoped settings via query.
+ * 2. Show current "terms" summary in action row.
+ * 3. Open editor sheet, save via mutation, close on success.
+ */
 export default function DataEntryOrderSettings() {
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const [sheetOpen, setSheetOpen] = useState(false);
@@ -144,6 +169,12 @@ export default function DataEntryOrderSettings() {
   const { mutateAsync, isPending } = useCompanySettingsMutation(cmp_id);
   const terms = settings?.dataEntry?.order?.termsAndConditions || [];
 
+  /**
+   * Shared save wrapper with company guard and success feedback.
+   *
+   * Accepts:
+   * - Partial company-settings payload merged server-side.
+   */
   const handleSave = async (payload) => {
     if (!cmp_id) {
       toast.error("Select a company first");

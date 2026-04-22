@@ -2,6 +2,7 @@ export function formatCurrency(value) {
   return `Rs. ${(Number(value) || 0).toFixed(2)}`;
 }
 
+// Compute derived tax and signed impact of an additional-charge row.
 export function calculateAdditionalChargeRow(row) {
   const value = Number(row?.value) || 0;
   const taxPercentage = Number(row?.taxPercentage) || 0;
@@ -18,6 +19,7 @@ export function calculateAdditionalChargeRow(row) {
   };
 }
 
+// Create initial selected-charge draft from master charge definition.
 export function buildAdditionalChargeSelection(charge, existingCharge) {
   if (existingCharge) {
     return calculateAdditionalChargeRow(existingCharge);

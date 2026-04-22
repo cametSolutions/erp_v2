@@ -10,6 +10,16 @@ import {
 } from "../../Model/ProductSubDetails.js";
 import PriceLevel from "../../Model/PriceLevel.js";
 
+/**
+ * Tally Product sync controller.
+ *
+ * Responsibilities:
+ * - Validates incoming product rows from Tally.
+ * - Resolves brand/category/subcategory/price-level references.
+ * - Ensures default godown exists before product write.
+ * - Upserts product master rows in bulk for high-volume imports.
+ */
+
 // @desc Save products from Tally (base data only, with default godown)
 // @route POST /api/tally/giveTransaction
 export const addProducts = async (req, res) => {

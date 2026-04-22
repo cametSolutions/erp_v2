@@ -2,6 +2,7 @@ import { useQuery } from "@tanstack/react-query";
 
 import { cashTransactionService } from "@/api/services/cashTransaction.service";
 
+// Query-key factory for receipt/cash transaction data.
 export const cashTransactionQueryKeys = {
   all: ["cash-transactions"],
   detail: (transactionId, cmpId = "") => [
@@ -18,6 +19,14 @@ export const cashTransactionQueryKeys = {
   ],
 };
 
+/**
+ * Fetches one cash transaction (receipt/payment) detail.
+ *
+ * @param {string} transactionId
+ * @param {string} cmpId
+ * @param {{enabled?: boolean, initialData?: any, skipGlobalLoader?: boolean}} options
+ * @returns {import("@tanstack/react-query").UseQueryResult}
+ */
 export function useCashTransactionDetailQuery(transactionId, cmpId, options = {}) {
   const {
     enabled = true,
@@ -37,6 +46,14 @@ export function useCashTransactionDetailQuery(transactionId, cmpId, options = {}
   });
 }
 
+/**
+ * Fetches list of cash/bank ledgers with current balances.
+ *
+ * @param {string} cmpId
+ * @param {string} cashBankType
+ * @param {{enabled?: boolean, skipGlobalLoader?: boolean}} options
+ * @returns {import("@tanstack/react-query").UseQueryResult}
+ */
 export function useCashBankLedgerBalancesQuery(
   cmpId,
   cashBankType = "",

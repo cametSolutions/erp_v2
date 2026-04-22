@@ -5,6 +5,14 @@ import { getApiLogs } from "../../utils/logs.js";
 import SubGroup from "../../Model/SubGroup.js";
 
 /**
+ * Tally AccountGroup/SubGroup sync controller.
+ *
+ * Purpose:
+ * - Imports accounting hierarchy masters used by party classification.
+ * - Maintains referential consistency by resolving subgroup -> account group link.
+ */
+
+/**
  * addAccountGroups - Import/Sync Account Groups from Tally
  *
  * Steps:

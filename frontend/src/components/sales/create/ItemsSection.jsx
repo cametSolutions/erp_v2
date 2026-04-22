@@ -16,6 +16,9 @@ import {
 import { ROUTES } from "@/routes/paths";
 import { removeItem, updateItem } from "@/store/slices/transactionSlice";
 
+// Item summary block on create/edit page.
+// Actual add/select flow happens in ProductSelectPage; this section shows
+// a compact preview and offers quick edit/remove actions.
 export default function ItemsSection({ returnTo = ROUTES.createOrder }) {
   const navigate = useNavigate();
   const dispatch = useDispatch();
@@ -44,6 +47,7 @@ export default function ItemsSection({ returnTo = ROUTES.createOrder }) {
                 state: { returnTo },
               })
             }
+            // Party must be selected first so rate/tax context is available.
             disabled={!hasParty}
             className="inline-flex w-full items-center justify-between rounded-xl border border-teal-600 bg-teal-600 px-3 py-3 text-xs font-medium text-white transition hover:border-teal-700 hover:bg-teal-700 disabled:cursor-not-allowed disabled:opacity-60"
           >
@@ -134,6 +138,7 @@ export default function ItemsSection({ returnTo = ROUTES.createOrder }) {
         item={editingItem}
         onSave={(changes) => {
           if (!editingItem) return;
+          // Reducer recalculates amounts/totals after applying line changes.
           dispatch(updateItem({ id: editingItem.id, changes }));
         }}
         onRemove={(item) => {

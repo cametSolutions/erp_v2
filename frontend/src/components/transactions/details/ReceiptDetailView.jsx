@@ -2,6 +2,12 @@ import { ArrowRight, BadgeIndianRupee, Building2, CreditCard, ReceiptText, User2
 
 import CancelVoucherDialog from "@/components/transactions/details/CancelVoucherDialog";
 
+/**
+ * Formats backend date value into UI-friendly `DD Mon YYYY`.
+ *
+ * @param {string|Date|null|undefined} value
+ * @returns {string}
+ */
 function formatDate(value) {
   if (!value) return "--";
   const parsed = new Date(value);
@@ -14,10 +20,22 @@ function formatDate(value) {
   });
 }
 
+/**
+ * Formats numeric values into rupee display string.
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string}
+ */
 function formatAmount(value) {
   return `Rs. ${Number(value || 0).toFixed(2)}`;
 }
 
+/**
+ * Compact summary tile used in receipt header grid.
+ *
+ * @param {{label: string, value: string, tone?: "slate"|"blue"|"teal"}} props
+ * @returns {JSX.Element}
+ */
 function SummaryTile({ label, value, tone = "slate" }) {
   const tones = {
     slate: "border-slate-200 bg-slate-50 text-slate-900",
@@ -35,6 +53,12 @@ function SummaryTile({ label, value, tone = "slate" }) {
   );
 }
 
+/**
+ * Generic section wrapper for detail blocks.
+ *
+ * @param {{title: string, icon?: React.ComponentType, children: React.ReactNode}} props
+ * @returns {JSX.Element}
+ */
 function SectionCard({ title, icon: Icon, children }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -49,6 +73,16 @@ function SectionCard({ title, icon: Icon, children }) {
   );
 }
 
+/**
+ * Receipt detail renderer.
+ *
+ * @param {{
+ *   receipt: object,
+ *   onCancel?: () => void,
+ *   isCancelling?: boolean
+ * }} props
+ * @returns {JSX.Element}
+ */
 export default function ReceiptDetailView({ receipt, onCancel, isCancelling = false }) {
   const isCancelled = receipt?.status === "cancelled";
   const statusTone =

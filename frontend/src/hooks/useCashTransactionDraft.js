@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 
+// Company + voucher-type scoped draft key.
 function getReceiptDraftStorageKey(cmp_id, voucher_type) {
   return `cash-transaction-draft-${voucher_type || "receipt"}-${cmp_id || "default"}`;
 }
 
+// Creates blank draft state used for initialization/reset.
 function createDefaultDraft() {
   return {
     transactionDate: new Date().toISOString(),
@@ -21,6 +23,18 @@ function createDefaultDraft() {
   };
 }
 
+/**
+ * LocalStorage-backed draft state for receipt/payment creation screen.
+ *
+ * Persists:
+ * - header selections/date/series
+ * - party and cash/bank selection
+ * - settlement selections
+ * - instrument and narration fields
+ *
+ * @param {{cmp_id: string, voucher_type: string}} params
+ * @returns {object} Draft state + setters + clearDraft.
+ */
 export function useCashTransactionDraft({ cmp_id, voucher_type }) {
   const draftStorageKey = useMemo(
     () => getReceiptDraftStorageKey(cmp_id, voucher_type),
@@ -42,6 +56,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
   const [chequeDate, setChequeDate] = useState(null);
   const [step, setStep] = useState("main");
 
+  // Resets in-memory state to default values.
   const resetDraftState = useCallback(() => {
     const nextDraft = createDefaultDraft();
     setTransactionDate(nextDraft.transactionDate);
@@ -58,6 +73,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
     setStep(nextDraft.step);
   }, []);
 
+  // Clears persisted draft and resets in-memory state.
   const clearDraft = useCallback(() => {
     try {
       localStorage.removeItem(draftStorageKey);
@@ -68,6 +84,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
     resetDraftState();
   }, [draftStorageKey, resetDraftState]);
 
+  // Hydrates draft from localStorage whenever company/scope changes.
   useEffect(() => {
     setHasHydrated(false);
 
@@ -111,6 +128,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
     }
   }, [cmp_id, draftStorageKey, resetDraftState]);
 
+  // Persists draft updates after hydration is complete.
   useEffect(() => {
     if (!cmp_id || !hasHydrated) return;
 

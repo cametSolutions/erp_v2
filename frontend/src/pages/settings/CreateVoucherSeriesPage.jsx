@@ -9,24 +9,37 @@ import api from "@/api/client/apiClient";
 import { voucherSeriesKeys } from "@/hooks/queries/voucherSeriesQueries";
 import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
+// Allows only alphanumeric tokens separated by "-" or "/" in the middle.
+// Examples accepted: FY2025, FY-2025, FY/2025, A1-B2/C3
 const middleSeparatorPattern = /^[A-Za-z0-9]+(?:[-/][A-Za-z0-9]+)*$/;
 
+/**
+ * Create/Edit voucher series page.
+ *
+ * Responsibilities:
+ * - Create a new voucher numbering series for selected voucher type.
+ * - Edit an existing series (except immutable current number in edit mode).
+ * - Keep React Query cache in sync for list + next-number endpoints.
+ */
 const CreateVoucherSeriesPage = () => {
   const location = useLocation();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const queryClient = useQueryClient();
 
+  // Voucher type can come from router state or query param on refresh/deep-link.
   const voucherType =
     location?.state?.from || searchParams.get("voucherType") || "";
   const editingSeries = location?.state?.series;
   const mode = location?.state?.mode || "create";
   const isEdit = mode === "edit";
 
+  // Scope series to currently selected company.
   const cmp_id =
     useSelector((state) => state.company.selectedCompanyId) || "";
 
   const [loading, setLoading] = useState(false);
+  // RHF handles local form state + validation messages.
   const {
     register,
     handleSubmit,
@@ -44,7 +57,10 @@ const CreateVoucherSeriesPage = () => {
     mode: "onChange",
   });
 
-  // PREFILL WHEN EDIT
+  /**
+   * Prefills form when editing existing series.
+   * On create mode, restores clean defaults.
+   */
   useEffect(() => {
     if (mode === "edit" && editingSeries) {
       reset({
@@ -70,6 +86,19 @@ const CreateVoucherSeriesPage = () => {
 
   const formValues = watch();
 
+  /**
+   * Persists form to backend.
+   *
+   * Accepts:
+   * - `form`: react-hook-form values.
+   *
+   * Flow:
+   * 1. Validate required runtime context (`voucherType`, `cmp_id`).
+   * 2. Normalize payload and numeric fields.
+   * 3. Create or update based on mode.
+   * 4. Refresh relevant query caches.
+   * 5. Navigate back to series listing for this voucher type.
+   */
   const onSubmit = async (form) => {
     if (!voucherType || !cmp_id) {
       toast.error("Missing voucher type or company");
@@ -89,7 +118,7 @@ const CreateVoucherSeriesPage = () => {
         widthOfNumericalPart: widthValue,
       };
 
-      // only send currentNumber when creating new series
+      // `currentNumber` is mutable only at create time; edit preserves running counter.
       let responseData;
       const payload =
         mode === "edit"
@@ -117,6 +146,7 @@ const CreateVoucherSeriesPage = () => {
         toast.success(res.data?.message || "Series created successfully");
       }
 
+      // Seed list cache immediately for snappy UI, then revalidate in background.
       queryClient.setQueryData(voucherSeriesKeys.list(cmp_id, voucherType), {
         voucherSeriesId: responseData?.voucherSeriesId,
         series: responseData?.series || [],
@@ -147,6 +177,12 @@ const CreateVoucherSeriesPage = () => {
     }
   };
 
+  /**
+   * Live formatted number preview rendered below form.
+   *
+   * Returns:
+   * - String combining prefix / padded current number / suffix.
+   */
   const livePreview = () => {
     const rawNumber = formValues.currentNumber || "1";
     const widthValue = Number(formValues.widthOfNumericalPart || 1);

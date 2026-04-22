@@ -1,11 +1,40 @@
+// Current series storage key (new format).
+/**
+ * Builds localStorage key for persisted voucher series object.
+ *
+ * Accepts:
+ * - `voucherType` string (defaults to `saleOrder` when missing).
+ * - `cmp_id` company identifier.
+ *
+ * Returns:
+ * - Namespaced key so each company + voucher type maintains its own preference.
+ */
 export function getSeriesStorageKey(voucherType, cmp_id) {
   return `lastSeries_${voucherType || "saleOrder"}_${cmp_id}`;
 }
 
+// Legacy series storage key kept for backward compatibility migration.
+/**
+ * Builds previous-format key used before we started storing whole series object.
+ * Kept to support migration for existing users.
+ */
 export function getLegacySeriesStorageKey(voucherType, cmp_id) {
   return `lastSeriesId_${voucherType || "saleOrder"}_${cmp_id}`;
 }
 
+/**
+ * Reads stored series preference for voucher/company.
+ * Falls back to legacy key format when newer key is missing.
+ *
+ * Accepts:
+ * - `voucherType` (saleOrder/receipt/etc.)
+ * - `cmp_id` active company id.
+ *
+ * Returns:
+ * - Parsed series object (shape includes `_id` and optionally metadata),
+ * - or `{ _id }` synthesized from legacy key,
+ * - or `null` when not available/invalid.
+ */
 export function readStoredSeries(voucherType, cmp_id) {
   if (!cmp_id) return null;
 
@@ -27,6 +56,18 @@ export function readStoredSeries(voucherType, cmp_id) {
   }
 }
 
+// Persists selected series and removes legacy key.
+/**
+ * Persists currently selected voucher series in localStorage.
+ *
+ * Accepts:
+ * - `voucherType`, `cmp_id`, and `series` object.
+ *
+ * Behavior:
+ * - No-op when required ids are missing.
+ * - Writes JSON payload to new key.
+ * - Deletes legacy key so future reads use single source.
+ */
 export function persistStoredSeries(voucherType, cmp_id, series) {
   if (!cmp_id || !series?._id) return;
 
@@ -41,6 +82,11 @@ export function persistStoredSeries(voucherType, cmp_id, series) {
   }
 }
 
+// Clears sale-order scoped local draft helpers and stored series keys.
+/**
+ * Clears sale-order specific local draft artifacts for a company.
+ * Useful when starting a fresh order flow or resetting stale state.
+ */
 export function clearSaleOrderDraftStorage(cmp_id) {
   if (!cmp_id) return;
 

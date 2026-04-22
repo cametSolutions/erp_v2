@@ -1,5 +1,6 @@
 import api from "@/api/client/apiClient";
 
+// Voucher prefix/suffix are optional; normalize empty values away.
 function normalizeOptionalVoucherPart(value) {
   if (value == null) return undefined;
 
@@ -7,6 +8,8 @@ function normalizeOptionalVoucherPart(value) {
   return normalized ? normalized : undefined;
 }
 
+// Builds create payload for receipt/payment API from UI state.
+// Supports mixed key styles expected by backend mappers.
 export function buildCreateCashTransactionPayload({
   cmp_id,
   voucher_type,
@@ -56,6 +59,7 @@ export function buildCreateCashTransactionPayload({
   };
 }
 
+// Creates receipt/payment transaction.
 export async function createCashTransaction(payload) {
   const response = await api.post("/cash-transactions", payload, {
     headers: { "Content-Type": "application/json" },
@@ -65,6 +69,7 @@ export async function createCashTransaction(payload) {
   return response.data;
 }
 
+// Fetches single transaction by id.
 export async function getCashTransactionById(id, { cmp_id, ...options } = {}) {
   if (!id) return null;
 
@@ -77,6 +82,7 @@ export async function getCashTransactionById(id, { cmp_id, ...options } = {}) {
   return response.data?.data?.cashTransaction || null;
 }
 
+// Cancels existing transaction by id.
 export async function cancelCashTransaction(id, payload) {
   const response = await api.put(`/cash-transactions/${id}/cancel`, payload, {
     headers: { "Content-Type": "application/json" },
@@ -86,6 +92,7 @@ export async function cancelCashTransaction(id, payload) {
   return response.data;
 }
 
+// Fetches computed cash/bank ledger balances for company.
 export async function getCashBankLedgerBalances({
   cmp_id,
   cash_bank_type,

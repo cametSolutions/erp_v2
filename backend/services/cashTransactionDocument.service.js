@@ -1,5 +1,8 @@
 import { getInitialTransactionStatus } from "./transactionState.service.js";
 
+// Normalizes settlement rows before persistence:
+// - converts numeric fields safely
+// - coerces date fields to Date instances
 export function normalizeSettlementDetails(settlement_details = [], transactionDate) {
   return settlement_details.map((item) => ({
     outstanding: item?.outstanding,
@@ -16,6 +19,7 @@ export function normalizeSettlementDetails(settlement_details = [], transactionD
   }));
 }
 
+// Builds Receipt document payload from normalized inputs + issued voucher identity.
 export function buildCashTransactionDocument(data = {}, voucherIdentity = {}, settlement_details = [], advance_amount = 0, date) {
   return {
     cmp_id: data.cmp_id,
@@ -42,6 +46,7 @@ export function buildCashTransactionDocument(data = {}, voucherIdentity = {}, se
   };
 }
 
+// Builds mirrored party-ledger entry for receipt posting.
 export function buildPartyLedgerDocument(data = {}, voucher_id, voucher_number, date, ledger_side) {
   return {
     cmp_id: data.cmp_id,
@@ -60,6 +65,7 @@ export function buildPartyLedgerDocument(data = {}, voucher_id, voucher_number, 
   };
 }
 
+// Builds mirrored cash/bank-ledger entry for receipt posting.
 export function buildCashBankLedgerDocument(data = {}, voucher_id, voucher_number, date, ledger_side) {
   return {
     cmp_id: data.cmp_id,

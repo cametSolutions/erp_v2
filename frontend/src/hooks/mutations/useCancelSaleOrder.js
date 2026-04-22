@@ -5,6 +5,21 @@ import { saleOrderService } from "@/api/services/saleOrder.service";
 import { saleOrderQueryKeys } from "@/hooks/queries/saleOrderQueries";
 import { invalidateVoucherSummaryForCompany } from "@/hooks/queries/voucherQueries";
 
+/**
+ * Mutation hook for soft-cancelling a sale order.
+ *
+ * On success it:
+ * - updates detail cache with cancelled document
+ * - invalidates sale-order list + voucher summary
+ * - emits toast
+ *
+ * @param {{
+ *   cmp_id?: string,
+ *   onSuccess?: Function,
+ *   onError?: Function
+ * } & object} options
+ * @returns {import("@tanstack/react-query").UseMutationResult}
+ */
 export function useCancelSaleOrder(options = {}) {
   const { cmp_id = "", onSuccess, onError, ...mutationOptions } = options;
   const queryClient = useQueryClient();

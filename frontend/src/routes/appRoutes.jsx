@@ -25,7 +25,9 @@ const CashBankBalancePage = lazy(
 const TransactionDetailPage = lazy(
   () => import("@/pages/transactions/TransactionDetailPage"),
 );
-const CreateOrderPage = lazy(() => import("@/pages/sales/SalesCreatePage"));
+const SaleOrderCreatePage = lazy(
+  () => import("@/pages/sales/SaleOrderCreatePage"),
+);
 const SaleOrderDetailPage = lazy(() => import("@/pages/sales/SaleOrderDetailPage"));
 const SaleOrderEditPage = lazy(() => import("@/pages/sales/SaleOrderEditPage"));
 const ProductSelectPage = lazy(() => import("@/pages/sales/ProductSelectPage"));
@@ -97,7 +99,7 @@ export const appRoutes = (
       path={ROUTES.CashBankBalancePage}
       element={<CashBankBalancePage />}
     />
-    <Route path={ROUTES.createOrder} element={<CreateOrderPage />} />
+    <Route path={ROUTES.createOrder} element={<SaleOrderCreatePage />} />
     <Route path={ROUTES.transactionDetail} element={<TransactionDetailPage />} />
     <Route path={ROUTES.saleOrderDetail} element={<SaleOrderDetailPage />} />
     <Route path={ROUTES.saleOrderEdit} element={<SaleOrderEditPage />} />

@@ -40,6 +40,15 @@ import { cn } from "@/lib/utils";
 import { ROUTES } from "@/routes/paths";
 import { DataEntryActionRow } from "@/pages/settings/DataEntrySettingsShared";
 
+/**
+ * Bottom sheet that allows selecting default bank account for voucher entry.
+ *
+ * Accepts:
+ * - `cmp_id`: active company id used to fetch bank-type parties.
+ * - `savedBank`: currently persisted bank object (if any).
+ * - `onSave`: async callback that writes selected bank id.
+ * - standard sheet controls (`open`, `onOpenChange`) + `isSaving`.
+ */
 function VoucherSettingsSheet({
   open,
   onOpenChange,
@@ -52,6 +61,7 @@ function VoucherSettingsSheet({
   const [search, setSearch] = useState("");
   const [selectedBankId, setSelectedBankId] = useState("");
 
+  // Reset transient selector state every time sheet opens.
   useEffect(() => {
     if (open) {
       setSelectedBankId(savedBank?._id || "");
@@ -60,6 +70,7 @@ function VoucherSettingsSheet({
     }
   }, [open, savedBank]);
 
+  // Fetch only bank parties; this list backs default bank picker.
   const {
     data: bankData,
     isLoading: isBankLoading,
@@ -76,6 +87,7 @@ function VoucherSettingsSheet({
   });
 
   const banks = bankData?.items || [];
+  // Client-side search filter over already fetched bank list.
   const filteredBanks = useMemo(() => {
     const term = search.trim().toLowerCase();
     if (!term) return banks;
@@ -95,6 +107,10 @@ function VoucherSettingsSheet({
     ? `${selectedBank.partyName || "Untitled Bank"}${selectedBank.bank_name ? ` - ${selectedBank.bank_name}` : ""}${selectedBank.ac_no ? ` (${selectedBank.ac_no})` : ""}`
     : "Select bank account";
 
+  /**
+   * Persists selected bank id in company data-entry voucher settings.
+   * `null` means no default bank should be auto-selected.
+   */
   const handleSave = async () => {
     await onSave({
       dataEntry: {
@@ -250,6 +266,13 @@ function VoucherSettingsSheet({
   );
 }
 
+/**
+ * Data-entry settings page for voucher module.
+ *
+ * Responsibilities:
+ * - Navigation entry to Voucher Series settings.
+ * - Default bank account preference editor.
+ */
 export default function DataEntryVoucherSettings() {
   const navigate = useNavigate();
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
@@ -266,6 +289,9 @@ export default function DataEntryVoucherSettings() {
 
   const selectedBank = settings?.dataEntry?.voucher?.defaultBankAccountId || null;
 
+  /**
+   * Writes partial settings payload and closes sheet on success.
+   */
   const handleSave = async (payload) => {
     if (!cmp_id) {
       toast.error("Select a company first");

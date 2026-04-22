@@ -4,6 +4,9 @@ import { useSelector } from "react-redux";
 import { formatCurrency } from "@/components/sales/create/helpers";
 import SectionCard from "@/components/sales/create/SectionCard";
 
+// Final review + submit block.
+// This component is intentionally presentational; all totals are computed in
+// transaction reducers/calculation utilities and read from Redux.
 export default function SummarySection({
   onCreate,
   createLoading,

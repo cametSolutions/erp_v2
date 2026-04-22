@@ -7,6 +7,21 @@ import { outstandingQueryKeys } from "@/hooks/queries/outstandingQueries";
 import { partyQueryKeys } from "@/hooks/queries/partyQueries";
 import { invalidateVoucherSummaryForCompany } from "@/hooks/queries/voucherQueries";
 
+/**
+ * Mutation hook for cancelling receipt/payment transactions.
+ *
+ * Side effects:
+ * - updates detail cache for the cancelled doc
+ * - invalidates transaction/outstanding/party aggregates
+ * - invalidates voucher summary totals
+ *
+ * @param {{
+ *   cmp_id?: string,
+ *   onSuccess?: Function,
+ *   onError?: Function
+ * } & object} options
+ * @returns {import("@tanstack/react-query").UseMutationResult}
+ */
 export function useCancelCashTransaction(options = {}) {
   const { cmp_id = "", onSuccess, onError, ...mutationOptions } = options;
   const queryClient = useQueryClient();

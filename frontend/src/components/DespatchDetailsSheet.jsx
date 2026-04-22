@@ -15,11 +15,26 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 
+/**
+ * Despatch details editor (bottom sheet).
+ *
+ * Uses local form state while open, and only commits to Redux on Save.
+ *
+ * @param {{open: boolean, onOpenChange: (open: boolean) => void}} props
+ * @returns {JSX.Element}
+ */
 export default function DespatchDetailsSheet({ open, onOpenChange }) {
   const dispatch = useDispatch();
   const existing = useSelector((state) => state.transaction.despatchDetails);
   const [form, setForm] = useState(existing);
 
+  /**
+   * Updates a single field in local form draft.
+   *
+   * @param {string} field
+   * @param {string} value
+   * @returns {void}
+   */
   const handleChange = (field, value) => {
     setForm((prev) => ({
       ...prev,
@@ -27,6 +42,13 @@ export default function DespatchDetailsSheet({ open, onOpenChange }) {
     }));
   };
 
+  /**
+   * Sheet visibility handler.
+   * Rehydrates form from Redux whenever opening.
+   *
+   * @param {boolean} nextOpen
+   * @returns {void}
+   */
   const handleSheetChange = (nextOpen) => {
     if (nextOpen) {
       setForm(existing);
@@ -35,6 +57,11 @@ export default function DespatchDetailsSheet({ open, onOpenChange }) {
     onOpenChange(nextOpen);
   };
 
+  /**
+   * Commits local despatch draft into transaction slice.
+   *
+   * @returns {void}
+   */
   const handleSave = () => {
     dispatch(setDespatchDetails(form));
     handleSheetChange(false);

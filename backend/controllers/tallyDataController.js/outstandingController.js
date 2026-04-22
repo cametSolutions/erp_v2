@@ -6,8 +6,17 @@ import subGroupModel from "../../Model/SubGroup.js";
 import { getApiLogs } from "../../utils/logs.js";
 import { buildBulkResponse } from "../../helpers/tallyDataHelpers.js";
 
-
-
+/**
+ * importOutstandingFromTally - Full replace import for outstanding data from Tally.
+ *
+ * High-level flow:
+ * 1) validate request payload + party id list
+ * 2) resolve party/accountGroup/subGroup references
+ * 3) delete existing outstanding rows for company scope
+ * 4) validate each incoming item and build insert docs
+ * 5) bulk insert valid documents
+ * 6) return bulk summary response (inserted/skipped)
+ */
 export const importOutstandingFromTally = async (req, res) => {
   try {
     const { data, partyIds } = req.body;
