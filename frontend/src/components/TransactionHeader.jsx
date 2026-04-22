@@ -19,6 +19,13 @@ import {
   setSelectedSeries,
 } from "@/store/slices/transactionSlice";
 
+/**
+ * Small icon-only button used as custom input for react-datepicker.
+ *
+ * @param {{onClick?: () => void}} props
+ * @param {React.Ref<HTMLButtonElement>} ref
+ * @returns {JSX.Element}
+ */
 const DateIconInput = forwardRef(({ onClick }, ref) => (
   <button
     type="button"
@@ -32,13 +39,24 @@ const DateIconInput = forwardRef(({ onClick }, ref) => (
 
 DateIconInput.displayName = "DateIconInput";
 
+/**
+ * Converts incoming value into valid Date object.
+ *
+ * @param {string|Date|null|undefined} value
+ * @returns {Date}
+ */
 const getSafeDate = (value) => {
   if (!value) return new Date();
   const parsed = new Date(value);
   return Number.isNaN(parsed.getTime()) ? new Date() : parsed;
 };
 
-// build separate parts from series
+/**
+ * Converts selected series metadata into distinct voucher parts.
+ *
+ * @param {object|null} series
+ * @returns {{prefix: string, number: string, suffix: string}}
+ */
 const getVoucherParts = (series) => {
   if (!series) {
     return { prefix: "", number: "", suffix: "" };
@@ -56,10 +74,42 @@ const getVoucherParts = (series) => {
   };
 };
 
-// only for UI (PREFIX / NUMBER / SUFFIX)
+/**
+ * Formats full voucher number for display.
+ *
+ * @param {{prefix: string, number: string, suffix: string}} parts
+ * @returns {string}
+ */
 const formatVoucherForUi = ({ prefix, number, suffix }) =>
   formatVoucherNumber(prefix, number, suffix);
 
+/**
+ * Shared transaction header for create/edit voucher screens.
+ *
+ * Capabilities:
+ * - date picker
+ * - voucher series selection (create mode)
+ * - locked series display (edit mode)
+ * - exposes normalized header payload to parent via `onHeaderReady`
+ *
+ * Controlled/Uncontrolled:
+ * - If `transactionDate` + `onTransactionDateChange` are provided => controlled date
+ * - If `selectedSeries` + `onSelectedSeriesChange` are provided => controlled series
+ *
+ * @param {{
+ *   cmp_id: string,
+ *   numberField: string,
+ *   onHeaderReady?: (builder: (() => object) | null) => void,
+ *   editMode?: boolean,
+ *   lockedSeries?: object|null,
+ *   voucherTypeOverride?: string|null,
+ *   transactionDate?: string|undefined,
+ *   onTransactionDateChange?: ((isoDate: string) => void)|undefined,
+ *   selectedSeries?: object|undefined,
+ *   onSelectedSeriesChange?: ((series: object|null) => void)|undefined,
+ * }} props
+ * @returns {JSX.Element}
+ */
 export default function TransactionHeader({
   cmp_id,
   numberField,
@@ -128,6 +178,12 @@ export default function TransactionHeader({
     ? effectiveSeries?.voucherNumber || ""
     : formatVoucherForUi(voucherParts);
 
+  /**
+   * Writes selected series either to controlled parent or Redux.
+   *
+   * @param {object|null} series
+   * @returns {void}
+   */
   const handleSeriesChange = useCallback((series) => {
     if (isSeriesControlled) {
       onSelectedSeriesChange(series);
@@ -137,6 +193,12 @@ export default function TransactionHeader({
     dispatch(setSelectedSeries({ series }));
   }, [dispatch, isSeriesControlled, onSelectedSeriesChange]);
 
+  /**
+   * Writes date either to controlled parent or Redux.
+   *
+   * @param {string} nextTransactionDate - ISO timestamp string.
+   * @returns {void}
+   */
   const handleTransactionDateChange = useCallback((nextTransactionDate) => {
     if (isDateControlled) {
       onTransactionDateChange(nextTransactionDate);
@@ -150,6 +212,7 @@ export default function TransactionHeader({
     );
   }, [dispatch, isDateControlled, onTransactionDateChange]);
 
+  // Load last-used series from localStorage for this company/voucher type.
   useEffect(() => {
     if (isSeriesControlled) return;
     if (editMode) return;
@@ -162,11 +225,13 @@ export default function TransactionHeader({
     handleSeriesChange(storedSeries);
   }, [cmp_id, editMode, handleSeriesChange, isSeriesControlled, selectedSeries?._id, voucherType]);
 
+  // Ensure date is initialized once.
   useEffect(() => {
     if (transactionDate) return;
     handleTransactionDateChange(new Date().toISOString());
   }, [handleTransactionDateChange, transactionDate]);
 
+  // Auto-select API default series if none is selected yet.
   useEffect(() => {
     if (editMode) return;
     if (!cmp_id || !effectiveSeries) return;
@@ -175,6 +240,7 @@ export default function TransactionHeader({
     handleSeriesChange(effectiveSeries);
   }, [cmp_id, editMode, effectiveSeries, handleSeriesChange, matchedSelectedSeries]);
 
+  // Persist active series for smoother next-entry UX.
   useEffect(() => {
     if (isSeriesControlled) return;
     if (editMode) return;
@@ -183,7 +249,8 @@ export default function TransactionHeader({
     persistStoredSeries(voucherType, cmp_id, effectiveSeries);
   }, [cmp_id, editMode, effectiveSeries, isSeriesControlled, voucherType]);
 
-  // expose clean data to parent (separated prefix/number/suffix)
+  // Expose clean header payload builder to parent page.
+  // Parent calls this builder at submit time to get latest header values.
   useEffect(() => {
     if (!onHeaderReady) return;
     if (!effectiveSeries || !transactionDate) {
@@ -223,6 +290,12 @@ export default function TransactionHeader({
     handleSeriesChange(series);
   };
 
+  /**
+   * DatePicker callback adapter.
+   *
+   * @param {Date|null} date
+   * @returns {void}
+   */
   const handleDateChange = (date) => {
     if (!date) return;
     handleTransactionDateChange(date.toISOString());

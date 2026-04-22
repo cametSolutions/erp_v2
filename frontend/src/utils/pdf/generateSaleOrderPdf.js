@@ -11,6 +11,12 @@ const PDF_THEME = {
   headerFillColor: [245, 247, 250],
 };
 
+/**
+ * Formats date to `DD-MM-YYYY` for print.
+ *
+ * @param {string|Date|null|undefined} value
+ * @returns {string}
+ */
 function formatDate(value) {
   if (!value) return "--";
   const parsed = new Date(value);
@@ -23,15 +29,33 @@ function formatDate(value) {
   return `${day}-${month}-${year}`;
 }
 
+/**
+ * Formats number to fixed 2-decimal string.
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string}
+ */
 function formatAmount(value) {
   return Number(value || 0).toFixed(2);
 }
 
+/**
+ * Formats numeric value compactly (no decimal if integer).
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string}
+ */
 function formatCompactAmount(value) {
   const numeric = Number(value || 0);
   return Number.isInteger(numeric) ? String(numeric) : numeric.toFixed(2);
 }
 
+/**
+ * Loads remote image URL as Data URL for jsPDF embedding.
+ *
+ * @param {string|null|undefined} url
+ * @returns {Promise<string|null>}
+ */
 async function loadImageAsDataUrl(url) {
   if (!url) return null;
 
@@ -52,6 +76,12 @@ async function loadImageAsDataUrl(url) {
   }
 }
 
+/**
+ * Builds one-line company address from org fields.
+ *
+ * @param {object} org
+ * @returns {string}
+ */
 function getCompanyAddress(org = {}) {
   return [
     org?.flat,
@@ -66,6 +96,12 @@ function getCompanyAddress(org = {}) {
     .join(", ");
 }
 
+/**
+ * Normalizes print-config keys from mixed backend naming styles.
+ *
+ * @param {object} configurations
+ * @returns {object}
+ */
 function normalizeConfigurations(configurations = {}) {
   return {
     printTitle: configurations?.printTitle || configurations?.print_title || "Sale Order",
@@ -112,6 +148,12 @@ function normalizeConfigurations(configurations = {}) {
   };
 }
 
+/**
+ * Integer-to-words converter (Indian numbering system).
+ *
+ * @param {number} num
+ * @returns {string}
+ */
 function integerToWords(num) {
   const ones = [
     "",
@@ -178,6 +220,12 @@ function integerToWords(num) {
   return parts.join(" ").trim();
 }
 
+/**
+ * Converts currency amount to words.
+ *
+ * @param {number|string} value
+ * @returns {string}
+ */
 function amountToWords(value) {
   const numericValue = Number(value || 0);
   const rupees = Math.floor(numericValue);
@@ -189,6 +237,14 @@ function amountToWords(value) {
   return `${rupeeWords}${paiseWords} Only`;
 }
 
+/**
+ * Ensures there is enough vertical space on current page; adds page if needed.
+ *
+ * @param {jsPDF} doc
+ * @param {number} currentY
+ * @param {number} requiredHeight
+ * @returns {number} Next Y position on current/new page.
+ */
 function ensureSpace(doc, currentY, requiredHeight) {
   const pageHeight = doc.internal.pageSize.getHeight();
 
@@ -200,6 +256,13 @@ function ensureSpace(doc, currentY, requiredHeight) {
   return 18;
 }
 
+/**
+ * Shared text style helper.
+ *
+ * @param {jsPDF} doc
+ * @param {{font?: string, weight?: string, size?: number, color?: number[]}} style
+ * @returns {void}
+ */
 function setTextStyle(
   doc,
   { font = "helvetica", weight = "normal", size = 9, color = PDF_THEME.bodyTextColor }
@@ -209,12 +272,16 @@ function setTextStyle(
   doc.setTextColor(...color);
 }
 
+/**
+ * Draws thin horizontal separator line.
+ */
 function drawDivider(doc, y, pageWidth, margin) {
   doc.setDrawColor(...PDF_THEME.dividerColor);
   doc.setLineWidth(0.2);
   doc.line(margin, y, pageWidth - margin, y);
 }
 
+// Item cess/tax helpers support multiple backend field variants.
 function getItemCessRate(item = {}) {
   return Number(item?.cess ?? item?.cess_rate ?? item?.cess_percentage ?? 0);
 }
@@ -252,6 +319,13 @@ function getTerms(configurations, companySettings, org) {
           : [];
 }
 
+/**
+ * Resolves footer bank lines from bank/org data.
+ *
+ * @param {object} bankDetails
+ * @param {object} org
+ * @returns {string[]}
+ */
 function getFooterBankLines(bankDetails, org) {
   const bankInfo = bankDetails || org || {};
 
@@ -275,6 +349,11 @@ function getFooterBankLines(bankDetails, org) {
   ].filter(Boolean);
 }
 
+/**
+ * Renders company + voucher header block.
+ *
+ * @returns {number} next Y position.
+ */
 function renderHeader({
   doc,
   currentY,
@@ -364,6 +443,11 @@ function renderHeader({
   return nextY + PDF_THEME.sectionGap;
 }
 
+/**
+ * Renders bill-to and ship-to block.
+ *
+ * @returns {number} next Y position.
+ */
 function renderPartySection({
   doc,
   currentY,
@@ -422,6 +506,12 @@ function renderPartySection({
   return currentY + boxHeight + PDF_THEME.sectionGap;
 }
 
+/**
+ * Returns printable despatch label/value rows.
+ *
+ * @param {object} saleOrder
+ * @returns {Array<[string, any]>}
+ */
 function getDespatchRows(saleOrder) {
   const despatchDetails = saleOrder?.despatch_details || {};
 
@@ -437,6 +527,11 @@ function getDespatchRows(saleOrder) {
   ].filter(([, value]) => value);
 }
 
+/**
+ * Renders despatch section when at least one despatch field exists.
+ *
+ * @returns {number} next Y position.
+ */
 function renderDespatchSection({
   doc,
   currentY,
@@ -503,6 +598,12 @@ function renderDespatchSection({
   return nextY + estimatedHeight + PDF_THEME.sectionGap;
 }
 
+/**
+ * Builds dynamic item table columns based on print configuration flags.
+ *
+ * @param {object} resolvedConfigurations
+ * @returns {Array<object>}
+ */
 function buildItemColumns(resolvedConfigurations) {
   return [
     {
@@ -618,6 +719,11 @@ function buildItemColumns(resolvedConfigurations) {
   ].filter(Boolean);
 }
 
+/**
+ * Renders items table via jspdf-autotable.
+ *
+ * @returns {number} next Y position.
+ */
 function renderItemsTable({
   doc,
   currentY,
@@ -702,6 +808,13 @@ function renderItemsTable({
   return doc.lastAutoTable?.finalY + PDF_THEME.sectionGap || currentY + PDF_THEME.sectionGap;
 }
 
+/**
+ * Builds summary-row label/value pairs for totals panel.
+ *
+ * @param {object} saleOrder
+ * @param {object} resolvedConfigurations
+ * @returns {Array<[string, string]>}
+ */
 function buildSummaryRows(saleOrder, resolvedConfigurations) {
   const summaryRows = [["Subtotal", formatAmount(saleOrder?.totals?.sub_total)]];
 
@@ -734,6 +847,11 @@ function buildSummaryRows(saleOrder, resolvedConfigurations) {
   return summaryRows;
 }
 
+/**
+ * Renders totals + amount-in-words block.
+ *
+ * @returns {number} next Y position.
+ */
 function renderTotalsSection({
   doc,
   currentY,
@@ -789,6 +907,11 @@ function renderTotalsSection({
   return nextY;
 }
 
+/**
+ * Renders terms section.
+ *
+ * @returns {number} next Y position.
+ */
 function renderTermsSection({
   doc,
   currentY,
@@ -832,6 +955,11 @@ function renderTermsSection({
   return nextY + PDF_THEME.sectionGap;
 }
 
+/**
+ * Renders footer with optional bank details and signature area.
+ *
+ * @returns {void}
+ */
 function renderFooter({
   doc,
   currentY,
@@ -874,6 +1002,19 @@ function renderFooter({
   doc.text("Authorized Signatory", rightX, footerTopY + 24, { align: "right" });
 }
 
+/**
+ * Generates and opens downloadable Sale Order PDF.
+ *
+ * @param {{
+ *   saleOrder: object,
+ *   org: object,
+ *   configurations?: object,
+ *   bankDetails?: object,
+ *   companySettings?: object,
+ *   partyConfig?: object
+ * }} payload
+ * @returns {Promise<void>}
+ */
 export async function generateSaleOrderPdf({
   saleOrder,
   org,

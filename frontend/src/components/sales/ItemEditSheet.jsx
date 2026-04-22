@@ -12,14 +12,42 @@ import {
 } from "@/components/ui/sheet";
 import { recalculateItem } from "@/store/slices/transactionSlice";
 
+/**
+ * Money formatter for summary panel.
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string}
+ */
 function formatMoney(value) {
   return (Number(value) || 0).toFixed(2);
 }
 
+/**
+ * Percent formatter for summary panel.
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string}
+ */
 function formatPercent(value) {
   return `${(Number(value) || 0).toFixed(2)}%`;
 }
 
+/**
+ * Builds a calculation draft from form inputs and existing item metadata.
+ * Uses the shared `recalculateItem` engine so edit preview matches final totals.
+ *
+ * @param {object} item - Original editable item.
+ * @param {{
+ *   rate: number|string,
+ *   taxInclusive: boolean,
+ *   actualQty: number|string,
+ *   billedQty: number|string,
+ *   discountType: "percentage"|"amount",
+ *   discountValue: number|string,
+ *   description: string
+ * }} form
+ * @returns {object} Recalculated item summary object.
+ */
 function buildDraft(item, form) {
   const discountType = form.discountType || "percentage";
   const billedQty = Number(form.billedQty) || 0;
@@ -55,6 +83,18 @@ function buildDraft(item, form) {
   });
 }
 
+/**
+ * Item row editor used by create page and product selector.
+ *
+ * @param {{
+ *   open: boolean,
+ *   onOpenChange: (open: boolean) => void,
+ *   item: object|null,
+ *   onSave?: (changes: object) => void,
+ *   onRemove?: (item: object) => void
+ * }} props
+ * @returns {JSX.Element}
+ */
 export default function ItemEditSheet({
   open,
   onOpenChange,
@@ -73,6 +113,7 @@ export default function ItemEditSheet({
   });
 
   useEffect(() => {
+    // Rebuild local form every time sheet opens with a new item.
     if (!open || !item) return;
 
     setForm({
@@ -94,6 +135,13 @@ export default function ItemEditSheet({
     return buildDraft(item, form);
   }, [form, item]);
 
+  /**
+   * Generic local-form field setter.
+   *
+   * @param {string} field
+   * @param {any} value
+   * @returns {void}
+   */
   const handleChange = (field, value) => {
     setForm((current) => ({
       ...current,
@@ -101,6 +149,11 @@ export default function ItemEditSheet({
     }));
   };
 
+  /**
+   * Emits normalized row changes to parent and closes sheet.
+   *
+   * @returns {void}
+   */
   const handleSave = () => {
     if (!item || !onSave) return;
     const summary = buildDraft(item, form);
@@ -119,6 +172,11 @@ export default function ItemEditSheet({
     onOpenChange(false);
   };
 
+  /**
+   * Emits remove action to parent and closes sheet.
+   *
+   * @returns {void}
+   */
   const handleRemove = () => {
     if (!item || !onRemove) return;
     onRemove(item);

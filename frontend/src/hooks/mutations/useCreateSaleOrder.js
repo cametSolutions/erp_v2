@@ -6,6 +6,22 @@ import { saleOrderQueryKeys } from "@/hooks/queries/saleOrderQueries";
 import { invalidateVoucherSummaryForCompany } from "@/hooks/queries/voucherQueries";
 import { voucherSeriesKeys } from "@/hooks/queries/voucherSeriesQueries";
 
+/**
+ * Mutation hook for sale-order creation.
+ *
+ * On success it:
+ * - seeds detail cache for created document
+ * - invalidates voucher series + summary data for company
+ * - emits toast
+ * - calls optional external callbacks
+ *
+ * @param {{
+ *   cmp_id?: string,
+ *   onSuccess?: Function,
+ *   onError?: Function
+ * } & object} options
+ * @returns {import("@tanstack/react-query").UseMutationResult}
+ */
 export function useCreateSaleOrder(options = {}) {
   const { cmp_id = "", onSuccess, onError, ...mutationOptions } = options;
   const queryClient = useQueryClient();

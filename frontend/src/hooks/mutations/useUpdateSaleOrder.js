@@ -9,6 +9,22 @@ import { ROUTES } from "@/routes/paths";
 import { resetSaleOrderDraft } from "@/store/slices/transactionSlice";
 import { clearSaleOrderDraftStorage } from "@/utils/transactionStorage";
 
+/**
+ * Mutation hook for updating an existing sale order.
+ *
+ * On success it:
+ * - updates detail cache
+ * - invalidates sale-order list queries
+ * - clears draft state/storage
+ * - navigates back to detail page
+ *
+ * @param {{
+ *   cmp_id?: string,
+ *   onSuccess?: Function,
+ *   onError?: Function
+ * } & object} options
+ * @returns {import("@tanstack/react-query").UseMutationResult}
+ */
 export function useUpdateSaleOrder(options = {}) {
   const { cmp_id = "", onSuccess, onError, ...mutationOptions } = options;
   const dispatch = useDispatch();

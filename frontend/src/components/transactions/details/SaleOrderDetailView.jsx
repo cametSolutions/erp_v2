@@ -5,6 +5,12 @@ import CancelVoucherDialog from "@/components/transactions/details/CancelVoucher
 import { Button } from "@/components/ui/button";
 import { generateSaleOrderPdf } from "@/utils/pdf/generateSaleOrderPdf";
 
+/**
+ * Formats backend date value into UI-friendly `DD Mon YYYY`.
+ *
+ * @param {string|Date|null|undefined} value
+ * @returns {string} Formatted date or `--` fallback.
+ */
 function formatDate(value) {
   if (!value) return "--";
   const parsed = new Date(value);
@@ -17,10 +23,22 @@ function formatDate(value) {
   });
 }
 
+/**
+ * Formats numeric value into `Rs. xx.xx` string.
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string}
+ */
 function formatAmount(value) {
   return `Rs. ${Number(value || 0).toFixed(2)}`;
 }
 
+/**
+ * Compact stat tile used in summary row.
+ *
+ * @param {{label: string, value: string, tone?: "slate"|"blue"|"teal"}} props
+ * @returns {JSX.Element}
+ */
 function SummaryTile({ label, value, tone = "slate" }) {
   const tones = {
     slate: "border-slate-200 bg-slate-50 text-slate-900",
@@ -38,6 +56,12 @@ function SummaryTile({ label, value, tone = "slate" }) {
   );
 }
 
+/**
+ * Generic bordered section wrapper used in detail page.
+ *
+ * @param {{title: string, icon?: React.ComponentType, children: React.ReactNode}} props
+ * @returns {JSX.Element}
+ */
 function SectionCard({ title, icon: Icon, children }) {
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
@@ -52,6 +76,25 @@ function SectionCard({ title, icon: Icon, children }) {
   );
 }
 
+/**
+ * Sale-order detail renderer.
+ *
+ * Data contract:
+ * - `saleOrder`: detailed voucher document from API
+ * - `org/configurations/bankDetails/companySettings`: print context inputs
+ * - `onCancel`: cancellation callback invoked by dialog confirm
+ *
+ * @param {{
+ *   saleOrder: object,
+ *   org?: object,
+ *   configurations?: object,
+ *   bankDetails?: object,
+ *   companySettings?: object,
+ *   onCancel?: () => void,
+ *   isCancelling?: boolean
+ * }} props
+ * @returns {JSX.Element}
+ */
 export default function SaleOrderDetailView({
   saleOrder,
   org,
@@ -81,6 +124,7 @@ export default function SaleOrderDetailView({
   ].filter(Boolean);
 
   const handlePrint = () => {
+    // Guard against incomplete print context.
     if (!saleOrder || !org || !configurations) return;
 
     generateSaleOrderPdf({

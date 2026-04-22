@@ -1,3 +1,16 @@
+/**
+ * Shared card wrapper for sale-order create/edit sections.
+ *
+ * @param {{
+ *   title: string,
+ *   required?: boolean,
+ *   subtitle?: string,
+ *   icon?: React.ComponentType,
+ *   tone?: "slate"|"blue"|"amber"|"teal",
+ *   children: React.ReactNode
+ * }} props
+ * @returns {JSX.Element}
+ */
 export default function SectionCard({
   title,
   required,
