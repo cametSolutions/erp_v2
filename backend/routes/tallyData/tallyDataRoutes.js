@@ -18,6 +18,7 @@ import {
 } from "../../controllers/tallyDataController.js/tallyExportController.js";
 
 const router = express.Router();
+// All Tally endpoints require API key middleware.
 router.use(validateTallyApiKey);
 
 /**

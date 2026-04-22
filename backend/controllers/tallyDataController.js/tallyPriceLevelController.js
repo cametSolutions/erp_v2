@@ -5,6 +5,13 @@ import { getApiLogs } from "../../utils/logs.js";
 import { buildBulkResponse } from "../../helpers/tallyDataHelpers.js";
 
 /**
+ * Tally Price Level sync controller.
+ *
+ * This master data drives rate lookup behavior in sales flow
+ * (retail/wholesale/party-specific pricing rules).
+ */
+
+/**
  * addPriceLevels - Import/Sync Price Levels from Tally
  *
  * Steps:

@@ -5,6 +5,14 @@ import { getApiLogs } from "../../utils/logs.js";
 import { buildBulkResponse } from "../../helpers/tallyDataHelpers.js";
 
 /**
+ * Tally Godown sync controller.
+ *
+ * Special business rule:
+ * - Company must always have one active default godown.
+ * - Incoming payload is normalized so this invariant is preserved.
+ */
+
+/**
  * addGodowns - Import/Sync Godowns from Tally
  *
  * Rules:
@@ -270,5 +278,4 @@ export const addGodowns = async (req, res) => {
     });
   }
 };
-
 

@@ -3,6 +3,8 @@ import mongoose from "mongoose";
 import Receipt from "../../Model/Receipt.js";
 import SaleOrder from "../../Model/SaleOrder.js";
 
+// Shared export helper:
+// returns all docs where company-level serial is greater than the provided serial.
 const fetchBySerial = async (Model, cmp_id, sno, res, label) => {
   try {
     if (!mongoose.Types.ObjectId.isValid(cmp_id)) {
@@ -49,11 +51,13 @@ const fetchBySerial = async (Model, cmp_id, sno, res, label) => {
   }
 };
 
+// Export sale orders after serial `sno` for Tally pull.
 export const getSaleOrdersForTally = async (req, res) => {
   const { cmp_id, sno } = req.params;
   return fetchBySerial(SaleOrder, cmp_id, sno, res, "saleOrder");
 };
 
+// Export receipts after serial `sno` for Tally pull.
 export const getReceiptsForTally = async (req, res) => {
   const { cmp_id, sno } = req.params;
   return fetchBySerial(Receipt, cmp_id, sno, res, "receipt");

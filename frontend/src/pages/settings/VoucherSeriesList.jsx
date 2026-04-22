@@ -16,10 +16,28 @@ import {
 } from "@/hooks/queries/voucherSeriesQueries";
 import { ROUTES } from "@/routes/paths";
 
+/**
+ * Left-pads numeric series counter to configured width.
+ *
+ * Accepts:
+ * - `num`: current sequence number.
+ * - `width`: minimum digits to show.
+ *
+ * Returns:
+ * - Zero-padded numeric string.
+ */
 function formatNumber(num, width) {
   return String(num || 0).padStart(width || 1, "0");
 }
 
+/**
+ * Lists voucher series for a given voucher type and allows edit/delete.
+ *
+ * Data sources:
+ * - Company id from Redux.
+ * - Voucher type from route state/query string.
+ * - Series list from React Query.
+ */
 export default function VoucherSeriesList() {
   const location = useLocation();
   const navigate = useNavigate();
@@ -40,6 +58,7 @@ export default function VoucherSeriesList() {
 
   const series = data?.series || [];
 
+  // Open create screen while preserving voucherType context.
   const openCreateSeries = () =>
     navigate(
       {
@@ -51,6 +70,7 @@ export default function VoucherSeriesList() {
       },
     );
 
+  // Configure mobile page header menu action ("Add Series").
   useEffect(() => {
     if (!voucherType) return;
 
@@ -67,6 +87,13 @@ export default function VoucherSeriesList() {
     return () => resetHeaderOptions();
   }, [resetHeaderOptions, setHeaderOptions, voucherType]);
 
+  /**
+   * Deletes selected series from backend.
+   *
+   * Notes:
+   * - Default series is protected before this handler is called.
+   * - Cache is updated optimistically from response, then invalidated for safety.
+   */
   const handleDelete = async () => {
     if (!seriesToDelete) return;
 
@@ -112,6 +139,9 @@ export default function VoucherSeriesList() {
     }
   };
 
+  /**
+   * Opens create page in edit mode with selected series payload in location state.
+   */
   const handleEditClick = (seriesItem) => {
     navigate(
       {
@@ -124,6 +154,11 @@ export default function VoucherSeriesList() {
     );
   };
 
+  /**
+   * Pre-delete guard:
+   * - Blocks deletion of default series.
+   * - Otherwise opens confirm dialog by setting `seriesToDelete`.
+   */
   const handleDeleteClick = (seriesItem) => {
     if (seriesItem?.isDefault) {
       toast.warning("Cannot delete default series");

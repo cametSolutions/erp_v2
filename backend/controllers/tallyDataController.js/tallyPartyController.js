@@ -7,7 +7,18 @@ import Party from "../../Model/partySchema.js";
 import { getApiLogs } from "../../utils/logs.js";
 import { buildBulkResponse } from "../../helpers/tallyDataHelpers.js";
 
-
+/**
+ * Tally Party sync controller.
+ *
+ * Why this exists:
+ * - Receives large party batches from Tally bridge.
+ * - Resolves relational references (AccountGroup/SubGroup/PriceLevel).
+ * - Upserts by `(party_master_id, cmp_id)` while preserving audit metadata.
+ *
+ * Endpoint behavior:
+ * - Input: `{ data: TallyPartyPayload[] }`
+ * - Output: bulk summary with inserted/updated/skipped counts.
+ */
 
 /**
  * addParties - Import/Sync Parties from Tally
@@ -401,5 +412,4 @@ export const addParties = async (req, res) => {
     });
   }
 };
-
 

@@ -38,6 +38,7 @@ const SAVE_STATUS_LABELS = {
   saved: "Saved",
 };
 
+// Field metadata for Sale Order print template toggles.
 const SALE_ORDER_FIELDS = [
   {
     key: "enable_company_details",
@@ -198,6 +199,9 @@ const TITLES = {
   receipt: "Receipt",
 };
 
+/**
+ * Skeleton placeholder rendered while print config query is loading.
+ */
 function LoadingRows() {
   return (
     <div className="space-y-3">
@@ -211,6 +215,15 @@ function LoadingRows() {
   );
 }
 
+/**
+ * Generic row renderer for one print setting option.
+ *
+ * Accepts:
+ * - Icon/label/description metadata.
+ * - Either:
+ *   - toggle mode (`checked`, `onCheckedChange`)
+ *   - or `action` node for custom controls (e.g. "Edit title" button).
+ */
 function SettingRow({
   // eslint-disable-next-line no-unused-vars
   icon: Icon,
@@ -247,6 +260,14 @@ function SettingRow({
   );
 }
 
+/**
+ * Print configuration editor for sale order / receipt templates.
+ *
+ * Responsibilities:
+ * - Fetch current print config for selected company + voucher type.
+ * - Render toggle controls mapped from metadata definitions.
+ * - Debounce and batch multiple local toggle edits into fewer API writes.
+ */
 function PrintConfigDetail({ voucherType }) {
   const cmp_id = useSelector((state) => state.company.selectedCompanyId);
 
@@ -267,7 +288,10 @@ function PrintConfigDetail({ voucherType }) {
   const fields = CONFIG_FIELDS_BY_TYPE[voucherType] || [];
   const voucherLabel = TITLES[voucherType] || "Voucher";
 
-  // Clear "Saved" label after a short delay
+  /**
+   * Moves save badge from "saved" back to idle after short delay
+   * so user gets visual confirmation without persistent noise.
+   */
   const clearSavedStateLater = useCallback(() => {
     if (savedLabelTimeoutRef.current) {
       window.clearTimeout(savedLabelTimeoutRef.current);
@@ -277,7 +301,11 @@ function PrintConfigDetail({ voucherType }) {
     }, 1200);
   }, []);
 
-  // Flush accumulated changes to the server
+  /**
+   * Sends accumulated partial config updates to backend.
+   * Called by debounce scheduler; can self-schedule again when edits arrive
+   * during an in-flight save.
+   */
   const flushPendingChanges = useCallback(async () => {
     if (!cmp_id) return;
 
@@ -309,7 +337,9 @@ function PrintConfigDetail({ voucherType }) {
     }
   }, [clearSavedStateLater, cmp_id, mutateAsync]);
 
-  // Debounced trigger for flush
+  /**
+   * Debounced save trigger used by UI controls.
+   */
   const scheduleSave = useCallback(() => {
     if (debounceTimeoutRef.current) {
       window.clearTimeout(debounceTimeoutRef.current);
@@ -319,7 +349,17 @@ function PrintConfigDetail({ voucherType }) {
     }, 300);
   }, [flushPendingChanges]);
 
-  // Helper used by switches and dialog
+  /**
+   * Shared update entry point for all config controls.
+   *
+   * Accepts:
+   * - Partial config object, ex: `{ enable_tax_amount: true }`
+   *
+   * Behavior:
+   * - Merges partial into pending buffer.
+   * - Marks status as saving.
+   * - Starts/refreshes debounce timer.
+   */
   const updateConfig = useCallback(
     (partial) => {
       if (!partial || !Object.keys(partial).length) return;

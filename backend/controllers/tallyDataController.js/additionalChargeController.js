@@ -5,6 +5,13 @@ import { getApiLogs } from "../../utils/logs.js";
 import { buildBulkResponse } from "../../helpers/tallyDataHelpers.js";
 
 /**
+ * Tally Additional Charges sync controller.
+ *
+ * Used by sale order/receipt calculations to keep surcharge/tax extra masters
+ * in sync with Tally and available for transaction computations.
+ */
+
+/**
  * saveAdditionalChargesFromTally - Import/Sync Additional Charges from Tally
  *
  * Steps:

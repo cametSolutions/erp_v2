@@ -213,6 +213,8 @@ const saleOrderSlice = createSlice({
       state.finalAmount = action.payload || 0;
     },
     recalcFinalAmount: (state) => {
+      // Legacy helper formula:
+      // finalAmount = subTotal + totalAdditionalCharge (rounded to 2 decimals)
       state.finalAmount =
         Number((state.subTotal + state.totalAdditionalCharge).toFixed(2));
     },

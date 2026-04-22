@@ -2,7 +2,21 @@ import { createSlice } from "@reduxjs/toolkit";
 import { calculateItemAmounts, calculateItemsWithTotals } from "@/utils/salesCalculation";
 import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
-// Normalize and compute derived values of a single additional-charge row.
+/**
+ * Normalizes one additional-charge row and computes derived fields.
+ *
+ * Input shape expected from UI:
+ * - value: base charge amount (string/number)
+ * - action: "add" | "subtract"
+ * - taxPercentage: percentage applied on base value
+ *
+ * Derived formulas:
+ * - taxAmt = value * taxPercentage / 100
+ * - finalValue = (value + taxAmt) * sign
+ *   where sign is +1 for add and -1 for subtract
+ *
+ * Output is the canonical charge row shape used in state and totals calculation.
+ */
 function normalizeAdditionalCharge(row) {
   const baseValue = Number(row?.value) || 0;
   const taxPercentage = Number(row?.taxPercentage) || 0;
@@ -20,6 +34,13 @@ function normalizeAdditionalCharge(row) {
   };
 }
 
+/**
+ * Enriches selected voucher-series object with display-ready voucher number parts.
+ *
+ * Purpose:
+ * - Convert raw series metadata into a predictable object consumed by header/payload.
+ * - Build formatted voucher number using prefix + padded numeric part + suffix.
+ */
 function enrichSelectedSeries(series) {
   if (!series) return null;
 
@@ -43,12 +64,15 @@ function enrichSelectedSeries(series) {
 }
 
 export function recalculateItem(item) {
-  // Shared wrapper so reducers use one canonical row-calculation path.
+  // Single source of truth for row math.
+  // Any reducer that changes item economics should call this wrapper.
   return calculateItemAmounts(item, item?.taxType || "igst");
 }
 
 function resolveItemPriceLevelRate(item, nextPriceLevel) {
-  // Find rate override from price-level matrix for a given item.
+  // Extracts matching rate from item.priceLevels[] where each row is:
+  // { priceLevel: <id>, priceRate: <number> }.
+  // Returns `null` when selected level has no mapping for this item.
   if (!nextPriceLevel || !Array.isArray(item?.priceLevels)) return null;
 
   const match = item.priceLevels.find(
@@ -60,7 +84,17 @@ function resolveItemPriceLevelRate(item, nextPriceLevel) {
 }
 
 function repriceAllItemsInternal(state) {
-  // Re-price every current line item when price level changes globally.
+  /**
+   * Global reprice behavior:
+   * 1) attach currently selected price level to each row
+   * 2) if level is set -> use matching price-level rate (or 0 if missing)
+   * 3) mark source as "priceLevel"
+   * 4) recalculate full row amounts/taxes
+   *
+   * Important edge case:
+   * - if price level is cleared and a row was originally priced by price level,
+   *   rate is reset to 0 to avoid keeping stale level-derived rate.
+   */
   state.items = state.items.map((item) => {
     const nextItem = {
       ...item,
@@ -83,7 +117,17 @@ function repriceAllItemsInternal(state) {
 }
 
 function recalculateTotals(state) {
-  // Recalculate line totals first, then add additional charges.
+  /**
+   * Order totals pipeline:
+   * 1) Recompute every item row + core item totals via `calculateItemsWithTotals`
+   * 2) Sum additional charge impact from normalized rows (`finalValue`)
+   * 3) Build document totals:
+   *    - amountWithAdditionalCharge = itemTotal + totalAdditionalCharge
+   *    - finalAmount = itemTotal + totalAdditionalCharge
+   *
+   * Note:
+   * - round-off is currently not applied here; final amount is straight sum.
+   */
   const { items, totals: itemTotals } = calculateItemsWithTotals(
     state.items,
     state.taxType,
@@ -162,6 +206,11 @@ function mapSaleOrderParty(doc = {}) {
 function mapSaleOrderItem(row = {}, taxType = "igst") {
   // Convert backend item row to UI item row and immediately recalculate so
   // computed fields are normalized with current calculator implementation.
+  //
+  // Mapping notes:
+  // - backend stores combined tax_rate; for CGST/SGST we split equally
+  // - saved numeric fields are re-hydrated and then recalculated to ensure
+  //   consistency with latest calculation engine and UI format
   return recalculateItem({
     _id: row?._id || null,
     id: row?.item_id || null,
@@ -200,6 +249,7 @@ function mapSaleOrderItem(row = {}, taxType = "igst") {
 }
 
 function mapSaleOrderAdditionalCharge(charge = {}) {
+  // Converts saved additional-charge schema -> UI row and re-derives tax/final value.
   return normalizeAdditionalCharge({
     _id: charge?._id || null,
     option: charge?.option || "",
@@ -258,6 +308,7 @@ const transactionSlice = createSlice({
       const party = action.payload || null;
       state.party = party;
       // Party selection drives tax type and therefore per-line tax calculation.
+      // Changing party can change tax regime (IGST vs CGST/SGST), so all rows must be recomputed.
       state.taxType = party?.taxType || "igst";
       state.items = state.items.map((item) => ({
         ...item,
@@ -267,6 +318,7 @@ const transactionSlice = createSlice({
     },
     clearParty(state) {
       state.party = null;
+      // Clearing party reverts tax context to default IGST.
       state.taxType = "igst";
       state.items = state.items.map((item) => ({
         ...item,
@@ -284,6 +336,11 @@ const transactionSlice = createSlice({
       recalculateTotals(state);
     },
     addItemsFromSelection(state, action) {
+      /**
+       * Merge policy for selected items:
+       * - if item already exists -> increment qty and recalculate row
+       * - else add as new row with current tax/price-level context
+       */
       const incomingItems = Array.isArray(action.payload) ? action.payload : [];
 
       incomingItems.forEach((incomingItem) => {
@@ -396,6 +453,7 @@ const transactionSlice = createSlice({
       recalculateTotals(state);
     },
     resetSaleOrderDraft(state) {
+      // Reset keeps structure stable while dropping transient transaction content.
       state.cmp_id = initialState.cmp_id;
       state.voucherType = initialState.voucherType;
       state.transactionDate = initialState.transactionDate;
