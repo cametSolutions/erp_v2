@@ -2,6 +2,7 @@ import mongoose from "mongoose";
 
 const { Schema, model, models } = mongoose;
 
+// Per-bill settlement detail attached to receipt/payment transaction.
 const SettlementDetailSchema = new Schema(
   {
     outstanding: { type: Schema.Types.ObjectId, ref: "Outstanding", required: true },
@@ -16,6 +17,7 @@ const SettlementDetailSchema = new Schema(
   { _id: true, strict: true }
 );
 
+// Shared cash-transaction schema used by Receipt model (and potentially Payment model).
 const CashTransactionSchema = new Schema(
   {
     cmp_id: { type: Schema.Types.ObjectId, ref: "Company", required: true },
@@ -66,6 +68,11 @@ const CashTransactionSchema = new Schema(
   }
 );
 
+// Common query/index patterns:
+// - by company/date
+// - by voucher type
+// - by party
+// - unique voucher and serial constraints
 CashTransactionSchema.index({ cmp_id: 1, date: -1 });
 CashTransactionSchema.index({ cmp_id: 1, voucher_type: 1, date: -1 });
 CashTransactionSchema.index({ cmp_id: 1, party_id: 1, date: -1 });

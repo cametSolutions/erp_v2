@@ -68,6 +68,8 @@ export const useSettlementOutstandingQuery = ({
   classification,
   enabled = true,
 }) =>
+  // Settlement query used in receipt/payment amount allocation step.
+  // Returns positive pending bills for selected party and classification.
   useQuery({
     queryKey: outstandingQueryKeys.settlement(
       partyId,

@@ -1,3 +1,11 @@
+/**
+ * Auto-allocates entered amount across outstanding bills in listed order.
+ * Strategy: oldest-first order as provided by caller.
+ *
+ * @param {number|string} amount
+ * @param {Array<object>} bills
+ * @returns {Array<object>} Bills with `checked` and `settled_amount` populated.
+ */
 export function calculateAutoSettlement(amount, bills = []) {
   let remaining = Number(amount) || 0;
 

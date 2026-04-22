@@ -25,10 +25,22 @@ import { ROUTES } from "@/routes/paths";
 import calculateAutoSettlement from "@/utils/calculateAutoSettlement";
 import { useMobileHeader } from "@/components/Layout/HomeLayout";
 
+/**
+ * Formats amount into rupee display text.
+ *
+ * @param {number|string|null|undefined} value
+ * @returns {string}
+ */
 function formatCurrency(value) {
   return `Rs. ${(Number(value) || 0).toFixed(2)}`;
 }
 
+/**
+ * Formats date values for compact UI labels.
+ *
+ * @param {string|Date|null|undefined} value
+ * @returns {string}
+ */
 function formatDateLabel(value) {
   if (!value) return "--";
 
@@ -42,6 +54,18 @@ function formatDateLabel(value) {
   });
 }
 
+/**
+ * Generic section wrapper used across receipt create screen.
+ *
+ * @param {{
+ *   title: string,
+ *   subtitle?: string,
+ *   icon: React.ComponentType,
+ *   tone?: "blue"|"amber"|"teal",
+ *   children: React.ReactNode
+ * }} props
+ * @returns {JSX.Element}
+ */
 function DetailCard({ title, subtitle, icon: Icon, tone = "blue", children }) {
   const tones = {
     blue: {
@@ -81,6 +105,14 @@ function DetailCard({ title, subtitle, icon: Icon, tone = "blue", children }) {
   );
 }
 
+/**
+ * Returns remaining unallocated amount after currently selected bill settlements.
+ *
+ * @param {number|string} amount
+ * @param {Array<object>} bills
+ * @param {string|null} excludeBillId
+ * @returns {number}
+ */
 function getRemainingAmountToAllocate(amount, bills = [], excludeBillId = null) {
   const allocatedAmount = bills.reduce((total, bill) => {
     if (excludeBillId && bill._id === excludeBillId) {
@@ -93,6 +125,14 @@ function getRemainingAmountToAllocate(amount, bills = [], excludeBillId = null) 
   return Math.max((Number(amount) || 0) - allocatedAmount, 0);
 }
 
+/**
+ * Recomputes selected settlements for checked bills based on available amount.
+ * Ensures final settled values remain consistent after any manual check/uncheck.
+ *
+ * @param {Array<object>} bills
+ * @param {number|string} amount
+ * @returns {Array<object>}
+ */
 function redistributeCheckedBills(bills = [], amount = 0) {
   let remaining = Number(amount) || 0;
 
@@ -116,6 +156,25 @@ function redistributeCheckedBills(bills = [], amount = 0) {
   });
 }
 
+/**
+ * Step-2 view: amount entry + outstanding settlement allocation.
+ *
+ * @param {{
+ *   voucher_type: "receipt"|"payment",
+ *   party: object|null,
+ *   amount: number,
+ *   setAmount: (n:number)=>void,
+ *   bills: Array<object>,
+ *   setBills: (updater:any)=>void,
+ *   onContinue: ()=>void,
+ *   onBack: ()=>void,
+ *   isLoading: boolean,
+ *   isError: boolean,
+ *   error: any,
+ *   refetch: ()=>void,
+ * }} props
+ * @returns {JSX.Element}
+ */
 function AmountSettlementStep({
   voucher_type,
   party,
@@ -144,12 +203,23 @@ function AmountSettlementStep({
   );
   const advanceAmount = Math.max((Number(amount) || 0) - settledAmount, 0);
 
+  /**
+   * Amount input handler:
+   * - updates entered amount
+   * - auto-distributes settlement among available bills
+   */
   const handleAmountChange = (event) => {
     const nextAmount = Number(event.target.value) || 0;
     setAmount(nextAmount);
     setBills((currentBills) => calculateAutoSettlement(nextAmount, currentBills));
   };
 
+  /**
+   * Bill checkbox toggle handler with allocation guard.
+   *
+   * @param {string} billId
+   * @param {boolean} checked
+   */
   const handleToggleBill = (billId, checked) => {
     const remainingAmount = getRemainingAmountToAllocate(amount, bills, billId);
 
@@ -314,6 +384,17 @@ function AmountSettlementStep({
   );
 }
 
+/**
+ * Main receipt/payment creation screen.
+ *
+ * Flow:
+ * 1) header + party + instrument + amount inputs
+ * 2) settlement sub-step for outstanding mapping
+ * 3) build payload and create transaction
+ *
+ * @param {{voucher_type?: "receipt"|"payment"}} props
+ * @returns {JSX.Element}
+ */
 export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   const cmp_id = useSelector((state) => state.company.selectedCompanyId);
   const navigate = useNavigate();
@@ -350,11 +431,13 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     clearDraft,
   } = useCashTransactionDraft({ cmp_id, voucher_type });
 
+  // Receives header payload builder from TransactionHeader.
   const handleHeaderReady = useCallback((builder) => {
     buildHeaderPayloadRef.current = builder;
     setHeaderReady(Boolean(builder));
   }, []);
 
+  // Instrument change resets cheque details and selected cash/bank ledger.
   useEffect(() => {
     if (instrumentType === "cash") {
       setChequeNumber("");
@@ -364,6 +447,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     setCashBank(null);
   }, [instrumentType]);
 
+  // Integrates settlement-step back button into mobile header.
   useEffect(() => {
     setHeaderOptions({
       onBack: step === "settlement" ? () => setStep("main") : undefined,
@@ -380,6 +464,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     enabled: Boolean(party?._id) && step === "settlement",
   });
 
+  // Auto-seed settlement rows from outstanding query when list/amount changes.
   useEffect(() => {
     if (!outstandingQuery.data?.items) return;
     setBills(calculateAutoSettlement(amount, outstandingQuery.data.items));
@@ -436,6 +521,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     (Number(amount) || 0) <= 0 ||
     (instrumentType === "cheque" && (!chequeNumber || !chequeDate));
 
+  // Converts selected bill settlements into backend payload shape.
   const handleContinueFromSettlement = () => {
     const nextSettlementDetails = bills
       .filter((bill) => bill.checked && (Number(bill?.settled_amount) || 0) > 0)
@@ -462,6 +548,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     setStep("main");
   };
 
+  // Final create action.
   const handleCreate = () => {
     const headerPayload = buildHeaderPayloadRef.current
       ? buildHeaderPayloadRef.current()

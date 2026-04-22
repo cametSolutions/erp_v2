@@ -7,6 +7,22 @@ import { partyQueryKeys } from "@/hooks/queries/partyQueries";
 import { invalidateVoucherSummaryForCompany } from "@/hooks/queries/voucherQueries";
 import { voucherSeriesKeys } from "@/hooks/queries/voucherSeriesQueries";
 
+/**
+ * Mutation hook for creating receipt/payment transactions.
+ *
+ * Side effects:
+ * - invalidates voucher-series counters
+ * - invalidates voucher summary totals
+ * - invalidates outstanding + party queries affected by settlement changes
+ *
+ * @param {{
+ *   cmp_id?: string,
+ *   voucher_type?: string,
+ *   onSuccess?: Function,
+ *   onError?: Function
+ * } & object} options
+ * @returns {import("@tanstack/react-query").UseMutationResult}
+ */
 export function useCreateCashTransaction(options = {}) {
   const { cmp_id = "", voucher_type = "", onSuccess, onError, ...mutationOptions } =
     options;
