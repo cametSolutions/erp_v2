@@ -27,6 +27,7 @@ export default function AdditionalChargesSection() {
   const dispatch = useDispatch();
   const cmp_id = useSelector((state) => state.company.selectedCompanyId) || "";
   const selectedCharges = useSelector((state) => state.transaction.additionalCharges);
+  const taxType = useSelector((state) => state.transaction.taxType);
   const totals = useSelector((state) => state.transaction.totals);
   const items = useSelector((state) => state.transaction.items);
   const [open, setOpen] = useState(false);
@@ -54,7 +55,7 @@ export default function AdditionalChargesSection() {
         return current.filter((item) => item._id !== charge?._id);
       }
 
-      return [...current, buildAdditionalChargeSelection(charge)];
+      return [...current, buildAdditionalChargeSelection(charge, null, taxType)];
     });
   };
 
@@ -65,7 +66,7 @@ export default function AdditionalChargesSection() {
           ? calculateAdditionalChargeRow({
               ...row,
               ...changes,
-            })
+            }, taxType)
           : row,
       ),
     );
@@ -175,7 +176,20 @@ export default function AdditionalChargesSection() {
                         {charge?.name || "Additional Charge"}
                       </p>
                       <p className="mt-1 text-[11px] text-slate-500">
-                        Tax {Number(charge?.taxPercentage || 0).toFixed(2)}%
+                        {[
+                          Number(charge?.igst) ? `IGST ${Number(charge.igst).toFixed(2)}%` : null,
+                          Number(charge?.cgst) ? `CGST ${Number(charge.cgst).toFixed(2)}%` : null,
+                          Number(charge?.sgst) ? `SGST ${Number(charge.sgst).toFixed(2)}%` : null,
+                          Number(charge?.cess) ? `Cess ${Number(charge.cess).toFixed(2)}%` : null,
+                          Number(charge?.addl_cess)
+                            ? `Addl. Cess ${Number(charge.addl_cess).toFixed(2)}%`
+                            : null,
+                          Number(charge?.state_cess)
+                            ? `State Cess ${Number(charge.state_cess).toFixed(2)}%`
+                            : null,
+                        ]
+                          .filter(Boolean)
+                          .join(" • ") || "No tax"}
                         {charge?.hsn ? ` · HSN ${charge.hsn}` : ""}
                       </p>
                     </div>
@@ -227,9 +241,12 @@ export default function AdditionalChargesSection() {
                       </div>
 
                       <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
-                        Tax amount: {formatCurrency(selected.taxAmt)}
+                        Tax split: IGST {formatCurrency(selected.igstAmount)} · CGST {formatCurrency(selected.cgstAmount)} · SGST {formatCurrency(selected.sgstAmount)}
                       </div>
-                      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700">
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] text-slate-600">
+                        Other cess: Cess {formatCurrency(selected.cessAmount)} · Addl. {formatCurrency(selected.addlCessAmount)} · State {formatCurrency(selected.stateCessAmount)}
+                      </div>
+                      <div className="rounded-xl border border-slate-100 bg-slate-50 px-3 py-2 text-[11px] font-semibold text-slate-700 md:col-span-2">
                         Final impact: {formatCurrency(selected.finalValue)}
                       </div>
                     </div>

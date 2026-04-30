@@ -25,10 +25,12 @@ const AdditionalChargesSchema = new mongoose.Schema(
       type: String,
       default: null,
     },
-    taxPercentage: {
-      type: Number,
-      default: 0,
-    },
+    cgst: { type: Number, default: 0 },
+    sgst: { type: Number, default: 0 },
+    igst: { type: Number, default: 0 },
+    cess: { type: Number, default: 0 },
+    addl_cess: { type: Number, default: 0 },
+    state_cess: { type: Number, default: 0 },
     exp_grpname: {
       type: String,
       default: null,

@@ -1,5 +1,10 @@
 import { createSlice } from "@reduxjs/toolkit";
-import { calculateItemAmounts, calculateItemsWithTotals } from "@/utils/salesCalculation";
+import {
+  calculateAdditionalChargeAmounts,
+  calculateAdditionalChargeTotals,
+  calculateItemAmounts,
+  calculateItemsWithTotals,
+} from "@/utils/salesCalculation";
 import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
 
 /**
@@ -8,30 +13,16 @@ import { formatVoucherNumber } from "@/utils/formatVoucherNumber";
  * Input shape expected from UI:
  * - value: base charge amount (string/number)
  * - action: "add" | "subtract"
- * - taxPercentage: percentage applied on base value
+ * - split rates: igst/cgst/sgst/cess/addl_cess/state_cess
  *
- * Derived formulas:
- * - taxAmt = value * taxPercentage / 100
- * - finalValue = (value + taxAmt) * sign
- *   where sign is +1 for add and -1 for subtract
+ * Derived fields:
+ * - per-component tax/cess amounts
+ * - finalValue = signed total impact including tax components
  *
  * Output is the canonical charge row shape used in state and totals calculation.
  */
-function normalizeAdditionalCharge(row) {
-  const baseValue = Number(row?.value) || 0;
-  const taxPercentage = Number(row?.taxPercentage) || 0;
-  const taxAmt = (baseValue * taxPercentage) / 100;
-  const sign = row?.action === "subtract" ? -1 : 1;
-  const finalValue = (baseValue + taxAmt) * sign;
-
-  return {
-    ...row,
-    value: row?.value ?? "",
-    action: row?.action === "subtract" ? "subtract" : "add",
-    taxPercentage,
-    taxAmt,
-    finalValue,
-  };
+function normalizeAdditionalCharge(row, taxType = "igst") {
+  return calculateAdditionalChargeAmounts(row, taxType);
 }
 
 /**
@@ -133,17 +124,28 @@ function recalculateTotals(state) {
     state.taxType,
   );
   state.items = items;
-
-  const totalAdditionalCharge = state.additionalCharges.reduce(
-    (accumulator, charge) => accumulator + (Number(charge?.finalValue) || 0),
-    0,
+  const chargeTotals = calculateAdditionalChargeTotals(
+    state.additionalCharges,
+    state.taxType,
   );
+  state.additionalCharges = chargeTotals.rows;
 
   state.totals = {
     ...itemTotals,
-    totalAdditionalCharge,
-    amountWithAdditionalCharge: itemTotals.itemTotal + totalAdditionalCharge,
-    finalAmount: itemTotals.itemTotal + totalAdditionalCharge,
+    totalAdditionalCharge: chargeTotals.totalAdditionalCharge,
+    totalAdditionalChargeTaxAmount:
+      chargeTotals.totalAdditionalChargeTaxAmount,
+    totalAdditionalChargeIgstAmt: chargeTotals.totalAdditionalChargeIgstAmt,
+    totalAdditionalChargeCgstAmt: chargeTotals.totalAdditionalChargeCgstAmt,
+    totalAdditionalChargeSgstAmt: chargeTotals.totalAdditionalChargeSgstAmt,
+    totalAdditionalChargeCessAmt: chargeTotals.totalAdditionalChargeCessAmt,
+    totalAdditionalChargeAddlCessAmt:
+      chargeTotals.totalAdditionalChargeAddlCessAmt,
+    totalAdditionalChargeStateCessAmt:
+      chargeTotals.totalAdditionalChargeStateCessAmt,
+    amountWithAdditionalCharge:
+      itemTotals.itemTotal + chargeTotals.totalAdditionalCharge,
+    finalAmount: itemTotals.itemTotal + chargeTotals.totalAdditionalCharge,
   };
 }
 
@@ -182,6 +184,13 @@ const initialState = {
     totalAddlCessAmt: 0,
     itemTotal: 0,
     totalAdditionalCharge: 0,
+    totalAdditionalChargeTaxAmount: 0,
+    totalAdditionalChargeIgstAmt: 0,
+    totalAdditionalChargeCgstAmt: 0,
+    totalAdditionalChargeSgstAmt: 0,
+    totalAdditionalChargeCessAmt: 0,
+    totalAdditionalChargeAddlCessAmt: 0,
+    totalAdditionalChargeStateCessAmt: 0,
     amountWithAdditionalCharge: 0,
     finalAmount: 0,
     roundOff: 0,
@@ -248,18 +257,29 @@ function mapSaleOrderItem(row = {}, taxType = "igst") {
   });
 }
 
-function mapSaleOrderAdditionalCharge(charge = {}) {
+function mapSaleOrderAdditionalCharge(charge = {}, taxType = "igst") {
   // Converts saved additional-charge schema -> UI row and re-derives tax/final value.
   return normalizeAdditionalCharge({
     _id: charge?._id || null,
     option: charge?.option || "",
     value: charge?.value ?? "",
     action: charge?.action === "subtract" ? "subtract" : "add",
-    taxPercentage: Number(charge?.tax_percentage) || 0,
-    taxAmt: Number(charge?.tax_amount) || 0,
+    igst: Number(charge?.igst) || 0,
+    cgst: Number(charge?.cgst) || 0,
+    sgst: Number(charge?.sgst) || 0,
+    cess: Number(charge?.cess) || 0,
+    addl_cess: Number(charge?.addl_cess) || 0,
+    state_cess: Number(charge?.state_cess) || 0,
+    igstAmount: Number(charge?.igst_amount) || 0,
+    cgstAmount: Number(charge?.cgst_amount) || 0,
+    sgstAmount: Number(charge?.sgst_amount) || 0,
+    taxAmount: Number(charge?.tax_amount) || 0,
+    cessAmount: Number(charge?.cess_amount) || 0,
+    addlCessAmount: Number(charge?.addl_cess_amount) || 0,
+    stateCessAmount: Number(charge?.state_cess_amount) || 0,
     hsn: charge?.hsn || "",
     finalValue: Number(charge?.final_value) || 0,
-  });
+  }, taxType);
 }
 
 function mapSaleOrderDespatchDetails(details = {}) {
@@ -328,7 +348,9 @@ const transactionSlice = createSlice({
     },
     setAdditionalCharges(state, action) {
       const rows = Array.isArray(action.payload) ? action.payload : [];
-      state.additionalCharges = rows.map(normalizeAdditionalCharge);
+      state.additionalCharges = rows.map((row) =>
+        normalizeAdditionalCharge(row, state.taxType)
+      );
       recalculateTotals(state);
     },
     resetAdditionalCharges(state) {
@@ -394,7 +416,9 @@ const transactionSlice = createSlice({
         ? doc.items.map((row) => mapSaleOrderItem(row, taxType))
         : [];
       state.additionalCharges = Array.isArray(doc?.additional_charges)
-        ? doc.additional_charges.map(mapSaleOrderAdditionalCharge)
+        ? doc.additional_charges.map((charge) =>
+            mapSaleOrderAdditionalCharge(charge, taxType)
+          )
         : [];
       state.despatchDetails = mapSaleOrderDespatchDetails(doc?.despatch_details);
       state.priceLevel = null;

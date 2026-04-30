@@ -70,14 +70,24 @@ function VoucherTypeBadge({ type }) {
   );
 }
 
-function CancelledBadge({ status }) {
-  if (status !== "cancelled") return null;
+function StatusBadge({ status, voucherType }) {
+  if (status === "cancelled") {
+    return (
+      <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">
+        Cancelled
+      </span>
+    );
+  }
 
-  return (
-    <span className="rounded-full bg-rose-50 px-2.5 py-0.5 text-[10px] font-semibold text-rose-700 ring-1 ring-rose-200">
-      Cancelled
-    </span>
-  );
+  if (voucherType === "saleOrder" && status === "converted") {
+    return (
+      <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-[10px] font-semibold text-amber-700 ring-1 ring-amber-200">
+        Converted
+      </span>
+    );
+  }
+
+  return null;
 }
 
 export default function DaybookPage() {
@@ -271,7 +281,10 @@ export default function DaybookPage() {
                         {formatDateDisplay(voucher.date)}
                       </span>
                       <VoucherTypeBadge type={voucher.voucher_type} />
-                      <CancelledBadge status={voucher.status} />
+                      <StatusBadge
+                        status={voucher.status}
+                        voucherType={voucher.voucher_type}
+                      />
                     </div>
                   </div>
 

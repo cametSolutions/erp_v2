@@ -20,6 +20,111 @@ function getApplicableGstRate(item, taxType) {
   return toNumber(item?.igst);
 }
 
+function getApplicableChargeRates(charge, taxType) {
+  const legacyTaxPercentage = toNumber(
+    charge?.taxPercentage ?? charge?.tax_percentage,
+  );
+
+  return {
+    igst:
+      taxType === "igst"
+        ? toNumber(charge?.igst ?? legacyTaxPercentage)
+        : 0,
+    cgst:
+      taxType === "cgst_sgst"
+        ? toNumber(charge?.cgst ?? legacyTaxPercentage / 2)
+        : 0,
+    sgst:
+      taxType === "cgst_sgst"
+        ? toNumber(charge?.sgst ?? legacyTaxPercentage / 2)
+        : 0,
+    cess: toNumber(charge?.cess),
+    addlCess: toNumber(charge?.addl_cess ?? charge?.addlCess),
+    stateCess: toNumber(charge?.state_cess ?? charge?.stateCess),
+  };
+}
+
+export function calculateAdditionalChargeAmounts(charge, taxType = "igst") {
+  const value = toNumber(charge?.value);
+  const sign = charge?.action === "subtract" ? -1 : 1;
+  const rates = getApplicableChargeRates(charge, taxType);
+  const igstAmount = value * (rates.igst / 100);
+  const cgstAmount = value * (rates.cgst / 100);
+  const sgstAmount = value * (rates.sgst / 100);
+  const taxAmount = igstAmount + cgstAmount + sgstAmount;
+  const cessAmount = 0;
+  const addlCessAmount = 0;
+  const stateCessAmount = 0;
+  const finalValue = (value + taxAmount) * sign;
+
+  return {
+    ...charge,
+    value: charge?.value ?? "",
+    action: charge?.action === "subtract" ? "subtract" : "add",
+    igst: roundMoney(rates.igst),
+    cgst: roundMoney(rates.cgst),
+    sgst: roundMoney(rates.sgst),
+    cess: roundMoney(rates.cess),
+    addl_cess: roundMoney(rates.addlCess),
+    state_cess: roundMoney(rates.stateCess),
+    igstAmount: roundMoney(igstAmount),
+    cgstAmount: roundMoney(cgstAmount),
+    sgstAmount: roundMoney(sgstAmount),
+    taxAmount: roundMoney(taxAmount),
+    cessAmount: roundMoney(cessAmount),
+    addlCessAmount: roundMoney(addlCessAmount),
+    stateCessAmount: roundMoney(stateCessAmount),
+    finalValue: roundMoney(finalValue),
+  };
+}
+
+export function calculateAdditionalChargeTotals(
+  additionalCharges = [],
+  taxType = "igst",
+) {
+  return additionalCharges
+    .map((charge) => calculateAdditionalChargeAmounts(charge, taxType))
+    .reduce(
+      (accumulator, charge) => {
+        accumulator.rows.push(charge);
+        accumulator.totalAdditionalCharge += toNumber(charge?.finalValue);
+        accumulator.totalAdditionalChargeTaxAmount += toNumber(
+          charge?.taxAmount,
+        ) * (charge?.action === "subtract" ? -1 : 1);
+        accumulator.totalAdditionalChargeIgstAmt += toNumber(
+          charge?.igstAmount,
+        ) * (charge?.action === "subtract" ? -1 : 1);
+        accumulator.totalAdditionalChargeCgstAmt += toNumber(
+          charge?.cgstAmount,
+        ) * (charge?.action === "subtract" ? -1 : 1);
+        accumulator.totalAdditionalChargeSgstAmt += toNumber(
+          charge?.sgstAmount,
+        ) * (charge?.action === "subtract" ? -1 : 1);
+        accumulator.totalAdditionalChargeCessAmt += toNumber(
+          charge?.cessAmount,
+        ) * (charge?.action === "subtract" ? -1 : 1);
+        accumulator.totalAdditionalChargeAddlCessAmt += toNumber(
+          charge?.addlCessAmount,
+        ) * (charge?.action === "subtract" ? -1 : 1);
+        accumulator.totalAdditionalChargeStateCessAmt += toNumber(
+          charge?.stateCessAmount,
+        ) * (charge?.action === "subtract" ? -1 : 1);
+        return accumulator;
+      },
+      {
+        rows: [],
+        totalAdditionalCharge: 0,
+        totalAdditionalChargeTaxAmount: 0,
+        totalAdditionalChargeIgstAmt: 0,
+        totalAdditionalChargeCgstAmt: 0,
+        totalAdditionalChargeSgstAmt: 0,
+        totalAdditionalChargeCessAmt: 0,
+        totalAdditionalChargeAddlCessAmt: 0,
+        totalAdditionalChargeStateCessAmt: 0,
+      },
+    );
+}
+
 export function calculateItemAmounts(item, taxType = "igst") {
   // This is the core per-row pricing engine used across create/edit flows.
   // All UI totals are derived from this function, not manual arithmetic in components.

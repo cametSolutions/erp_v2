@@ -1,28 +1,22 @@
+import { calculateAdditionalChargeAmounts } from "@/utils/salesCalculation";
+
 export function formatCurrency(value) {
   return `Rs. ${(Number(value) || 0).toFixed(2)}`;
 }
 
 // Compute derived tax and signed impact of an additional-charge row.
-export function calculateAdditionalChargeRow(row) {
-  const value = Number(row?.value) || 0;
-  const taxPercentage = Number(row?.taxPercentage) || 0;
-  const taxAmt = (value * taxPercentage) / 100;
-  const sign = row?.action === "subtract" ? -1 : 1;
-  const finalValue = (value + taxAmt) * sign;
-
-  return {
-    ...row,
-    value: row?.value ?? "",
-    taxPercentage,
-    taxAmt,
-    finalValue,
-  };
+export function calculateAdditionalChargeRow(row, taxType = "igst") {
+  return calculateAdditionalChargeAmounts(row, taxType);
 }
 
 // Create initial selected-charge draft from master charge definition.
-export function buildAdditionalChargeSelection(charge, existingCharge) {
+export function buildAdditionalChargeSelection(
+  charge,
+  existingCharge,
+  taxType = "igst",
+) {
   if (existingCharge) {
-    return calculateAdditionalChargeRow(existingCharge);
+    return calculateAdditionalChargeRow(existingCharge, taxType);
   }
 
   return calculateAdditionalChargeRow({
@@ -30,9 +24,13 @@ export function buildAdditionalChargeSelection(charge, existingCharge) {
     option: charge?.name || "Additional Charge",
     value: "",
     action: "add",
-    taxPercentage: Number(charge?.taxPercentage) || 0,
-    taxAmt: 0,
+    igst: Number(charge?.igst) || 0,
+    cgst: Number(charge?.cgst) || 0,
+    sgst: Number(charge?.sgst) || 0,
+    cess: Number(charge?.cess) || 0,
+    addl_cess: Number(charge?.addl_cess) || 0,
+    state_cess: Number(charge?.state_cess) || 0,
     hsn: charge?.hsn || "",
     finalValue: 0,
-  });
+  }, taxType);
 }

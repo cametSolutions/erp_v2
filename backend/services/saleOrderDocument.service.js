@@ -62,6 +62,62 @@ function normalizeTotals(body = {}) {
     totalAdditionalCharge:
       Number(firstDefined(totals.totalAdditionalCharge, body.totalAdditionalCharge)) ||
       0,
+    totalAdditionalChargeTaxAmount:
+      Number(
+        firstDefined(
+          totals.totalAdditionalChargeTaxAmount,
+          body.totalAdditionalChargeTaxAmount,
+          body.total_additional_charge_tax_amount
+        )
+      ) || 0,
+    totalAdditionalChargeIgstAmt:
+      Number(
+        firstDefined(
+          totals.totalAdditionalChargeIgstAmt,
+          body.totalAdditionalChargeIgstAmt,
+          body.total_additional_charge_igst_amt
+        )
+      ) || 0,
+    totalAdditionalChargeCgstAmt:
+      Number(
+        firstDefined(
+          totals.totalAdditionalChargeCgstAmt,
+          body.totalAdditionalChargeCgstAmt,
+          body.total_additional_charge_cgst_amt
+        )
+      ) || 0,
+    totalAdditionalChargeSgstAmt:
+      Number(
+        firstDefined(
+          totals.totalAdditionalChargeSgstAmt,
+          body.totalAdditionalChargeSgstAmt,
+          body.total_additional_charge_sgst_amt
+        )
+      ) || 0,
+    totalAdditionalChargeCessAmt:
+      Number(
+        firstDefined(
+          totals.totalAdditionalChargeCessAmt,
+          body.totalAdditionalChargeCessAmt,
+          body.total_additional_charge_cess_amt
+        )
+      ) || 0,
+    totalAdditionalChargeAddlCessAmt:
+      Number(
+        firstDefined(
+          totals.totalAdditionalChargeAddlCessAmt,
+          body.totalAdditionalChargeAddlCessAmt,
+          body.total_additional_charge_addl_cess_amt
+        )
+      ) || 0,
+    totalAdditionalChargeStateCessAmt:
+      Number(
+        firstDefined(
+          totals.totalAdditionalChargeStateCessAmt,
+          body.totalAdditionalChargeStateCessAmt,
+          body.total_additional_charge_state_cess_amt
+        )
+      ) || 0,
     amountWithAdditionalCharge:
       Number(
         firstDefined(
@@ -169,18 +225,76 @@ function mapSaleOrderItems(items = [], { preserveIds = false } = {}) {
 
 // Normalize additional charges and fix known legacy typo:
 // `substract` -> `subtract`
-function mapAdditionalCharges(additionalCharges = []) {
-  return additionalCharges.map((charge) => ({
-    option: charge?.option || "",
-    value: Number(charge?.value) || 0,
-    action: charge?.action === "substract" ? "subtract" : charge?.action || "add",
-    tax_percentage:
-      Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0,
-    tax_amount: Number(firstDefined(charge?.taxAmt, charge?.tax_amount)) || 0,
-    hsn: charge?.hsn || null,
-    final_value:
-      Number(firstDefined(charge?.finalValue, charge?.final_value)) || 0,
-  }));
+function mapAdditionalCharges(additionalCharges = [], taxType = "igst") {
+  return additionalCharges.map((charge) => {
+    const normalizedCharge = {
+      option: charge?.option || "",
+      value: Number(charge?.value) || 0,
+      action:
+        charge?.action === "substract" ? "subtract" : charge?.action || "add",
+      igst:
+        Number(
+          firstDefined(
+            charge?.igst,
+            taxType === "igst"
+              ? firstDefined(charge?.taxPercentage, charge?.tax_percentage)
+              : 0
+          )
+        ) || 0,
+      cgst:
+        Number(
+          firstDefined(
+            charge?.cgst,
+            taxType === "cgst_sgst"
+              ? (Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0) /
+                  2
+              : 0
+          )
+        ) || 0,
+      sgst:
+        Number(
+          firstDefined(
+            charge?.sgst,
+            taxType === "cgst_sgst"
+              ? (Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0) /
+                  2
+              : 0
+          )
+        ) || 0,
+      cess: Number(firstDefined(charge?.cess)) || 0,
+      addl_cess:
+        Number(firstDefined(charge?.addl_cess, charge?.addlCess)) || 0,
+      state_cess:
+        Number(firstDefined(charge?.state_cess, charge?.stateCess)) || 0,
+      hsn: charge?.hsn || null,
+      final_value:
+        Number(firstDefined(charge?.finalValue, charge?.final_value)) || 0,
+    };
+
+    const igstAmount =
+      taxType === "igst"
+        ? roundMoney(normalizedCharge.value * (normalizedCharge.igst / 100))
+        : 0;
+    const cgstAmount =
+      taxType === "cgst_sgst"
+        ? roundMoney(normalizedCharge.value * (normalizedCharge.cgst / 100))
+        : 0;
+    const sgstAmount =
+      taxType === "cgst_sgst"
+        ? roundMoney(normalizedCharge.value * (normalizedCharge.sgst / 100))
+        : 0;
+
+    return {
+      ...normalizedCharge,
+      igst_amount: igstAmount,
+      cgst_amount: cgstAmount,
+      sgst_amount: sgstAmount,
+      tax_amount: roundMoney(igstAmount + cgstAmount + sgstAmount),
+      cess_amount: 0,
+      addl_cess_amount: 0,
+      state_cess_amount: 0,
+    };
+  });
 }
 
 // Convert UI dispatch object into backend snake_case schema fields.
@@ -208,13 +322,15 @@ export function buildSaleOrderTotals(body = {}) {
   const calculatedTotals = calculateSaleOrderTotals(
     body.items || [],
     body.additionalCharges || [],
-    body.discounts || null
+    body.discounts || null,
+    normalizeTaxType(body)
   );
   const normalizedTotals = normalizeTotals(body);
+  const taxType = normalizeTaxType(body);
   const totalIgstAmt =
-    normalizeTaxType(body) === "igst" ? calculatedTotals.totalTax : 0;
+    taxType === "igst" ? calculatedTotals.totalTax : 0;
   const splitTaxAmount =
-    normalizeTaxType(body) === "cgst_sgst"
+    taxType === "cgst_sgst"
       ? roundMoney(calculatedTotals.totalTax / 2)
       : 0;
 
@@ -230,6 +346,20 @@ export function buildSaleOrderTotals(body = {}) {
     total_addl_cess_amt: roundMoney(calculatedTotals.totalAddlCess),
     item_total: calculatedTotals.itemTotal,
     total_additional_charge: calculatedTotals.totalAdditionalCharge,
+    total_additional_charge_tax_amount:
+      calculatedTotals.totalAdditionalChargeTax,
+    total_additional_charge_igst_amt:
+      calculatedTotals.totalAdditionalChargeIgst,
+    total_additional_charge_cgst_amt:
+      calculatedTotals.totalAdditionalChargeCgst,
+    total_additional_charge_sgst_amt:
+      calculatedTotals.totalAdditionalChargeSgst,
+    total_additional_charge_cess_amt:
+      calculatedTotals.totalAdditionalChargeCess,
+    total_additional_charge_addl_cess_amt:
+      calculatedTotals.totalAdditionalChargeAddlCess,
+    total_additional_charge_state_cess_amt:
+      calculatedTotals.totalAdditionalChargeStateCess,
     amount_with_additional_charge: calculatedTotals.amountWithAdditionalCharge,
     round_off: normalizedTotals.roundOff || 0,
     final_amount: calculatedTotals.grandTotal,
@@ -244,7 +374,8 @@ export function logSaleOrderTotalsMismatch(body = {}) {
   const serverTotals = calculateSaleOrderTotals(
     body.items || [],
     body.additionalCharges || [],
-    body.discounts || null
+    body.discounts || null,
+    normalizeTaxType(body)
   );
 
   const hasSignificantDifference = [
@@ -304,7 +435,10 @@ export function buildSaleOrderPayload(body, voucher, serials, userId) {
     price_level_name: priceLevelObject?.pricelevel || priceLevelObject?.name || null,
     // Monetary details
     items: mapSaleOrderItems(items),
-    additional_charges: mapAdditionalCharges(additionalCharges),
+    additional_charges: mapAdditionalCharges(
+      additionalCharges,
+      normalizeTaxType(body)
+    ),
     despatch_details: mapDespatchDetails(despatchDetails),
     totals: buildSaleOrderTotals(body),
     // Lifecycle + external sync placeholders
@@ -328,7 +462,10 @@ export function applySaleOrderUpdate(saleOrder, data = {}, userId = null) {
   saleOrder.price_level_name =
     priceLevelObject?.pricelevel || priceLevelObject?.name || null;
   saleOrder.items = mapSaleOrderItems(data.items || [], { preserveIds: true });
-  saleOrder.additional_charges = mapAdditionalCharges(data.additionalCharges || []);
+  saleOrder.additional_charges = mapAdditionalCharges(
+    data.additionalCharges || [],
+    normalizeTaxType(data)
+  );
   saleOrder.despatch_details = mapDespatchDetails(data.despatchDetails || {});
   saleOrder.totals = buildSaleOrderTotals(data);
   saleOrder.updated_by = userId || null;

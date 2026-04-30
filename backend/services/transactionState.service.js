@@ -9,16 +9,19 @@ const TRANSACTION_STATUS = {
     initial: "open",
     cancelled: "cancelled",
     editableStatuses: ["open"],
+    cancellableStatuses: ["open"],
   },
   receipt: {
     initial: "active",
     cancelled: "cancelled",
     editableStatuses: [],
+    cancellableStatuses: ["active"],
   },
   payment: {
     initial: "active",
     cancelled: "cancelled",
     editableStatuses: [],
+    cancellableStatuses: ["active"],
   },
 };
 
@@ -50,6 +53,14 @@ export function assertTransactionNotAlreadyCancelled(transactionType, status) {
   }
 }
 
+export function assertTransactionCancellable(transactionType, status) {
+  const cancellableStatuses = getConfig(transactionType)?.cancellableStatuses || [];
+
+  if (!cancellableStatuses.includes(status)) {
+    throw createHttpError(`Cannot cancel a ${status} ${transactionType}`, 400);
+  }
+}
+
 export function markTransactionCancelled(doc, transactionType) {
   doc.status = getCancelledTransactionStatus(transactionType);
   return doc.status;
@@ -57,6 +68,7 @@ export function markTransactionCancelled(doc, transactionType) {
 
 export default {
   assertTransactionEditable,
+  assertTransactionCancellable,
   assertTransactionNotAlreadyCancelled,
   getCancelledTransactionStatus,
   getInitialTransactionStatus,
