@@ -85,7 +85,29 @@ export function buildCreateSaleOrderPayload({
     })),
     // Document-level sections
     despatchDetails,
-    additionalCharges,
+    additionalCharges: (additionalCharges || []).map((charge) => ({
+      _id: charge?._id ?? null,
+      option: charge?.option || "",
+      value: Number(charge?.value) || 0,
+      action: charge?.action === "subtract" ? "subtract" : "add",
+      igst: Number(charge?.igst) || 0,
+      cgst: Number(charge?.cgst) || 0,
+      sgst: Number(charge?.sgst) || 0,
+      cess: Number(charge?.cess) || 0,
+      addl_cess: Number(charge?.addl_cess ?? charge?.addlCess) || 0,
+      state_cess: Number(charge?.state_cess ?? charge?.stateCess) || 0,
+      igstAmount: Number(charge?.igstAmount ?? charge?.igst_amount) || 0,
+      cgstAmount: Number(charge?.cgstAmount ?? charge?.cgst_amount) || 0,
+      sgstAmount: Number(charge?.sgstAmount ?? charge?.sgst_amount) || 0,
+      taxAmount: Number(charge?.taxAmount ?? charge?.tax_amount) || 0,
+      cessAmount: Number(charge?.cessAmount ?? charge?.cess_amount) || 0,
+      addlCessAmount:
+        Number(charge?.addlCessAmount ?? charge?.addl_cess_amount) || 0,
+      stateCessAmount:
+        Number(charge?.stateCessAmount ?? charge?.state_cess_amount) || 0,
+      hsn: charge?.hsn || "",
+      finalValue: Number(charge?.finalValue ?? charge?.final_value) || 0,
+    })),
     // Totals are still sent by frontend for transparency/debugging.
     // Backend re-calculates and validates final numbers before save.
     subTotal: Number(totals?.subTotal) || 0,
@@ -102,6 +124,55 @@ export function buildCreateSaleOrderPayload({
       Number(totals?.total_tax_amount ?? totals?.totalTaxAmount) || 0,
     item_total: Number(totals?.item_total ?? totals?.itemTotal) || 0,
     totalAdditionalCharge: Number(totals?.totalAdditionalCharge) || 0,
+    totalAdditionalChargeTaxAmount:
+      Number(totals?.totalAdditionalChargeTaxAmount) || 0,
+    total_additional_charge_tax_amount:
+      Number(
+        totals?.total_additional_charge_tax_amount ??
+          totals?.totalAdditionalChargeTaxAmount
+      ) || 0,
+    totalAdditionalChargeIgstAmt:
+      Number(totals?.totalAdditionalChargeIgstAmt) || 0,
+    total_additional_charge_igst_amt:
+      Number(
+        totals?.total_additional_charge_igst_amt ??
+          totals?.totalAdditionalChargeIgstAmt
+      ) || 0,
+    totalAdditionalChargeCgstAmt:
+      Number(totals?.totalAdditionalChargeCgstAmt) || 0,
+    total_additional_charge_cgst_amt:
+      Number(
+        totals?.total_additional_charge_cgst_amt ??
+          totals?.totalAdditionalChargeCgstAmt
+      ) || 0,
+    totalAdditionalChargeSgstAmt:
+      Number(totals?.totalAdditionalChargeSgstAmt) || 0,
+    total_additional_charge_sgst_amt:
+      Number(
+        totals?.total_additional_charge_sgst_amt ??
+          totals?.totalAdditionalChargeSgstAmt
+      ) || 0,
+    totalAdditionalChargeCessAmt:
+      Number(totals?.totalAdditionalChargeCessAmt) || 0,
+    total_additional_charge_cess_amt:
+      Number(
+        totals?.total_additional_charge_cess_amt ??
+          totals?.totalAdditionalChargeCessAmt
+      ) || 0,
+    totalAdditionalChargeAddlCessAmt:
+      Number(totals?.totalAdditionalChargeAddlCessAmt) || 0,
+    total_additional_charge_addl_cess_amt:
+      Number(
+        totals?.total_additional_charge_addl_cess_amt ??
+          totals?.totalAdditionalChargeAddlCessAmt
+      ) || 0,
+    totalAdditionalChargeStateCessAmt:
+      Number(totals?.totalAdditionalChargeStateCessAmt) || 0,
+    total_additional_charge_state_cess_amt:
+      Number(
+        totals?.total_additional_charge_state_cess_amt ??
+          totals?.totalAdditionalChargeStateCessAmt
+      ) || 0,
     amountWithAdditionalCharge: Number(totals?.amountWithAdditionalCharge) || 0,
     finalAmount: Number(totals?.finalAmount) || 0,
   };

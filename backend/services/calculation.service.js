@@ -67,35 +67,113 @@ function resolveItemDiscount(item = {}, lineSubtotalPaise = 0) {
 }
 
 function resolveChargeAmountPaise(charge = {}) {
+  return resolveChargeBreakdownPaise(charge).finalValuePaise;
+}
+
+function resolveChargeRate(charge = {}, key, legacyFallback = 0) {
+  const explicitRate = Number(firstDefined(charge?.[key], charge?.[key])) || 0;
+  if (explicitRate > 0) return explicitRate;
+  return Number(legacyFallback) || 0;
+}
+
+function resolveChargeBreakdownPaise(charge = {}, taxType = "igst") {
   const normalizedAction =
     charge?.action === "subtract" || charge?.action === "substract"
       ? "subtract"
       : "add";
   const sign = normalizedAction === "subtract" ? -1 : 1;
+  const baseValuePaise = toPaise(charge?.value);
+  const legacyTaxPercentage = Number(
+    firstDefined(charge?.taxPercentage, charge?.tax_percentage)
+  ) || 0;
+
+  const igstRate =
+    taxType === "igst"
+      ? resolveChargeRate(charge, "igst", legacyTaxPercentage)
+      : 0;
+  const cgstRate =
+    taxType === "cgst_sgst"
+      ? resolveChargeRate(charge, "cgst", legacyTaxPercentage / 2)
+      : 0;
+  const sgstRate =
+    taxType === "cgst_sgst"
+      ? resolveChargeRate(charge, "sgst", legacyTaxPercentage / 2)
+      : 0;
+  const igstAmountPaise = Math.round(baseValuePaise * (igstRate / 100));
+  const cgstAmountPaise = Math.round(baseValuePaise * (cgstRate / 100));
+  const sgstAmountPaise = Math.round(baseValuePaise * (sgstRate / 100));
+  const explicitTaxAmount = firstDefined(charge?.taxAmt, charge?.tax_amount);
+  const derivedTaxAmountPaise =
+    igstAmountPaise + cgstAmountPaise + sgstAmountPaise;
+  const hasSplitTaxDefinition =
+    igstRate > 0 ||
+    cgstRate > 0 ||
+    sgstRate > 0 ||
+    firstDefined(
+      charge?.igstAmount,
+      charge?.igst_amount,
+      charge?.cgstAmount,
+      charge?.cgst_amount,
+      charge?.sgstAmount,
+      charge?.sgst_amount
+    ) !== undefined;
+  const taxAmountPaise =
+    explicitTaxAmount !== undefined &&
+    explicitTaxAmount !== null &&
+    !hasSplitTaxDefinition
+      ? toPaise(explicitTaxAmount)
+      : derivedTaxAmountPaise;
+  const cessAmountPaise = 0;
+  const addlCessAmountPaise = 0;
+  const stateCessAmountPaise = 0;
   const explicitFinalValue = firstDefined(charge?.finalValue, charge?.final_value);
 
   if (explicitFinalValue !== undefined && explicitFinalValue !== null) {
     const finalValuePaise = toPaise(explicitFinalValue);
 
-    // If the client already sent a signed final value, keep it.
     if (finalValuePaise < 0) {
-      return finalValuePaise;
+      return {
+        baseValuePaise: baseValuePaise * sign,
+        igstAmountPaise: igstAmountPaise * sign,
+        cgstAmountPaise: cgstAmountPaise * sign,
+        sgstAmountPaise: sgstAmountPaise * sign,
+        taxAmountPaise: taxAmountPaise * sign,
+        cessAmountPaise: cessAmountPaise * sign,
+        addlCessAmountPaise: addlCessAmountPaise * sign,
+        stateCessAmountPaise: stateCessAmountPaise * sign,
+        finalValuePaise,
+      };
     }
 
-    return finalValuePaise * sign;
+    return {
+      baseValuePaise: baseValuePaise * sign,
+      igstAmountPaise: igstAmountPaise * sign,
+      cgstAmountPaise: cgstAmountPaise * sign,
+      sgstAmountPaise: sgstAmountPaise * sign,
+      taxAmountPaise: taxAmountPaise * sign,
+      cessAmountPaise: cessAmountPaise * sign,
+      addlCessAmountPaise: addlCessAmountPaise * sign,
+      stateCessAmountPaise: stateCessAmountPaise * sign,
+      finalValuePaise: finalValuePaise * sign,
+    };
   }
 
-  const baseValuePaise = toPaise(charge?.value);
-  const explicitTaxAmount = firstDefined(charge?.taxAmt, charge?.tax_amount);
-  const taxAmountPaise =
-    explicitTaxAmount !== undefined && explicitTaxAmount !== null
-      ? toPaise(explicitTaxAmount)
-      : Math.round(
-          baseValuePaise *
-            ((Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0) / 100)
-        );
-
-  return (baseValuePaise + taxAmountPaise) * sign;
+  return {
+    baseValuePaise: baseValuePaise * sign,
+    igstAmountPaise: igstAmountPaise * sign,
+    cgstAmountPaise: cgstAmountPaise * sign,
+    sgstAmountPaise: sgstAmountPaise * sign,
+    taxAmountPaise: taxAmountPaise * sign,
+    cessAmountPaise: cessAmountPaise * sign,
+    addlCessAmountPaise: addlCessAmountPaise * sign,
+    stateCessAmountPaise: stateCessAmountPaise * sign,
+    finalValuePaise:
+      (baseValuePaise +
+        taxAmountPaise +
+        cessAmountPaise +
+        addlCessAmountPaise +
+        stateCessAmountPaise) * sign,
+  };
 }
 
 function resolveDocumentDiscountPaise(discounts) {
@@ -122,6 +200,7 @@ export function calculateSaleOrderTotals(
   items = [],
   charges = [],
   discounts = null,
+  taxType = "igst",
 ) {
   const normalizedItems = Array.isArray(items) ? items : [];
   const normalizedCharges = Array.isArray(charges) ? charges : [];
@@ -131,6 +210,13 @@ export function calculateSaleOrderTotals(
   let totalTaxPaise = 0;
   let totalCessPaise = 0;
   let totalAddlCessPaise = 0;
+  let totalAdditionalChargeTaxPaise = 0;
+  let totalAdditionalChargeIgstPaise = 0;
+  let totalAdditionalChargeCgstPaise = 0;
+  let totalAdditionalChargeSgstPaise = 0;
+  let totalAdditionalChargeCessPaise = 0;
+  let totalAdditionalChargeAddlCessPaise = 0;
+  let totalAdditionalChargeStateCessPaise = 0;
 
   normalizedItems.forEach((item) => {
     const quantity = resolveItemQuantity(item);
@@ -160,10 +246,17 @@ export function calculateSaleOrderTotals(
     totalAddlCessPaise += itemAddlCessPaise;
   });
 
-  const chargeTotalPaise = normalizedCharges.reduce(
-    (sum, charge) => sum + resolveChargeAmountPaise(charge),
-    0,
-  );
+  const chargeTotalPaise = normalizedCharges.reduce((sum, charge) => {
+    const breakdown = resolveChargeBreakdownPaise(charge, taxType);
+    totalAdditionalChargeTaxPaise += breakdown.taxAmountPaise;
+    totalAdditionalChargeIgstPaise += breakdown.igstAmountPaise;
+    totalAdditionalChargeCgstPaise += breakdown.cgstAmountPaise;
+    totalAdditionalChargeSgstPaise += breakdown.sgstAmountPaise;
+    totalAdditionalChargeCessPaise += breakdown.cessAmountPaise;
+    totalAdditionalChargeAddlCessPaise += breakdown.addlCessAmountPaise;
+    totalAdditionalChargeStateCessPaise += breakdown.stateCessAmountPaise;
+    return sum + breakdown.finalValuePaise;
+  }, 0);
   const documentDiscountPaise = resolveDocumentDiscountPaise(discounts);
 
   totalDiscountPaise += documentDiscountPaise;
@@ -190,6 +283,17 @@ export function calculateSaleOrderTotals(
         totalAddlCessPaise
     ),
     totalAdditionalCharge: fromPaise(chargeTotalPaise),
+    totalAdditionalChargeTax: fromPaise(totalAdditionalChargeTaxPaise),
+    totalAdditionalChargeIgst: fromPaise(totalAdditionalChargeIgstPaise),
+    totalAdditionalChargeCgst: fromPaise(totalAdditionalChargeCgstPaise),
+    totalAdditionalChargeSgst: fromPaise(totalAdditionalChargeSgstPaise),
+    totalAdditionalChargeCess: fromPaise(totalAdditionalChargeCessPaise),
+    totalAdditionalChargeAddlCess: fromPaise(
+      totalAdditionalChargeAddlCessPaise
+    ),
+    totalAdditionalChargeStateCess: fromPaise(
+      totalAdditionalChargeStateCessPaise
+    ),
     amountWithAdditionalCharge: fromPaise(Math.max(grandTotalPaise, 0)),
     grandTotal: fromPaise(Math.max(grandTotalPaise, 0)),
   };

@@ -33,6 +33,23 @@ function formatAmount(value) {
   return `Rs. ${Number(value || 0).toFixed(2)}`;
 }
 
+function formatChargeRateSummary(charge = {}) {
+  return [
+    Number(charge?.igst) ? `IGST ${Number(charge.igst).toFixed(2)}%` : null,
+    Number(charge?.cgst) ? `CGST ${Number(charge.cgst).toFixed(2)}%` : null,
+    Number(charge?.sgst) ? `SGST ${Number(charge.sgst).toFixed(2)}%` : null,
+    Number(charge?.cess) ? `Cess ${Number(charge.cess).toFixed(2)}%` : null,
+    Number(charge?.addl_cess)
+      ? `Addl. Cess ${Number(charge.addl_cess).toFixed(2)}%`
+      : null,
+    Number(charge?.state_cess)
+      ? `State Cess ${Number(charge.state_cess).toFixed(2)}%`
+      : null,
+  ]
+    .filter(Boolean)
+    .join(" • ");
+}
+
 /**
  * Compact stat tile used in summary row.
  *
@@ -248,7 +265,9 @@ export default function SaleOrderDetailView({
                         {charge.option}
                       </p>
                       <p className="mt-1 text-[11px] text-slate-500">
-                        {charge.action} • Tax {Number(charge.tax_percentage || 0).toFixed(2)}%
+                        {[charge.action, formatChargeRateSummary(charge)]
+                          .filter(Boolean)
+                          .join(" • ")}
                       </p>
                     </div>
                     <p className="text-[13px] font-semibold text-slate-900">
@@ -290,6 +309,19 @@ export default function SaleOrderDetailView({
                 ["CGST", totals.total_cgst_amt],
                 ["SGST", totals.total_sgst_amt],
                 ["Additional Charge", totals.total_additional_charge],
+                ["Addl. Charge Tax", totals.total_additional_charge_tax_amount],
+                ["Addl. Charge IGST", totals.total_additional_charge_igst_amt],
+                ["Addl. Charge CGST", totals.total_additional_charge_cgst_amt],
+                ["Addl. Charge SGST", totals.total_additional_charge_sgst_amt],
+                ["Addl. Charge Cess", totals.total_additional_charge_cess_amt],
+                [
+                  "Addl. Charge Addl. Cess",
+                  totals.total_additional_charge_addl_cess_amt,
+                ],
+                [
+                  "Addl. Charge State Cess",
+                  totals.total_additional_charge_state_cess_amt,
+                ],
                 ["Round Off", totals.round_off],
               ].map(([label, value]) => (
                 <div key={label} className="flex items-center justify-between gap-4">

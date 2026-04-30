@@ -131,7 +131,12 @@ export const saveAdditionalChargesFromTally = async (req, res) => {
         const updatableFields = {
           name: charge.name,
           hsn: charge.hsn || null,
-          taxPercentage: charge.taxPercentage ?? 0,
+          cgst: charge.cgst ?? 0,
+          sgst: charge.sgst ?? 0,
+          igst: charge.igst ?? charge.taxPercentage ?? 0,
+          cess: charge.cess ?? 0,
+          addl_cess: charge.addl_cess ?? 0,
+          state_cess: charge.state_cess ?? 0,
           exp_grpname: charge.exp_grpname || null,
           exp_childgrpname: charge.exp_childgrpname || null,
           source: "tally",

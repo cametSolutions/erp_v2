@@ -14,7 +14,9 @@ export const listAdditionalCharges = async (req, res) => {
       cmp_id,
       Primary_user_id: owner,
     })
-      .select("_id name hsn taxPercentage additional_charge_id")
+      .select(
+        "_id name hsn cgst sgst igst cess addl_cess state_cess additional_charge_id"
+      )
       .sort({ name: 1 })
       .lean();
 
