@@ -15,6 +15,7 @@ import { importOutstandingFromTally } from "../../controllers/tallyDataControlle
 import {
   getReceiptsForTally,
   getSaleOrdersForTally,
+  markSaleOrdersConvertedFromTally,
 } from "../../controllers/tallyDataController.js/tallyExportController.js";
 
 const router = express.Router();
@@ -53,5 +54,6 @@ router.post("/outstanding", importOutstandingFromTally);
 // Sale Order export to Tally
 router.get("/get-sale-orders/:cmp_id/:sno", getSaleOrdersForTally);
 router.get("/get-receipts/:cmp_id/:sno", getReceiptsForTally);
+router.post("/sale-orders/mark-converted", markSaleOrdersConvertedFromTally);
 
 export default router;

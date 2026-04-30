@@ -126,6 +126,7 @@ export default function SaleOrderDetailView({
   const items = saleOrder?.items || [];
   const additionalCharges = saleOrder?.additional_charges || [];
   const isCancelled = saleOrder?.status === "cancelled";
+  const isOpen = saleOrder?.status === "open";
   const statusTone =
     saleOrder?.status === "converted"
       ? "bg-amber-100 text-amber-800"
@@ -201,7 +202,7 @@ export default function SaleOrderDetailView({
             size="sm"
             variant="outline"
             className="border-white/25 bg-white/10 text-white hover:bg-white/15"
-            disabled={isCancelled}
+            disabled={!isOpen}
             onClick={() => navigate(`/sale-orders/${saleOrder._id}/edit`)}
           >
             <SquarePen className="h-3.5 w-3.5" />
@@ -212,6 +213,7 @@ export default function SaleOrderDetailView({
             title="Cancel sale order?"
             description="This will mark the sale order as cancelled. This action can be reverted later if needed."
             isCancelled={isCancelled}
+            disabled={!isOpen}
             isLoading={isCancelling}
             onConfirm={onCancel}
           />

@@ -8,6 +8,7 @@ import {
   updateVoucherTimelineEntry,
 } from "./voucherTimeline.service.js";
 import {
+  assertTransactionCancellable,
   assertTransactionEditable,
   assertTransactionNotAlreadyCancelled,
   markTransactionCancelled,
@@ -207,8 +208,9 @@ export async function cancelSaleOrder(id, data = {}, req) {
         throw createHttpError("Sale order not found", 404);
       }
 
-      // Throws conflict-style error if already cancelled.
+      // Guard cancellation so converted/cancelled orders cannot be cancelled again.
       assertTransactionNotAlreadyCancelled("saleOrder", saleOrder.status);
+      assertTransactionCancellable("saleOrder", saleOrder.status);
 
       // Central helper keeps transaction status behavior consistent across voucher types.
       markTransactionCancelled(saleOrder, "saleOrder");
