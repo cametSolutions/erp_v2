@@ -4,6 +4,14 @@ const { Schema } = mongoose;
 
 export const AdditionalChargeSchema = new Schema(
   {
+    // Master identity is distinct from this embedded row's automatic `_id`.
+    // Nullable keeps legacy Sale/Sale Order documents writable; create/update
+    // services require it for every newly submitted charge.
+    additional_charge_id: {
+      type: Schema.Types.ObjectId,
+      ref: "AdditionalCharges",
+      default: null,
+    },
     option: { type: String, required: true },
     value: { type: Number, required: true },
 

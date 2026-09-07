@@ -120,7 +120,15 @@ export function normalizeSaleChargeInput(input = {}) {
     throw createSaleValidationError("Additional charge action must be add or subtract");
   }
   return {
-    charge_master_id: requiredObjectId(firstDefined(input.chargeMasterId, input.charge_master_id), "chargeMasterId"),
+    charge_master_id: requiredObjectId(
+      firstDefined(
+        input.additionalChargeId,
+        input.additional_charge_id,
+        input.chargeMasterId,
+        input.charge_master_id,
+      ),
+      "additionalChargeId",
+    ),
     action,
     value: finiteNumber(input.value, "Additional charge value"),
   };

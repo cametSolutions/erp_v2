@@ -40,9 +40,11 @@ describe("createSale", () => {
   it("posts every Sale effect atomically and groups repeated stock-row movement", async () => {
     const { context, party, godown, product, rowId, seriesId, charge } = await setupSaleContext();
     const line = { itemId: String(product._id), godownId: String(godown._id), godownStockRowId: String(rowId), selectedUnit: "NOS", actualQty: 3, billedQty: 3, rate: 100, taxInclusive: false, discountType: "amount", discountValue: 0 };
-    const sale = await createSale({ selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id), items: [line, { ...line, actualQty: 2 }], additionalCharges: [{ chargeMasterId: String(charge._id), action: "subtract", value: 10 }], narration: "  July sale  " }, { companyId: String(context.company._id), user: context.user });
+    const sale = await createSale({ selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id), items: [line, { ...line, actualQty: 2 }], additionalCharges: [{ additionalChargeId: String(charge._id), action: "subtract", value: 10 }], narration: "  July sale  " }, { companyId: String(context.company._id), user: context.user });
     expect(sale).toMatchObject({ voucher_type: "sale", status: "active", tally_status: "pending", narration: "July sale" });
     expect(sale.items).toHaveLength(2);
+    expect(String(sale.additional_charges[0].additional_charge_id)).toBe(String(charge._id));
+    expect(sale.additional_charges[0].option).toBe(charge.name);
     expect((await Product.findById(product._id)).GodownList[0].balance_stock).toBe(-3);
     expect(await ItemLedger.countDocuments({ voucher_id: sale._id })).toBe(2);
     expect((await ItemMonthlyBalance.findOne({ cmp_id: context.company._id, item_id: product._id })).total_outward_qty).toBe(5);

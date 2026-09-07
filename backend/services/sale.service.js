@@ -112,7 +112,10 @@ function mapSaleItems(items) {
 }
 
 function mapCharges(charges) {
-  return charges.map(({ charge_master_id, rates, name, ...charge }) => charge);
+  return charges.map(({ charge_master_id, rates, name, ...charge }) => ({
+    ...charge,
+    additional_charge_id: charge_master_id,
+  }));
 }
 
 async function decrementStock(items, cmp_id, session) {

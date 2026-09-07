@@ -3,6 +3,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 import app from "../../app.js";
+import AdditionalCharges from "../../Model/AdditionalCharges.js";
 import PriceLevel from "../../Model/PriceLevel.js";
 import Product from "../../Model/ProductSchema.js";
 import { Brand, Category, Subcategory } from "../../Model/ProductSubDetails.js";
@@ -412,6 +413,20 @@ describe("POST /api/sale-orders — Auth & middleware", () => {
 });
 
 describe("POST /api/sale-orders — Business logic", () => {
+  it("rejects an unknown additional-charge master ID", async () => {
+    const res = await postSaleOrder(
+      baseContext.token,
+      buildValidSaleOrderPayload(baseContext.party._id, baseContext.series.seriesId, {
+        additionalCharges: [
+          { additionalChargeId: String(new mongoose.Types.ObjectId()), value: 100 },
+        ],
+      }),
+    );
+
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Additional charge does not belong to this company");
+  });
+
   it('Party from a different company → 400 "Selected party does not belong to this company"', async () => {
     const otherCompany = await createOwnedCompany(baseContext.token, "Other Party Company");
     const otherAccountGroup = await createAccountGroup({
@@ -524,6 +539,33 @@ describe("POST /api/sale-orders — Business logic", () => {
 });
 
 describe("POST /api/sale-orders — DB side effects (assert after valid create)", () => {
+  it("persists the requested additional-charge master ID and its snapshots", async () => {
+    const charge = await AdditionalCharges.create({
+      cmp_id: baseContext.companyId,
+      Primary_user_id: baseContext.userId,
+      additional_charge_id: `SO-CHARGE-${new mongoose.Types.ObjectId()}`,
+      name: "Freight Charges",
+      hsn: "996812",
+      igst: 18,
+      cgst: 9,
+      sgst: 9,
+    });
+
+    const res = await createSaleOrderForTest({
+      additionalCharges: [{ additionalChargeId: String(charge._id), value: 100 }],
+    });
+    const saleOrder = await SaleOrder.findById(res.body.data.saleOrder._id).lean();
+
+    expect(String(saleOrder.additional_charges[0].additional_charge_id)).toBe(String(charge._id));
+    expect(saleOrder.additional_charges[0]).toMatchObject({
+      option: "Freight Charges",
+      hsn: "996812",
+      value: 100,
+      igst: 18,
+      final_value: 118,
+    });
+  });
+
   it("SaleOrder document exists in DB with correct cmp_id and party_id", async () => {
     const res = await createSaleOrderForTest();
 
