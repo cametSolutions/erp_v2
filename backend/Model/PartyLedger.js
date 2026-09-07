@@ -65,7 +65,9 @@ const PartyLedgerSchema = new Schema(
     against_id: {
       type: Schema.Types.ObjectId,
       ref: "Party",
-      required: true,
+      // Receipts use the selected cash/bank Party here. Sales have no
+      // corresponding Party/head, so their ledger entry legitimately has null.
+      default: null,
     },
 
 
