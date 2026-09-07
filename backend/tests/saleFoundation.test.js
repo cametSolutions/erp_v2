@@ -20,6 +20,40 @@ describe("Sale foundation calculations", () => {
     expect(result.totals.final_amount).toBe(188.8);
   });
 
+  it("removes included GST before applying percentage and amount discounts", () => {
+    const percentageDiscount = calculateSaleTotals([{
+      ...resolved,
+      billed_qty: 1,
+      rate: 100,
+      tax_inclusive: true,
+      discount_type: "percentage",
+      discount_value: 50,
+    }]);
+    const amountDiscount = calculateSaleTotals([{
+      ...resolved,
+      billed_qty: 1,
+      rate: 100,
+      tax_inclusive: true,
+      discount_type: "amount",
+      discount_value: 10,
+    }]);
+
+    expect(percentageDiscount.items[0]).toMatchObject({
+      base_price: 100 / 1.18,
+      discount_amount: 50 / 1.18,
+      taxable_amount: 50 / 1.18,
+      igst_amount: 9 / 1.18,
+      total_amount: 50,
+    });
+    expect(amountDiscount.items[0]).toMatchObject({
+      base_price: 100 / 1.18,
+      discount_amount: 10,
+      taxable_amount: 100 / 1.18 - 10,
+      igst_amount: (100 / 1.18 - 10) * 0.18,
+      total_amount: 88.2,
+    });
+  });
+
   it("rejects a negative final amount instead of clamping it", () => {
     expect(() => calculateSaleTotals([resolved], [{ action: "subtract", value: 1000, rates: { igst: 0, cgst: 0, sgst: 0 } }])).toThrow("cannot be negative");
   });

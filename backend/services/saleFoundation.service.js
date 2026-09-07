@@ -59,14 +59,20 @@ function roundMoney(value) {
   return Math.round((Number(value) || 0) * 100) / 100;
 }
 
-function splitTax(amount, taxType, rates) {
+function splitTax(amount, taxType, rates, { round = true } = {}) {
   if (taxType === "cgst_sgst") {
-    const cgst_amount = roundMoney(amount * (rates.cgst / 100));
-    const sgst_amount = roundMoney(amount * (rates.sgst / 100));
-    return { igst_amount: 0, cgst_amount, sgst_amount, tax_amount: roundMoney(cgst_amount + sgst_amount) };
+    const cgst_amount = amount * (rates.cgst / 100);
+    const sgst_amount = amount * (rates.sgst / 100);
+    return {
+      igst_amount: 0,
+      cgst_amount: round ? roundMoney(cgst_amount) : cgst_amount,
+      sgst_amount: round ? roundMoney(sgst_amount) : sgst_amount,
+      tax_amount: round ? roundMoney(cgst_amount + sgst_amount) : cgst_amount + sgst_amount,
+    };
   }
-  const igst_amount = roundMoney(amount * (rates.igst / 100));
-  return { igst_amount, cgst_amount: 0, sgst_amount: 0, tax_amount: igst_amount };
+  const igst_amount = amount * (rates.igst / 100);
+  const tax_amount = round ? roundMoney(igst_amount) : igst_amount;
+  return { igst_amount: tax_amount, cgst_amount: 0, sgst_amount: 0, tax_amount };
 }
 
 /**
@@ -185,15 +191,17 @@ export async function resolveSaleChargeMasters(charges, options = {}) {
 
 export function calculateSaleItem(item, taxType = "igst") {
   if (!["igst", "cgst_sgst"].includes(taxType)) throw createSaleValidationError("taxType must be igst or cgst_sgst");
-  const base_price = roundMoney(item.billed_qty * item.rate);
+  const gross_amount = item.billed_qty * item.rate;
   const taxRate = taxType === "igst" ? item.tax_rates.igst : item.tax_rates.cgst + item.tax_rates.sgst;
-  const price_before_tax = item.tax_inclusive && taxRate > 0 ? roundMoney(base_price / (1 + taxRate / 100)) : base_price;
-  const discount_amount = item.discount_type === "percentage" ? roundMoney(price_before_tax * item.discount_value / 100) : roundMoney(item.discount_value);
-  if (discount_amount > price_before_tax) throw createSaleValidationError("Item discount cannot exceed the item price");
-  const taxable_amount = roundMoney(price_before_tax - discount_amount);
-  const tax = splitTax(taxable_amount, taxType, item.tax_rates);
-  const cess_amount = roundMoney(taxable_amount * (item.tax_rates.cess / 100));
-  const addl_cess_amount = roundMoney(item.billed_qty * item.tax_rates.addl_cess);
+  // A tax-inclusive rate is the gross line value. Remove GST before applying
+  // the item discount, matching the established Sale Order calculation flow.
+  const base_price = item.tax_inclusive && taxRate > 0 ? gross_amount / (1 + taxRate / 100) : gross_amount;
+  const discount_amount = item.discount_type === "percentage" ? base_price * item.discount_value / 100 : item.discount_value;
+  if (discount_amount > base_price) throw createSaleValidationError("Item discount cannot exceed the item price");
+  const taxable_amount = base_price - discount_amount;
+  const tax = splitTax(taxable_amount, taxType, item.tax_rates, { round: false });
+  const cess_amount = taxable_amount * (item.tax_rates.cess / 100);
+  const addl_cess_amount = item.billed_qty * item.tax_rates.addl_cess;
   return { ...item, base_price, discount_amount, taxable_amount, ...tax, cess_amount, addl_cess_amount, total_amount: roundMoney(taxable_amount + tax.tax_amount + cess_amount + addl_cess_amount) };
 }
 

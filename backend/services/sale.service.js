@@ -229,12 +229,14 @@ export async function createSale(data = {}, req = {}) {
       }], { session });
 
       await decrementStock(calculated.items, cmp_id, session);
+      // Mongoose requires ordered inserts when creating more than one document
+      // in a transaction-bound session.
       await ItemLedger.create(sale.items.map((item) => ({
         cmp_id, item_id: item.item_id, godown_id: item.godown_id, godown_stock_row_id: item.godown_stock_row_id,
         batch: item.batch, voucher_type: "sale", voucher_id: sale._id, voucher_item_id: item._id,
         voucher_number: sale.voucher_number, date, base_quantity: item.actual_qty, base_unit: item.base_unit,
         movement_type: "OUT", tally_status: getInitialTransactionTallyStatus("sale"), created_by: userId,
-      })), { session });
+      })), { session, ordered: true });
       await updateItemMonthlyBalances(calculated.items, cmp_id, date, session);
       await PartyLedger.create([{
         cmp_id, voucher_type: "sale", voucher_id: sale._id, voucher_number: sale.voucher_number, date,
