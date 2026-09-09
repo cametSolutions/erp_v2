@@ -47,8 +47,9 @@ describe("createSale", () => {
     expect(sale.additional_charges[0].option).toBe(charge.name);
     expect((await Product.findById(product._id)).GodownList[0].balance_stock).toBe(-3);
     expect(await ItemLedger.countDocuments({ voucher_id: sale._id })).toBe(2);
+    expect(await ItemLedger.findOne({ voucher_id: sale._id })).toMatchObject({ status: "active", tally_status: "pending" });
     expect((await ItemMonthlyBalance.findOne({ cmp_id: context.company._id, item_id: product._id })).total_outward_qty).toBe(5);
-    expect(await PartyLedger.findOne({ voucher_id: sale._id, ledger_side: "debit", against_id: null })).not.toBeNull();
+    expect(await PartyLedger.findOne({ voucher_id: sale._id, ledger_side: "debit", against_id: null })).toMatchObject({ status: "active", tally_status: "pending" });
     expect((await PartyMonthlyBalance.findOne({ cmp_id: context.company._id, party_id: party._id })).total_debit).toBe(sale.totals.final_amount);
     expect((await Outstanding.findOne({ billId: String(sale._id) })).bill_due_date.toISOString()).toBe(sale.date.toISOString());
     expect(await VoucherTimeline.countDocuments({ voucher_id: sale._id, voucher_type: "sale" })).toBe(1);

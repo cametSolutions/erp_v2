@@ -544,9 +544,103 @@ describe("POST /api/tally/products", () => {
     expect(detailRes.status).toBe(200);
     expect(String(listRes.body.items[0].GodownList[0]._id)).toBe(expectedRowId);
     expect(String(detailRes.body.GodownList[0]._id)).toBe(expectedRowId);
+    expect(listRes.body.items[0].GodownList[0].godown_name).toBe("Main Godown");
+    expect(detailRes.body.GodownList[0].godown_name).toBe("Main Godown");
+    expect(typeof detailRes.body.GodownList[0].godown).toBe("string");
     expect(mongoose.Types.ObjectId.isValid(detailRes.body.GodownList[0]._id)).toBe(
       true,
     );
+  });
+
+  it("enriches stock rows safely and filters only the sale product list before pagination", async () => {
+    const context = await setupTallyIntegrationContext({
+      userOverrides: {
+        userName: "Sale Product Lookup Admin",
+        mobileNumber: "9910010199",
+        email: "sale-product-lookup-admin@example.com",
+      },
+    });
+    const mainGodown = await createDefaultGodown({
+      cmp_id: context.company._id,
+      Primary_user_id: context.user._id,
+      godown: "Sale Main Godown",
+      godown_id: "GDN-SALE-LIST",
+    });
+    const foreignGodown = await Godown.create({
+      cmp_id: new mongoose.Types.ObjectId(),
+      Primary_user_id: context.user._id,
+      godown: "Other Company Godown",
+      godown_id: "GDN-OTHER-COMPANY",
+    });
+    await Product.create([
+      {
+        product_name: "Sale Product With Stock",
+        product_master_id: "PRD-SALE-WITH-STOCK",
+        cmp_id: context.company._id,
+        Primary_user_id: context.user._id,
+        base_unit: "NOS",
+        GodownList: [{ godown: mainGodown._id, balance_stock: 5 }],
+      },
+      {
+        product_name: "Product Without Stock Rows",
+        product_master_id: "PRD-SALE-WITHOUT-STOCK",
+        cmp_id: context.company._id,
+        Primary_user_id: context.user._id,
+        base_unit: "NOS",
+        GodownList: [],
+      },
+      {
+        product_name: "Product With Foreign Godown",
+        product_master_id: "PRD-SALE-FOREIGN-GODOWN",
+        cmp_id: context.company._id,
+        Primary_user_id: context.user._id,
+        base_unit: "NOS",
+        GodownList: [{ godown: foreignGodown._id, balance_stock: 1 }],
+      },
+    ]);
+
+    const masterRes = await request(app)
+      .get("/api/product")
+      .set("Authorization", `Bearer ${context.token}`)
+      .query({ cmp_id: String(context.company._id), limit: 20 });
+    const saleRes = await request(app)
+      .get("/api/product")
+      .set("Authorization", `Bearer ${context.token}`)
+      .query({ cmp_id: String(context.company._id), limit: 20, for_sale: true });
+    const storedStockedProduct = await Product.findOne({
+      cmp_id: context.company._id,
+      product_master_id: "PRD-SALE-WITH-STOCK",
+    }).lean();
+    const detailRes = await request(app)
+      .get(`/api/product/${storedStockedProduct._id}`)
+      .set("Authorization", `Bearer ${context.token}`)
+      .query({ cmp_id: String(context.company._id) });
+
+    expect(masterRes.status).toBe(200);
+    expect(masterRes.body.items.map((item) => item.product_name)).toEqual(
+      expect.arrayContaining([
+        "Sale Product With Stock",
+        "Product Without Stock Rows",
+        "Product With Foreign Godown",
+      ]),
+    );
+    expect(saleRes.status).toBe(200);
+    expect(detailRes.status).toBe(200);
+    expect(saleRes.body.total).toBe(2);
+    expect(saleRes.body.items.map((item) => item.product_name).sort()).toEqual([
+      "Product With Foreign Godown",
+      "Sale Product With Stock",
+    ]);
+    const stockedProduct = saleRes.body.items.find(
+      (item) => item.product_name === "Sale Product With Stock",
+    );
+    const foreignProduct = saleRes.body.items.find(
+      (item) => item.product_name === "Product With Foreign Godown",
+    );
+    expect(stockedProduct.GodownList[0].godown_name).toBe("Sale Main Godown");
+    expect(detailRes.body.GodownList[0].godown_name).toBe("Sale Main Godown");
+    expect(String(detailRes.body.GodownList[0].godown)).toBe(String(mainGodown._id));
+    expect(foreignProduct.GodownList[0].godown_name).toBeNull();
   });
 
   it("should create different subdocument _ids for multiple new GodownList rows", async () => {

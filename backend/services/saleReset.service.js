@@ -214,7 +214,7 @@ export async function resetSaleTransactions({ companyId, dryRun = false }) {
 
       await Product.updateMany(
         { cmp_id: cmpId, "GodownList.0": { $exists: true } },
-        [{ $set: { GodownList: { $map: { input: "$GodownList", as: "row", in: { $mergeObjects: ["$$row", { balance_stock: STOCK_BASELINE }] } } } } }],
+        { $set: { "GodownList.$[].balance_stock": STOCK_BASELINE } },
         // Preserve all non-stock product fields, including the product timestamp.
         { session, timestamps: false },
       );

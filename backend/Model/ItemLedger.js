@@ -77,6 +77,13 @@ const ItemLedgerSchema = new Schema(
       required: true,
     },
 
+    status: {
+      type: String,
+      enum: ["active", "cancelled"],
+      default: "active",
+      required: true,
+    },
+
     tally_status: {
       type: String,
       enum: ["pending", "accepted"],

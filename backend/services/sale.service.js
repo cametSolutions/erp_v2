@@ -238,7 +238,8 @@ export async function createSale(data = {}, req = {}) {
         cmp_id, item_id: item.item_id, godown_id: item.godown_id, godown_stock_row_id: item.godown_stock_row_id,
         batch: item.batch, voucher_type: "sale", voucher_id: sale._id, voucher_item_id: item._id,
         voucher_number: sale.voucher_number, date, base_quantity: item.actual_qty, base_unit: item.base_unit,
-        movement_type: "OUT", tally_status: getInitialTransactionTallyStatus("sale"), created_by: userId,
+        movement_type: "OUT", status: getInitialTransactionStatus("sale"),
+        tally_status: getInitialTransactionTallyStatus("sale"), created_by: userId,
       })), { session, ordered: true });
       await updateItemMonthlyBalances(calculated.items, cmp_id, date, session);
       await PartyLedger.create([{
