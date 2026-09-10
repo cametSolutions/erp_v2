@@ -10,6 +10,7 @@ import PartyMonthlyBalance from "../Model/PartyMonthlyBalance.js";
 import Party from "../Model/partySchema.js";
 import Sale from "../Model/Sale.js";
 import { buildSaleCashBankLedger, isCashBankParty } from "../services/sale.service.js";
+import { auditSale } from "../services/saleAudit.service.js";
 
 dotenv.config();
 
@@ -51,6 +52,7 @@ export async function repairCashBankSales({ dryRun = false } = {}) {
     cashBankLedgersAlreadyExisting: 0,
     cashBankLedgersToCreate: 0,
     partyMonthlyBalanceRowsToRebuild: 0,
+    auditIssuesBeforeRepair: 0,
   };
   if (!saleIds.length) return summary;
 
@@ -73,7 +75,11 @@ export async function repairCashBankSales({ dryRun = false } = {}) {
   summary.cashBankLedgersAlreadyExisting = existingCashBankLedgers.length;
   summary.cashBankLedgersToCreate = targetSales.filter((sale) => !existingVoucherIds.has(String(sale._id))).length;
   summary.partyMonthlyBalanceRowsToRebuild = buckets.size;
-  if (dryRun) return summary;
+  if (dryRun) {
+    const audits = await Promise.all(targetSales.map((sale) => auditSale({ saleId: sale._id, companyId: sale.cmp_id })));
+    summary.auditIssuesBeforeRepair = audits.reduce((total, audit) => total + audit.audit.issues.length, 0);
+    return summary;
+  }
 
   const session = await mongoose.startSession();
   try {

@@ -33,6 +33,10 @@ function sameNumber(left, right) {
   return Number(left) === Number(right);
 }
 
+function sameDate(left, right) {
+  return new Date(left).getTime() === new Date(right).getTime();
+}
+
 function monthKey(date) {
   const value = new Date(date);
   return `${value.getFullYear()}-${String(value.getMonth() + 1).padStart(2, "0")}`;
@@ -110,14 +114,21 @@ function outstandingAudit(sale, records) {
   return checkResult(issues, 1, records.length);
 }
 
-function cashBankLedgerAudit(sale, ledgers) {
+function cashBankLedgerAudit(sale, party, ledgers) {
   const issues = [];
   if (ledgers.length === 0) issues.push(`Missing CashBankLedger for Sale ${id(sale._id)}`);
   if (ledgers.length > 1) issues.push(`Expected one CashBankLedger for Sale ${id(sale._id)}, found ${ledgers.length}`);
   for (const ledger of ledgers) {
+    if (!sameId(ledger.cmp_id, sale.cmp_id)) issues.push(`CashBankLedger cmp_id does not match Sale ${id(sale._id)}`);
+    if (ledger.voucher_type !== "sale") issues.push(`CashBankLedger voucher_type for Sale ${id(sale._id)} is not sale`);
+    if (!sameId(ledger.voucher_id, sale._id)) issues.push(`CashBankLedger voucher_id does not match Sale ${id(sale._id)}`);
     if (!sameId(ledger.cash_bank_id, sale.party_id)) issues.push(`CashBankLedger account does not match Sale ${id(sale._id)}`);
+    if (ledger.cash_bank_type !== party.partyType) issues.push(`CashBankLedger account type does not match Sale party type`);
+    if (!sameDate(ledger.date, sale.date)) issues.push(`CashBankLedger date does not match Sale ${id(sale._id)}`);
     if (ledger.ledger_side !== "credit") issues.push(`CashBankLedger ledger_side is ${ledger.ledger_side}, expected credit`);
     if (!sameNumber(ledger.amount, sale.totals.final_amount)) issues.push(`CashBankLedger amount ${ledger.amount} does not match Sale final_amount ${sale.totals.final_amount}`);
+    if (ledger.status !== sale.status) issues.push(`CashBankLedger status does not match Sale ${id(sale._id)}`);
+    if (ledger.tally_status !== sale.tally_status) issues.push(`CashBankLedger tally_status does not match Sale ${id(sale._id)}`);
   }
   return checkResult(issues, 1, ledgers.length);
 }
@@ -148,7 +159,7 @@ export async function auditSale({ saleId, companyId }) {
     ? checkResult(partyLedgers.length ? [`Unexpected PartyLedger for cash/bank Sale ${id(sale._id)}`] : [], 0, partyLedgers.length)
     : partyLedgerAudit(sale, partyLedgers);
   const cashBankLedgerCheck = isCashBankSale
-    ? cashBankLedgerAudit(sale, cashBankLedgers)
+    ? cashBankLedgerAudit(sale, party, cashBankLedgers)
     : checkResult(cashBankLedgers.length ? [`Unexpected CashBankLedger for credit Sale ${id(sale._id)}`] : [], 0, cashBankLedgers.length);
   const outstandingCheck = isCashBankSale
     ? checkResult(outstandingRecords.length ? [`Unexpected Outstanding record for cash/bank Sale ${id(sale._id)}`] : [], 0, outstandingRecords.length)
@@ -214,6 +225,22 @@ export async function auditSale({ saleId, companyId }) {
   const stockRowsCheck = checkResult(stockRowIssues, sale.items.length, stockRows.filter((entry) => entry.currentStockRow).length);
   const saleItemById = new Map(sale.items.map((item) => [id(item._id), item]));
 
+  const checks = {
+    overallValid: [itemLedgerCheck, itemMonthlyCheck, partyLedgerCheck, cashBankLedgerCheck, partyMonthlyCheck, outstandingCheck, referencesCheck, stockRowsCheck]
+      .every((check) => check.valid),
+    itemLedger: itemLedgerCheck,
+    itemMonthlyBalance: itemMonthlyCheck,
+    partyLedger: partyLedgerCheck,
+    cashBankLedger: cashBankLedgerCheck,
+    partyMonthlyBalance: partyMonthlyCheck,
+    outstanding: outstandingCheck,
+    references: referencesCheck,
+    stockRows: stockRowsCheck,
+  };
+  const issues = Object.values(checks)
+    .filter((value) => value && Array.isArray(value.issues))
+    .flatMap((value) => value.issues);
+
   return {
     sale,
     itemLedgers: itemLedgers.map((ledger) => {
@@ -242,17 +269,18 @@ export async function auditSale({ saleId, companyId }) {
     })),
     voucherTimeline,
     stockRows,
-    checks: {
-      overallValid: [itemLedgerCheck, itemMonthlyCheck, partyLedgerCheck, cashBankLedgerCheck, partyMonthlyCheck, outstandingCheck, referencesCheck, stockRowsCheck]
-        .every((check) => check.valid),
-      itemLedger: itemLedgerCheck,
-      itemMonthlyBalance: itemMonthlyCheck,
-      partyLedger: partyLedgerCheck,
-      cashBankLedger: cashBankLedgerCheck,
-      partyMonthlyBalance: partyMonthlyCheck,
-      outstanding: outstandingCheck,
-      references: referencesCheck,
-      stockRows: stockRowsCheck,
+    checks,
+    audit: {
+      partyType: party?.partyType || null,
+      isCashBankSale,
+      valid: checks.overallValid,
+      issues,
+      expected: {
+        partyLedger: !isCashBankSale,
+        partyMonthlyBalance: !isCashBankSale,
+        outstanding: !isCashBankSale,
+        cashBankLedger: isCashBankSale,
+      },
     },
   };
 }
