@@ -340,7 +340,7 @@ describe("POST /api/tally/products", () => {
     expect(productCount).toBe(0);
   });
 
-  it("should fail when default godown does not exist", async () => {
+  it("should create a product without requiring a default godown", async () => {
     const context = await setupTallyIntegrationContext({
       userOverrides: {
         userName: "Tally Product Admin Four",
@@ -356,6 +356,10 @@ describe("POST /api/tally/products", () => {
           Primary_user_id: context.user._id.toString(),
           cmp_id: context.company._id.toString(),
           product_master_id: "PRD-NO-GODOWN-001",
+          brand: null,
+          category: null,
+          sub_category: null,
+          priceLevels: [],
         }),
       ],
     });
@@ -366,31 +370,21 @@ describe("POST /api/tally/products", () => {
       product_master_id: "PRD-NO-GODOWN-001",
     });
 
-    expect(res.status).toBe(400);
-    expect(res.body.status).toBe("failure");
+    expect(res.status).toBe(201);
+    expect(res.body.status).toBe("success");
     expect(res.body.message).toBe("Products processing completed");
     expect(res.body.summary).toEqual({
       totalReceived: 1,
-      insertedCount: 0,
+      insertedCount: 1,
       updatedCount: 0,
-      successCount: 0,
-      skippedCount: 1,
+      successCount: 1,
+      skippedCount: 0,
     });
-    expect(res.body.skippedReasons).toEqual({
-      missingRequiredFields: 0,
-      duplicateInRequest: 0,
-      processingErrors: 1,
-    });
-    expect(res.body.skippedItems).toHaveLength(1);
-    expect(res.body.skippedItems[0]).toMatchObject({
-      item: 1,
-      reason: "Processing error: Default godown not found",
-      data: {
-        product_master_id: "PRD-NO-GODOWN-001",
-        product_name: "Sample Product",
-      },
-    });
-    expect(productCount).toBe(0);
+    expect(res.body.skippedReasons).toBeUndefined();
+    expect(res.body.skippedItems).toBeUndefined();
+    expect(productCount).toBe(1);
+    const product = await Product.findOne({ product_master_id: "PRD-NO-GODOWN-001" }).lean();
+    expect(product.GodownList).toEqual([]);
   });
 
   it("should create product successfully when dependencies resolve", async () => {
@@ -480,27 +474,10 @@ describe("POST /api/tally/products", () => {
       String(priceLevel._id),
     );
     expect(productInDb.priceLevels[0].priceRate).toBe(120);
-    expect(productInDb.GodownList).toHaveLength(1);
-    expect(productInDb.GodownList[0]._id).toBeDefined();
-    expect(mongoose.Types.ObjectId.isValid(productInDb.GodownList[0]._id)).toBe(
-      true,
-    );
-    expect(String(productInDb.GodownList[0].godown)).toBe(
-      String(defaultGodown._id),
-    );
-    expect(productInDb.GodownList[0].batch).toBe("Primary Batch");
-    expect(productInDb.GodownList[0].balance_stock).toBe(0);
-
-    const rawProductInDb = await Product.collection.findOne({
-      _id: productInDb._id,
-    });
-    expect(rawProductInDb.GodownList[0]._id).toBeDefined();
-    expect(
-      mongoose.Types.ObjectId.isValid(rawProductInDb.GodownList[0]._id),
-    ).toBe(true);
+    expect(productInDb.GodownList).toEqual([]);
   });
 
-  it("should return GodownList row _id in product list and detail JSON", async () => {
+  it("should return an empty GodownList when a product has no initial stock row", async () => {
     const context = await setupTallyIntegrationContext({
       userOverrides: {
         userName: "Tally Product API Godown Row Admin",
@@ -528,7 +505,6 @@ describe("POST /api/tally/products", () => {
       Primary_user_id: context.user._id,
       product_master_id: "PRD-TALLY-API-ROW-ID",
     }).lean();
-    const expectedRowId = String(productInDb.GodownList[0]._id);
 
     const listRes = await request(app)
       .get("/api/product")
@@ -542,14 +518,9 @@ describe("POST /api/tally/products", () => {
     expect(importRes.status).toBe(201);
     expect(listRes.status).toBe(200);
     expect(detailRes.status).toBe(200);
-    expect(String(listRes.body.items[0].GodownList[0]._id)).toBe(expectedRowId);
-    expect(String(detailRes.body.GodownList[0]._id)).toBe(expectedRowId);
-    expect(listRes.body.items[0].GodownList[0].godown_name).toBe("Main Godown");
-    expect(detailRes.body.GodownList[0].godown_name).toBe("Main Godown");
-    expect(typeof detailRes.body.GodownList[0].godown).toBe("string");
-    expect(mongoose.Types.ObjectId.isValid(detailRes.body.GodownList[0]._id)).toBe(
-      true,
-    );
+    expect(productInDb.GodownList).toEqual([]);
+    expect(listRes.body.items[0].GodownList).toEqual([]);
+    expect(detailRes.body.GodownList).toEqual([]);
   });
 
   it("enriches stock rows safely and filters only the sale product list before pagination", async () => {
