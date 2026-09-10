@@ -1,10 +1,12 @@
 import mongoose from "mongoose";
 
+import CashBankLedger from "../Model/CashBankLedger.js";
 import ItemLedger from "../Model/ItemLedger.js";
 import ItemMonthlyBalance from "../Model/ItemMonthlyBalanceSchema.js";
 import Outstanding from "../Model/outstandingShcema.js";
 import PartyLedger from "../Model/PartyLedger.js";
 import PartyMonthlyBalance from "../Model/PartyMonthlyBalance.js";
+import Party from "../Model/partySchema.js";
 import Product from "../Model/ProductSchema.js";
 import Sale from "../Model/Sale.js";
 import VoucherTimeline from "../Model/VoucherTimeline.js";
@@ -108,17 +110,32 @@ function outstandingAudit(sale, records) {
   return checkResult(issues, 1, records.length);
 }
 
+function cashBankLedgerAudit(sale, ledgers) {
+  const issues = [];
+  if (ledgers.length === 0) issues.push(`Missing CashBankLedger for Sale ${id(sale._id)}`);
+  if (ledgers.length > 1) issues.push(`Expected one CashBankLedger for Sale ${id(sale._id)}, found ${ledgers.length}`);
+  for (const ledger of ledgers) {
+    if (!sameId(ledger.cash_bank_id, sale.party_id)) issues.push(`CashBankLedger account does not match Sale ${id(sale._id)}`);
+    if (ledger.ledger_side !== "credit") issues.push(`CashBankLedger ledger_side is ${ledger.ledger_side}, expected credit`);
+    if (!sameNumber(ledger.amount, sale.totals.final_amount)) issues.push(`CashBankLedger amount ${ledger.amount} does not match Sale final_amount ${sale.totals.final_amount}`);
+  }
+  return checkResult(issues, 1, ledgers.length);
+}
+
 export async function auditSale({ saleId, companyId }) {
   if (!mongoose.Types.ObjectId.isValid(saleId)) throw auditError("saleId must be a valid ObjectId", 400);
 
   const sale = await Sale.findOne({ _id: saleId, cmp_id: companyId }).lean();
   if (!sale) throw auditError("Sale not found", 404);
+  const party = await Party.findOne({ _id: sale.party_id, cmp_id: companyId }).select("partyType").lean();
+  const isCashBankSale = ["cash", "bank"].includes(String(party?.partyType || "").toLowerCase());
 
   const saleMonthKey = monthKey(sale.date);
   const productIds = [...new Set(sale.items.map((item) => id(item.item_id)))];
-  const [itemLedgers, partyLedgers, outstandingRecords, voucherTimeline, itemMonthlyDocuments, partyMonthlyBalance, products] = await Promise.all([
+  const [itemLedgers, partyLedgers, cashBankLedgers, outstandingRecords, voucherTimeline, itemMonthlyDocuments, partyMonthlyBalance, products] = await Promise.all([
     ItemLedger.find({ cmp_id: companyId, voucher_type: "sale", voucher_id: sale._id }).lean(),
     PartyLedger.find({ cmp_id: companyId, voucher_type: "sale", voucher_id: sale._id }).lean(),
+    CashBankLedger.find({ cmp_id: companyId, voucher_type: "sale", voucher_id: sale._id }).lean(),
     Outstanding.find({ cmp_id: companyId, billId: id(sale._id), source: "sale" }).lean(),
     VoucherTimeline.find({ cmp_id: companyId, voucher_type: "sale", voucher_id: sale._id }).sort({ created_at: 1, _id: 1 }).lean(),
     ItemMonthlyBalance.find({ cmp_id: companyId, item_id: { $in: productIds }, month_key: saleMonthKey }).lean(),
@@ -127,8 +144,15 @@ export async function auditSale({ saleId, companyId }) {
   ]);
 
   const itemLedgerCheck = ledgerAudit(sale, itemLedgers);
-  const partyLedgerCheck = partyLedgerAudit(sale, partyLedgers);
-  const outstandingCheck = outstandingAudit(sale, outstandingRecords);
+  const partyLedgerCheck = isCashBankSale
+    ? checkResult(partyLedgers.length ? [`Unexpected PartyLedger for cash/bank Sale ${id(sale._id)}`] : [], 0, partyLedgers.length)
+    : partyLedgerAudit(sale, partyLedgers);
+  const cashBankLedgerCheck = isCashBankSale
+    ? cashBankLedgerAudit(sale, cashBankLedgers)
+    : checkResult(cashBankLedgers.length ? [`Unexpected CashBankLedger for credit Sale ${id(sale._id)}`] : [], 0, cashBankLedgers.length);
+  const outstandingCheck = isCashBankSale
+    ? checkResult(outstandingRecords.length ? [`Unexpected Outstanding record for cash/bank Sale ${id(sale._id)}`] : [], 0, outstandingRecords.length)
+    : outstandingAudit(sale, outstandingRecords);
   const referencesIssues = [];
   if (voucherTimeline.length === 0) referencesIssues.push(`Missing VoucherTimeline entry for Sale ${id(sale._id)}`);
   if (voucherTimeline.length > 1) referencesIssues.push(`Expected one VoucherTimeline entry for Sale ${id(sale._id)}, found ${voucherTimeline.length}`);
@@ -157,7 +181,9 @@ export async function auditSale({ saleId, companyId }) {
   });
   const itemMonthlyCheck = checkResult(itemMonthlyIssues);
 
-  const partyMonthlyIssues = partyMonthlyBalance ? [] : [`Missing PartyMonthlyBalance for party ${id(sale.party_id)} in ${saleMonthKey}`];
+  const partyMonthlyIssues = isCashBankSale
+    ? (partyMonthlyBalance ? [`Unexpected PartyMonthlyBalance for cash/bank Sale ${id(sale._id)}`] : [])
+    : (partyMonthlyBalance ? [] : [`Missing PartyMonthlyBalance for party ${id(sale.party_id)} in ${saleMonthKey}`]);
   const partyMonthlyCheck = checkResult(partyMonthlyIssues);
   const partyMonthlyBalances = [{
     partyId: id(sale.party_id),
@@ -208,6 +234,7 @@ export async function auditSale({ saleId, companyId }) {
     }),
     itemMonthlyBalances,
     partyLedgers,
+    cashBankLedgers,
     partyMonthlyBalances,
     outstanding: outstandingRecords.map((record) => ({
       ...record,
@@ -216,11 +243,12 @@ export async function auditSale({ saleId, companyId }) {
     voucherTimeline,
     stockRows,
     checks: {
-      overallValid: [itemLedgerCheck, itemMonthlyCheck, partyLedgerCheck, partyMonthlyCheck, outstandingCheck, referencesCheck, stockRowsCheck]
+      overallValid: [itemLedgerCheck, itemMonthlyCheck, partyLedgerCheck, cashBankLedgerCheck, partyMonthlyCheck, outstandingCheck, referencesCheck, stockRowsCheck]
         .every((check) => check.valid),
       itemLedger: itemLedgerCheck,
       itemMonthlyBalance: itemMonthlyCheck,
       partyLedger: partyLedgerCheck,
+      cashBankLedger: cashBankLedgerCheck,
       partyMonthlyBalance: partyMonthlyCheck,
       outstanding: outstandingCheck,
       references: referencesCheck,

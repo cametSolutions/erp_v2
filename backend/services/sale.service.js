@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 import Company from "../Model/CompanySchema.js";
+import CashBankLedger from "../Model/CashBankLedger.js";
 import ItemLedger from "../Model/ItemLedger.js";
 import ItemMonthlyBalance from "../Model/ItemMonthlyBalanceSchema.js";
 import Outstanding from "../Model/outstandingShcema.js";
@@ -54,6 +55,37 @@ function resolveTaxType(company, party) {
   const companyState = String(company?.state || "").trim().toLowerCase();
   const partyState = String(party?.state || "").trim().toLowerCase();
   return companyState && partyState && companyState === partyState ? "cgst_sgst" : "igst";
+}
+
+function isCashBankParty(party) {
+  const type = String(party?.partyType || "").trim().toLowerCase();
+  return type === "cash" || type === "bank";
+}
+
+function buildSaleCashBankLedger({ sale, party, amount, userId }) {
+  return {
+    cmp_id: sale.cmp_id,
+    voucher_type: "sale",
+    voucher_id: sale._id,
+    voucher_number: sale.voucher_number,
+    date: sale.date,
+    cash_bank_id: party._id,
+    cash_bank_name: party.partyName,
+    cash_bank_type: party.partyType,
+    amount,
+    // Keep the existing CashBankLedger convention used by receipts: a sale
+    // settled through this account is an inward/credit ledger movement.
+    ledger_side: "credit",
+    // A cash/bank sale has no separate debtor; the selected account is both
+    // the sale party and the settlement account.
+    party_id: party._id,
+    party_name: party.partyName,
+    instrument_type: party.partyType === "bank" ? "neft" : "cash",
+    narration: sale.narration || null,
+    status: sale.status,
+    tally_status: sale.tally_status,
+    created_by: userId,
+  };
 }
 
 function mapDespatchDetails(input = {}) {
@@ -243,18 +275,24 @@ export async function createSale(data = {}, req = {}) {
         tally_status: getInitialTransactionTallyStatus("sale"), created_by: userId,
       })), { session, ordered: true });
       await updateItemMonthlyBalances(calculated.items, cmp_id, date, session);
-      await PartyLedger.create([{
-        cmp_id, voucher_type: "sale", voucher_id: sale._id, voucher_number: sale.voucher_number, date,
-        party_id, party_name: party.partyName, amount: calculated.totals.final_amount, ledger_side: "debit",
-        against_id: null, status: getInitialTransactionStatus("sale"), tally_status: getInitialTransactionTallyStatus("sale"), created_by: userId,
-      }], { session });
-      await updatePartyMonthlyBalance({ cmp_id, party_id, date, amount: calculated.totals.final_amount, session });
-      await Outstanding.create([{
-        Primary_user_id: party.Primary_user_id, cmp_id, accountGroup: party.accountGroup, subGroup: party.subGroup || null,
-        party_name: party.partyName, alias: null, party_id, mobile_no: party.mobileNumber || null, email: party.emailID || null,
-        bill_date: date, bill_no: sale.voucher_number, billId: String(sale._id), bill_amount: calculated.totals.final_amount,
-        bill_due_date: date, bill_pending_amt: calculated.totals.final_amount, classification: "dr", createdBy: String(userId), source: "sale",
-      }], { session });
+      if (isCashBankParty(party)) {
+        await CashBankLedger.create([
+          buildSaleCashBankLedger({ sale, party, amount: calculated.totals.final_amount, userId }),
+        ], { session });
+      } else {
+        await PartyLedger.create([{
+          cmp_id, voucher_type: "sale", voucher_id: sale._id, voucher_number: sale.voucher_number, date,
+          party_id, party_name: party.partyName, amount: calculated.totals.final_amount, ledger_side: "debit",
+          against_id: null, status: getInitialTransactionStatus("sale"), tally_status: getInitialTransactionTallyStatus("sale"), created_by: userId,
+        }], { session });
+        await updatePartyMonthlyBalance({ cmp_id, party_id, date, amount: calculated.totals.final_amount, session });
+        await Outstanding.create([{
+          Primary_user_id: party.Primary_user_id, cmp_id, accountGroup: party.accountGroup, subGroup: party.subGroup || null,
+          party_name: party.partyName, alias: null, party_id, mobile_no: party.mobileNumber || null, email: party.emailID || null,
+          bill_date: date, bill_no: sale.voucher_number, billId: String(sale._id), bill_amount: calculated.totals.final_amount,
+          bill_due_date: date, bill_pending_amt: calculated.totals.final_amount, classification: "dr", createdBy: String(userId), source: "sale",
+        }], { session });
+      }
       await createVoucherTimelineEntry(buildVoucherTimelinePayload(sale), session);
       createdSale = sale.toObject();
     });
@@ -276,4 +314,5 @@ export async function getSaleById(id, { cmp_id } = {}, req = {}) {
   return Sale.findOne(filter).lean();
 }
 
+export { buildSaleCashBankLedger, isCashBankParty };
 export default { createSale, getSaleById };

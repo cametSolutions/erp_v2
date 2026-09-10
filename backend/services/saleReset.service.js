@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 
+import CashBankLedger from "../Model/CashBankLedger.js";
 import ItemLedger from "../Model/ItemLedger.js";
 import ItemMonthlyBalance from "../Model/ItemMonthlyBalanceSchema.js";
 import Outstanding from "../Model/outstandingShcema.js";
@@ -146,10 +147,11 @@ async function rebuildPartyBalances({ cmpId, affectedKeys, session }) {
 }
 
 async function loadResetPlan(cmpId, session) {
-  const [sales, itemLedgers, partyLedgers, outstanding, voucherTimeline, products] = await Promise.all([
+  const [sales, itemLedgers, partyLedgers, cashBankLedgers, outstanding, voucherTimeline, products] = await Promise.all([
     Sale.find({ cmp_id: cmpId }).select("_id").session(session).lean(),
     ItemLedger.find({ cmp_id: cmpId, voucher_type: "sale" }).session(session).lean(),
     PartyLedger.find({ cmp_id: cmpId, voucher_type: "sale" }).session(session).lean(),
+    CashBankLedger.find({ cmp_id: cmpId, voucher_type: "sale" }).select("_id").session(session).lean(),
     Outstanding.find({ cmp_id: cmpId, source: "sale" }).select("_id").session(session).lean(),
     VoucherTimeline.find({ cmp_id: cmpId, voucher_type: "sale" }).select("_id").session(session).lean(),
     Product.find({ cmp_id: cmpId, "GodownList.0": { $exists: true } }).select("GodownList").session(session).lean(),
@@ -158,6 +160,7 @@ async function loadResetPlan(cmpId, session) {
     sales,
     itemLedgers,
     partyLedgers,
+    cashBankLedgers,
     outstanding,
     voucherTimeline,
     products,
@@ -177,7 +180,7 @@ function dryRunSummary(cmpId, plan) {
       partyLedgers: plan.partyLedgers.length,
       outstanding: plan.outstanding.length,
       voucherTimeline: plan.voucherTimeline.length,
-      cashBankLedgers: 0,
+      cashBankLedgers: plan.cashBankLedgers.length,
     },
     affectedItemMonthlyBalances: [...plan.itemBalanceKeys.values()].map(({ item_id, month_key }) => ({ itemId: id(item_id), monthKey: month_key })),
     affectedPartyMonthlyBalances: [...plan.partyBalanceKeys.values()].map(({ party_id, month_key }) => ({ partyId: id(party_id), monthKey: month_key })),
@@ -199,10 +202,11 @@ export async function resetSaleTransactions({ companyId, dryRun = false }) {
     let summary;
     await session.withTransaction(async () => {
       const plan = await loadResetPlan(cmpId, session);
-      const [salesResult, itemLedgerResult, partyLedgerResult, outstandingResult, timelineResult] = await Promise.all([
+      const [salesResult, itemLedgerResult, partyLedgerResult, cashBankLedgerResult, outstandingResult, timelineResult] = await Promise.all([
         Sale.deleteMany({ cmp_id: cmpId }, { session }),
         ItemLedger.deleteMany({ cmp_id: cmpId, voucher_type: "sale" }, { session }),
         PartyLedger.deleteMany({ cmp_id: cmpId, voucher_type: "sale" }, { session }),
+        CashBankLedger.deleteMany({ cmp_id: cmpId, voucher_type: "sale" }, { session }),
         Outstanding.deleteMany({ cmp_id: cmpId, source: "sale" }, { session }),
         VoucherTimeline.deleteMany({ cmp_id: cmpId, voucher_type: "sale" }, { session }),
       ]);
@@ -228,7 +232,7 @@ export async function resetSaleTransactions({ companyId, dryRun = false }) {
           partyLedgers: partyLedgerResult.deletedCount,
           outstanding: outstandingResult.deletedCount,
           voucherTimeline: timelineResult.deletedCount,
-          cashBankLedgers: 0,
+          cashBankLedgers: cashBankLedgerResult.deletedCount,
         },
         rebuilt: { itemMonthlyBalances: itemBalances, partyMonthlyBalances: partyBalances },
         stockReset: { ...summarizeStock(plan.products), stockValueSetTo: STOCK_BASELINE },
