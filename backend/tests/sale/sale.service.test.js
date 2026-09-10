@@ -12,7 +12,7 @@ import { Godown } from "../../Model/ProductSubDetails.js";
 import Sale from "../../Model/Sale.js";
 import VoucherSeries from "../../Model/VoucherSeriesSchema.js";
 import VoucherTimeline from "../../Model/VoucherTimeline.js";
-import { createSale } from "../../services/sale.service.js";
+import { createSale, getSaleById } from "../../services/sale.service.js";
 import { createTestCompany } from "../helpers/company.js";
 import { createAccountGroup, createTestParty, setupIntegrationTestContext } from "../helpers/party.js";
 import { loginAndGetAuthContext } from "../helpers/user.js";
@@ -60,5 +60,49 @@ describe("createSale", () => {
     await expect(createSale({ selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id), items: [{ itemId: String(product._id), godownId: String(godown._id), godownStockRowId: String(new mongoose.Types.ObjectId()), selectedUnit: "NOS", actualQty: 1, billedQty: 1, rate: 1, taxInclusive: false, discountType: "amount", discountValue: 0 }] }, { companyId: String(context.company._id), user: context.user })).rejects.toThrow("does not belong");
     expect(await Sale.countDocuments()).toBe(0);
     expect(await ItemLedger.countDocuments()).toBe(0);
+  });
+});
+
+describe("getSaleById", () => {
+  it("returns the persisted sale only within the requested company scope", async () => {
+    const { context, party, godown, product, rowId, seriesId } = await setupSaleContext();
+    const sale = await createSale({
+      selectedSeries: { _id: String(seriesId) },
+      transactionDate: "2026-07-15",
+      partyId: String(party._id),
+      items: [{
+        itemId: String(product._id),
+        godownId: String(godown._id),
+        godownStockRowId: String(rowId),
+        selectedUnit: "NOS",
+        actualQty: 1,
+        billedQty: 1,
+        rate: 100,
+        taxInclusive: false,
+        discountType: "amount",
+        discountValue: 0,
+      }],
+      additionalCharges: [],
+    }, { companyId: String(context.company._id), user: context.user });
+
+    const fetched = await getSaleById(
+      sale._id,
+      { cmp_id: String(context.company._id) },
+      { user: context.user },
+    );
+    const inaccessible = await getSaleById(
+      sale._id,
+      { cmp_id: String(new mongoose.Types.ObjectId()) },
+      { user: context.user },
+    );
+
+    expect(fetched).toMatchObject({
+      _id: sale._id,
+      voucher_number: sale.voucher_number,
+      party_snapshot: sale.party_snapshot,
+      totals: sale.totals,
+    });
+    expect(fetched.items).toHaveLength(1);
+    expect(inaccessible).toBeNull();
   });
 });

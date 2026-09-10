@@ -10,6 +10,7 @@ import Party from "../Model/partySchema.js";
 import PriceLevel from "../Model/PriceLevel.js";
 import Product from "../Model/ProductSchema.js";
 import Sale from "../Model/Sale.js";
+import { applyTransactionCreatorScope } from "../utils/authScope.js";
 import { getInitialTransactionStatus, getInitialTransactionTallyStatus } from "./transactionState.service.js";
 import { issueVoucherIdentity } from "./voucherIdentity.service.js";
 import { createVoucherTimelineEntry } from "./voucherTimeline.service.js";
@@ -263,4 +264,16 @@ export async function createSale(data = {}, req = {}) {
   }
 }
 
-export default { createSale };
+// Fetch the persisted Sale document without recalculating or enriching its
+// transaction snapshots. Company (and, for staff, creator) access is applied
+// to the database filter so inaccessible records are indistinguishable from
+// missing records.
+export async function getSaleById(id, { cmp_id } = {}, req = {}) {
+  const filter = applyTransactionCreatorScope(req, { _id: id });
+
+  if (cmp_id) filter.cmp_id = cmp_id;
+
+  return Sale.findOne(filter).lean();
+}
+
+export default { createSale, getSaleById };
