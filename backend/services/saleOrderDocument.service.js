@@ -387,22 +387,21 @@ function mapSaleOrderItems(items = [], { preserveIds = false } = {}) {
 function mapAdditionalCharges(additionalCharges = [], taxType = "igst") {
   return additionalCharges.map((charge) => {
     const normalizedCharge = {
-      option: charge?.option || "",
+      additional_charge_id: firstDefined(
+        charge?.additional_charge_id,
+        charge?.additionalChargeId,
+        charge?.charge_master_id,
+        charge?.chargeMasterId,
+      ),
+      option: charge?.option || charge?.name || "",
       value: Number(charge?.value) || 0,
       action:
         charge?.action === "substract" ? "subtract" : charge?.action || "add",
-      igst:
-        Number(
-          firstDefined(
-            charge?.igst,
-            taxType === "igst"
-              ? firstDefined(charge?.taxPercentage, charge?.tax_percentage)
-              : 0
-          )
-        ) || 0,
+      igst: Number(firstDefined(charge?.rates?.igst, charge?.igst, taxType === "igst" ? firstDefined(charge?.taxPercentage, charge?.tax_percentage) : 0)) || 0,
       cgst:
         Number(
           firstDefined(
+            charge?.rates?.cgst,
             charge?.cgst,
             taxType === "cgst_sgst"
               ? (Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0) /
@@ -413,6 +412,7 @@ function mapAdditionalCharges(additionalCharges = [], taxType = "igst") {
       sgst:
         Number(
           firstDefined(
+            charge?.rates?.sgst,
             charge?.sgst,
             taxType === "cgst_sgst"
               ? (Number(firstDefined(charge?.taxPercentage, charge?.tax_percentage)) || 0) /
@@ -420,14 +420,11 @@ function mapAdditionalCharges(additionalCharges = [], taxType = "igst") {
               : 0
           )
         ) || 0,
-      cess: Number(firstDefined(charge?.cess)) || 0,
+      cess: Number(firstDefined(charge?.rates?.cess, charge?.cess)) || 0,
       addl_cess:
-        Number(firstDefined(charge?.addl_cess, charge?.addlCess)) || 0,
-      state_cess:
-        Number(firstDefined(charge?.state_cess, charge?.stateCess)) || 0,
+        Number(firstDefined(charge?.rates?.addl_cess, charge?.addl_cess, charge?.addlCess)) || 0,
+      state_cess: Number(firstDefined(charge?.rates?.state_cess, charge?.state_cess, charge?.stateCess)) || 0,
       hsn: charge?.hsn || null,
-      final_value:
-        Number(firstDefined(charge?.finalValue, charge?.final_value)) || 0,
     };
 
     const igstAmount =
@@ -452,6 +449,7 @@ function mapAdditionalCharges(additionalCharges = [], taxType = "igst") {
       cess_amount: 0,
       addl_cess_amount: 0,
       state_cess_amount: 0,
+      final_value: roundMoney(normalizedCharge.value + igstAmount + cgstAmount + sgstAmount),
     };
   });
 }

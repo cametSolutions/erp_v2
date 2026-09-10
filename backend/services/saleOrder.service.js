@@ -26,6 +26,10 @@ import {
   logSaleOrderTotalsMismatch,
   normalizeSelectedSeries,
 } from "./saleOrderDocument.service.js";
+import {
+  normalizeSaleChargeInput,
+  resolveSaleChargeMasters,
+} from "./saleFoundation.service.js";
 
 // Local helper to attach HTTP-aware status codes to thrown errors.
 // Controllers read `error.statusCode` to decide response status.
@@ -33,6 +37,42 @@ function createHttpError(message, statusCode = 500) {
   const error = new Error(message);
   error.statusCode = statusCode;
   return error;
+}
+
+async function resolveSaleOrderAdditionalCharges(
+  additionalCharges,
+  cmpId,
+  session,
+) {
+  if (!Array.isArray(additionalCharges)) {
+    throw createHttpError("additionalCharges must be an array", 400);
+  }
+
+  const normalizedCharges = additionalCharges.map((charge) =>
+    normalizeSaleChargeInput({
+      chargeMasterId:
+        charge?.additionalChargeId ??
+        charge?.additional_charge_id ??
+        charge?.chargeMasterId ??
+        charge?.charge_master_id,
+      action: charge?.action ?? "add",
+      value: charge?.value,
+    }),
+  );
+
+  const resolvedCharges = await resolveSaleChargeMasters(normalizedCharges, {
+    cmpId,
+    session,
+  });
+
+  // The document calculator reads rate snapshots directly while the Sale
+  // resolver keeps them under `rates`; expose both without trusting payload
+  // tax fields.
+  return resolvedCharges.map(({ rates, ...charge }) => ({
+    ...charge,
+    ...rates,
+    rates,
+  }));
 }
 
 const SALE_ORDER_PRODUCT_ENRICHMENT_POPULATE = [
@@ -137,6 +177,12 @@ export async function createSaleOrder(data = {}, req) {
         throw createHttpError("Selected party does not belong to this company", 400);
       }
 
+      const additionalCharges = await resolveSaleOrderAdditionalCharges(
+        data.additionalCharges ?? data.additional_charges ?? [],
+        cmpId,
+        session,
+      );
+
       // Centralized voucher generation guarantees unique numbering policy.
       const voucherIdentity = await issueVoucherIdentity({
         cmpId,
@@ -148,7 +194,7 @@ export async function createSaleOrder(data = {}, req) {
 
       // Convert API request shape into schema-ready document with normalized numeric fields.
       const saleOrderDoc = buildSaleOrderPayload(
-        { ...data, cmpId },
+        { ...data, cmpId, additionalCharges },
         voucherIdentity.voucher,
         voucherIdentity.serials,
         userId
@@ -233,8 +279,14 @@ export async function updateSaleOrder(id, data = {}, req) {
       // Prevent updates on states like `cancelled` / non-editable statuses.
       assertTransactionEditable("saleOrder", saleOrder.status);
 
+      const additionalCharges = await resolveSaleOrderAdditionalCharges(
+        data.additionalCharges ?? data.additional_charges ?? [],
+        cmpId,
+        session,
+      );
+
       // Mutates mongoose document in-memory with normalized values.
-      applySaleOrderUpdate(saleOrder, data, userId);
+      applySaleOrderUpdate(saleOrder, { ...data, additionalCharges }, userId);
 
       await saleOrder.save({ session });
       updatedSaleOrder = saleOrder.toObject();
