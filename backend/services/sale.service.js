@@ -39,6 +39,28 @@ function normalizedText(value, maximum = 500) {
   return result || null;
 }
 
+function normalizeRequestId(value) {
+  if (typeof value !== "string") {
+    throw createSaleValidationError("request_id must be a string");
+  }
+  const request_id = value.trim();
+  if (!request_id) throw createSaleValidationError("request_id is required");
+  if (request_id.length > 128) {
+    throw createSaleValidationError("request_id is too long");
+  }
+  return request_id;
+}
+
+function isRequestIdDuplicateKeyError(error) {
+  const duplicate = error?.writeErrors?.[0]?.err || error;
+  if (duplicate?.code !== 11000) return false;
+  if (
+    duplicate?.keyPattern?.cmp_id === 1
+    && duplicate?.keyPattern?.request_id === 1
+  ) return true;
+  return String(duplicate?.message || "").includes("cmp_id_1_request_id_1");
+}
+
 function normalizeDate(value) {
   const date = new Date(value);
   if (!value || Number.isNaN(date.getTime())) {
@@ -202,6 +224,13 @@ async function updatePartyMonthlyBalance({ cmp_id, party_id, date, amount, sessi
 export async function createSale(data = {}, req = {}) {
   const cmp_id = requiredObjectId(req.companyId, "companyId");
   const userId = requiredObjectId(req.user?._id || req.user?.id, "userId");
+  const request_id = normalizeRequestId(data.request_id ?? data.requestId);
+
+  // A replay avoids all validation and posting work: the first successful
+  // request is authoritative even if a client resubmits a different payload.
+  const existingSale = await Sale.findOne({ cmp_id, request_id }).lean();
+  if (existingSale) return existingSale;
+
   const party_id = requiredObjectId(data.partyId ?? data.party_id, "partyId");
   const series_id = requiredObjectId(data.selectedSeries?._id ?? data.series_id, "selectedSeries._id");
   const priceLevelValue = data.priceLevelId ?? data.price_level_id;
@@ -213,6 +242,14 @@ export async function createSale(data = {}, req = {}) {
   try {
     let createdSale;
     await session.withTransaction(async () => {
+      // Repeat the lookup in the transaction so a retry that starts after a
+      // concurrent request commits does not issue voucher/counter values.
+      const replay = await Sale.findOne({ cmp_id, request_id }).session(session).lean();
+      if (replay) {
+        createdSale = replay;
+        return;
+      }
+
       const [company, party, priceLevel] = await Promise.all([
         Company.findById(cmp_id).session(session).lean(),
         Party.findOne({ _id: party_id, cmp_id }).session(session).lean(),
@@ -239,6 +276,7 @@ export async function createSale(data = {}, req = {}) {
 
       const [sale] = await Sale.create([{
         cmp_id,
+        request_id,
         voucher_type: "sale",
         series_id,
         series_name: voucherIdentity.series.seriesName,
@@ -297,6 +335,15 @@ export async function createSale(data = {}, req = {}) {
       createdSale = sale.toObject();
     });
     return createdSale;
+  } catch (error) {
+    // The unique index is the final guard when two transactions begin before
+    // either can observe the other's Sale. The losing transaction has already
+    // rolled back its voucher/counter and posting writes at this point.
+    if (isRequestIdDuplicateKeyError(error)) {
+      const replay = await Sale.findOne({ cmp_id, request_id }).lean();
+      if (replay) return replay;
+    }
+    throw error;
   } finally {
     await session.endSession();
   }

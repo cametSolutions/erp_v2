@@ -61,8 +61,9 @@ async function setupStockPolicyContext(openingStock) {
   return { context, party, godown, product, rowId, seriesId };
 }
 
-function saleRequest({ party, product, godown, rowId, seriesId, actualQty, billedQty }) {
+function saleRequest({ party, product, godown, rowId, seriesId, requestId, actualQty, billedQty }) {
   return {
+    request_id: requestId,
     selectedSeries: { _id: String(seriesId) },
     transactionDate: "2026-07-15",
     partyId: String(party._id),
@@ -89,8 +90,8 @@ function requestContext(context) {
 describe("Sale stock policy", () => {
   it("atomically groups actual quantities and permits the resulting balance to be negative", async () => {
     const setup = await setupStockPolicyContext(8);
-    const first = saleRequest({ ...setup, actualQty: 5, billedQty: 1 });
-    const second = saleRequest({ ...setup, actualQty: 7, billedQty: 99 });
+    const first = saleRequest({ ...setup, requestId: "stock-policy-grouped", actualQty: 5, billedQty: 1 });
+    const second = saleRequest({ ...setup, requestId: "stock-policy-grouped", actualQty: 7, billedQty: 99 });
     const sale = await createSale({ ...first, items: [...first.items, ...second.items] }, requestContext(setup.context));
 
     const saved = await Product.findById(setup.product._id).lean();
@@ -103,12 +104,15 @@ describe("Sale stock policy", () => {
 
   it("applies both concurrent deductions even when the balance becomes negative", async () => {
     const setup = await setupStockPolicyContext(10);
-    const request = (actualQty) => createSale(
-      saleRequest({ ...setup, actualQty, billedQty: 1 }),
+    const request = (actualQty, requestId) => createSale(
+      saleRequest({ ...setup, requestId, actualQty, billedQty: 1 }),
       requestContext(setup.context),
     );
 
-    await Promise.all([request(8), request(8)]);
+    await Promise.all([
+      request(8, "stock-policy-concurrent-a"),
+      request(8, "stock-policy-concurrent-b"),
+    ]);
 
     const saved = await Product.findById(setup.product._id).lean();
     expect(saved.GodownList[0].balance_stock).toBe(-6);
@@ -120,6 +124,7 @@ describe("Sale stock policy", () => {
     const invalidRequest = saleRequest({
       ...setup,
       rowId: new mongoose.Types.ObjectId(),
+      requestId: "stock-policy-invalid-row",
       actualQty: 15,
       billedQty: 15,
     });

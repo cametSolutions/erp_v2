@@ -82,6 +82,10 @@ const SaleItemSchema = new Schema(
 const SaleSchema = new Schema(
   {
     cmp_id: { type: Schema.Types.ObjectId, ref: "Company", required: true },
+    // Client-generated idempotency key. It is required for every newly
+    // created Sale; the partial unique index leaves legacy documents that
+    // predate this field indexable during rollout.
+    request_id: { type: String, required: true, trim: true, maxlength: 128 },
 
     voucher_type: { type: String, default: "sale" },
     series_id: { type: Schema.Types.ObjectId, required: true },
@@ -137,6 +141,13 @@ const SaleSchema = new Schema(
 );
 
 SaleSchema.index({ cmp_id: 1, voucher_number: 1 }, { unique: true });
+SaleSchema.index(
+  { cmp_id: 1, request_id: 1 },
+  {
+    unique: true,
+    partialFilterExpression: { request_id: { $type: "string" } },
+  },
+);
 SaleSchema.index(
   { cmp_id: 1, company_level_serial_number: 1 },
   { unique: true },

@@ -127,7 +127,7 @@ describe("createSale", () => {
   it("posts every Sale effect atomically and groups repeated stock-row movement", async () => {
     const { context, party, godown, product, rowId, seriesId, charge } = await setupSaleContext();
     const line = { itemId: String(product._id), godownId: String(godown._id), godownStockRowId: String(rowId), selectedUnit: "NOS", actualQty: 3, billedQty: 3, rate: 100, taxInclusive: false, discountType: "amount", discountValue: 0 };
-    const sale = await createSale({ selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id), items: [line, { ...line, actualQty: 2 }], additionalCharges: [{ additionalChargeId: String(charge._id), action: "subtract", value: 10 }], narration: "  July sale  " }, { companyId: String(context.company._id), user: context.user });
+    const sale = await createSale({ request_id: "sale-service-postings", selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id), items: [line, { ...line, actualQty: 2 }], additionalCharges: [{ additionalChargeId: String(charge._id), action: "subtract", value: 10 }], narration: "  July sale  " }, { companyId: String(context.company._id), user: context.user });
     expect(sale).toMatchObject({ voucher_type: "sale", status: "active", tally_status: "pending", narration: "July sale" });
     expectId(sale.cmp_id, context.company._id); expectId(sale.series_id, seriesId); expectId(sale.party_id, party._id);
     expect(sale.series_name).toBe("Sale"); expectDate(sale.date, "2026-07-15"); expect(sale.voucher_number).toBe("001");
@@ -162,6 +162,7 @@ describe("createSale", () => {
       state: "Kerala",
     });
     const sale = await createSale({
+      request_id: `sale-service-${partyType}`,
       selectedSeries: { _id: String(seriesId) },
       transactionDate: "2026-07-15",
       partyId: String(party._id),
@@ -196,6 +197,7 @@ describe("createSale", () => {
     const accountGroup = await createAccountGroup({ cmp_id: context.company._id, Primary_user_id: context.user._id, accountGroup_id: "legacy-cash-account" });
     const party = await createTestParty({ cmp_id: context.company._id, Primary_user_id: context.user._id, accountGroup: accountGroup._id, partyType: "cash", partyName: "Legacy Cash", state: "Kerala" });
     const sale = await createSale({
+      request_id: "sale-service-legacy-cash",
       selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id),
       items: [{ itemId: String(product._id), godownId: String(godown._id), godownStockRowId: String(rowId), selectedUnit: "NOS", actualQty: 1, billedQty: 1, rate: 100, taxInclusive: false, discountType: "amount", discountValue: 0 }], additionalCharges: [],
     }, { companyId: String(context.company._id), user: context.user });
@@ -226,7 +228,7 @@ describe("createSale", () => {
   it("rejects a stale stock row before creating any posting", async () => {
     const { context, party, godown, product, seriesId } = await setupSaleContext();
     const openingStock = (await Product.findById(product._id)).GodownList[0].balance_stock;
-    await expect(createSale({ selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id), items: [{ itemId: String(product._id), godownId: String(godown._id), godownStockRowId: String(new mongoose.Types.ObjectId()), selectedUnit: "NOS", actualQty: 1, billedQty: 1, rate: 1, taxInclusive: false, discountType: "amount", discountValue: 0 }] }, { companyId: String(context.company._id), user: context.user })).rejects.toThrow("does not belong");
+    await expect(createSale({ request_id: "sale-service-stale-row", selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15", partyId: String(party._id), items: [{ itemId: String(product._id), godownId: String(godown._id), godownStockRowId: String(new mongoose.Types.ObjectId()), selectedUnit: "NOS", actualQty: 1, billedQty: 1, rate: 1, taxInclusive: false, discountType: "amount", discountValue: 0 }] }, { companyId: String(context.company._id), user: context.user })).rejects.toThrow("does not belong");
     expect(await Sale.countDocuments()).toBe(0);
     expect(await ItemLedger.countDocuments()).toBe(0);
     expect(await ItemMonthlyBalance.countDocuments()).toBe(0);
@@ -243,6 +245,7 @@ describe("getSaleById", () => {
   it("returns the persisted sale only within the requested company scope", async () => {
     const { context, party, godown, product, rowId, seriesId } = await setupSaleContext();
     const sale = await createSale({
+      request_id: "sale-service-readback",
       selectedSeries: { _id: String(seriesId) },
       transactionDate: "2026-07-15",
       partyId: String(party._id),
