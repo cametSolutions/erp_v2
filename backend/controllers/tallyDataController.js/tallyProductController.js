@@ -6,6 +6,7 @@ import {
   Brand,
   Category,
   Subcategory,
+  Godown,
 } from "../../Model/ProductSubDetails.js";
 import PriceLevel from "../../Model/PriceLevel.js";
 
@@ -285,6 +286,26 @@ export const addProducts = async (req, res) => {
       existingProductMap[p.product_master_id] = p;
     });
 
+    const needsPlaceholder = validProducts.some(
+      ({ product }) => {
+        const existing = existingProductMap[product.product_master_id];
+        return !existing || !Array.isArray(existing.GodownList) || existing.GodownList.length === 0;
+      },
+    );
+    const defaultGodown = needsPlaceholder
+      ? await Godown.findOne({
+          cmp_id: cmpObjectId,
+          Primary_user_id: primaryUserObjectId,
+          defaultGodown: true,
+        }).lean()
+      : null;
+    if (needsPlaceholder && !defaultGodown) {
+      return res.status(400).json({
+        status: "failure",
+        message: "A default godown is required before initializing product stock.",
+      });
+    }
+
 
     // console.log("brandMap",brandMap);
     // console.log("categoryMap",categoryMap);
@@ -296,6 +317,7 @@ export const addProducts = async (req, res) => {
 
     // 6) Build operations array, skipping when brand/category/subcategory/priceLevel not found
     const ops = [];
+    const emptyListOps = [];
     const legacyUnitCleanupIds = [];
     const BATCH_SIZE = 200;
 
@@ -416,13 +438,29 @@ export const addProducts = async (req, res) => {
 
       const insertProduct = {
         ...productMasterFields,
-        GodownList: [],
+        GodownList: [{
+          godown: defaultGodown?._id,
+          batch: "Primary Batch",
+          balance_stock: 0,
+          is_placeholder: true,
+        }],
       };
 
       const existingProduct = existingProductMap[product.product_master_id];
 
       if (existingProduct) {
         legacyUnitCleanupIds.push(existingProduct._id);
+        if (!Array.isArray(existingProduct.GodownList) || existingProduct.GodownList.length === 0) {
+          emptyListOps.push({
+            updateOne: {
+              filter: {
+                _id: existingProduct._id,
+                $or: [{ GodownList: { $exists: false } }, { GodownList: { $size: 0 } }],
+              },
+              update: { $set: { GodownList: insertProduct.GodownList } },
+            },
+          });
+        }
         ops.push({
           updateOne: {
             filter: {
@@ -466,6 +504,10 @@ export const addProducts = async (req, res) => {
           data: {},
         });
       }
+    }
+
+    for (let i = 0; i < emptyListOps.length; i += BATCH_SIZE) {
+      await productModel.bulkWrite(emptyListOps.slice(i, i + BATCH_SIZE), { ordered: false });
     }
 
     if (legacyUnitCleanupIds.length > 0) {
