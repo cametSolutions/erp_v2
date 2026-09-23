@@ -53,9 +53,15 @@ function checkResult(issues, expectedEntries, actualEntries) {
 
 function ledgerAudit(sale, ledgers) {
   const issues = [];
+  // Removed Sale lines deliberately retain a cancelled ItemLedger for audit
+  // history. Only active postings describe the current Sale state.
+  const activeLedgers = ledgers.filter((ledger) => ledger.status === "active");
+  const cancelledLedgers = ledgers.filter((ledger) => ledger.status === "cancelled");
   const bySaleItem = new Map();
-  for (const ledger of ledgers) {
-    const key = id(ledger.voucher_item_id);
+  for (const ledger of activeLedgers) {
+    // sale_item_id is the explicit stable Sale-line reference. Fall back to
+    // voucher_item_id for postings created before that field was introduced.
+    const key = id(ledger.sale_item_id || ledger.voucher_item_id);
     bySaleItem.set(key, [...(bySaleItem.get(key) || []), ledger]);
   }
 
@@ -81,44 +87,62 @@ function ledgerAudit(sale, ledgers) {
     }
   }
 
-  for (const ledger of ledgers) {
-    if (!expectedIds.has(id(ledger.voucher_item_id))) {
+  for (const ledger of activeLedgers) {
+    if (!expectedIds.has(id(ledger.sale_item_id || ledger.voucher_item_id))) {
       issues.push(`Extra ItemLedger ${id(ledger._id)} references a Sale item that does not exist`);
     }
   }
 
-  return checkResult(issues, sale.items.length, ledgers.length);
+  return {
+    ...checkResult(issues, sale.items.length, activeLedgers.length),
+    activeEntries: activeLedgers.length,
+    cancelledHistoricalEntries: cancelledLedgers.length,
+  };
 }
 
 function partyLedgerAudit(sale, ledgers) {
+  const activeLedgers = ledgers.filter((ledger) => ledger.status === "active");
+  const cancelledLedgers = ledgers.filter((ledger) => ledger.status === "cancelled");
   const issues = [];
-  if (ledgers.length === 0) issues.push(`Missing PartyLedger for Sale ${id(sale._id)}`);
-  if (ledgers.length > 1) issues.push(`Expected one PartyLedger for Sale ${id(sale._id)}, found ${ledgers.length}`);
-  for (const ledger of ledgers) {
+  if (activeLedgers.length === 0) issues.push(`Missing PartyLedger for Sale ${id(sale._id)}`);
+  if (activeLedgers.length > 1) issues.push(`Expected one active PartyLedger for Sale ${id(sale._id)}, found ${activeLedgers.length}`);
+  for (const ledger of activeLedgers) {
     if (!sameId(ledger.party_id, sale.party_id)) issues.push(`PartyLedger party_id does not match Sale ${id(sale._id)}`);
     if (ledger.ledger_side !== "debit") issues.push(`PartyLedger ledger_side is ${ledger.ledger_side}, expected debit`);
     if (!sameNumber(ledger.amount, sale.totals.final_amount)) issues.push(`PartyLedger debit amount ${ledger.amount} does not match Sale final_amount ${sale.totals.final_amount}`);
   }
-  return checkResult(issues, 1, ledgers.length);
+  return {
+    ...checkResult(issues, 1, activeLedgers.length),
+    activeEntries: activeLedgers.length,
+    cancelledHistoricalEntries: cancelledLedgers.length,
+  };
 }
 
 function outstandingAudit(sale, records) {
+  const activeRecords = records.filter((record) => !record.isCancelled);
+  const cancelledRecords = records.filter((record) => record.isCancelled);
   const issues = [];
-  if (records.length === 0) issues.push(`Missing Outstanding record for Sale ${id(sale._id)}`);
-  if (records.length > 1) issues.push(`Expected one Outstanding record for Sale ${id(sale._id)}, found ${records.length}`);
-  for (const record of records) {
+  if (activeRecords.length === 0) issues.push(`Missing Outstanding record for Sale ${id(sale._id)}`);
+  if (activeRecords.length > 1) issues.push(`Expected one active Outstanding record for Sale ${id(sale._id)}, found ${activeRecords.length}`);
+  for (const record of activeRecords) {
     if (!sameId(record.party_id, sale.party_id)) issues.push(`Outstanding party_id does not match Sale ${id(sale._id)}`);
     if (record.bill_no !== sale.voucher_number) issues.push(`Outstanding bill_no does not match Sale voucher_number`);
     if (!sameNumber(record.bill_amount, sale.totals.final_amount)) issues.push(`Outstanding bill_amount ${record.bill_amount} does not match Sale final_amount ${sale.totals.final_amount}`);
   }
-  return checkResult(issues, 1, records.length);
+  return {
+    ...checkResult(issues, 1, activeRecords.length),
+    activeEntries: activeRecords.length,
+    cancelledHistoricalEntries: cancelledRecords.length,
+  };
 }
 
 function cashBankLedgerAudit(sale, party, ledgers) {
+  const activeLedgers = ledgers.filter((ledger) => ledger.status === "active");
+  const cancelledLedgers = ledgers.filter((ledger) => ledger.status === "cancelled");
   const issues = [];
-  if (ledgers.length === 0) issues.push(`Missing CashBankLedger for Sale ${id(sale._id)}`);
-  if (ledgers.length > 1) issues.push(`Expected one CashBankLedger for Sale ${id(sale._id)}, found ${ledgers.length}`);
-  for (const ledger of ledgers) {
+  if (activeLedgers.length === 0) issues.push(`Missing CashBankLedger for Sale ${id(sale._id)}`);
+  if (activeLedgers.length > 1) issues.push(`Expected one active CashBankLedger for Sale ${id(sale._id)}, found ${activeLedgers.length}`);
+  for (const ledger of activeLedgers) {
     if (!sameId(ledger.cmp_id, sale.cmp_id)) issues.push(`CashBankLedger cmp_id does not match Sale ${id(sale._id)}`);
     if (ledger.voucher_type !== "sale") issues.push(`CashBankLedger voucher_type for Sale ${id(sale._id)} is not sale`);
     if (!sameId(ledger.voucher_id, sale._id)) issues.push(`CashBankLedger voucher_id does not match Sale ${id(sale._id)}`);
@@ -130,7 +154,21 @@ function cashBankLedgerAudit(sale, party, ledgers) {
     if (ledger.status !== sale.status) issues.push(`CashBankLedger status does not match Sale ${id(sale._id)}`);
     if (ledger.tally_status !== sale.tally_status) issues.push(`CashBankLedger tally_status does not match Sale ${id(sale._id)}`);
   }
-  return checkResult(issues, 1, ledgers.length);
+  return {
+    ...checkResult(issues, 1, activeLedgers.length),
+    activeEntries: activeLedgers.length,
+    cancelledHistoricalEntries: cancelledLedgers.length,
+  };
+}
+
+function zeroActiveCheck(records, isActive, issue) {
+  const activeEntries = records.filter(isActive).length;
+  const cancelledHistoricalEntries = records.length - activeEntries;
+  return {
+    ...checkResult(activeEntries ? [issue] : [], 0, activeEntries),
+    activeEntries,
+    cancelledHistoricalEntries,
+  };
 }
 
 export async function auditSale({ saleId, companyId }) {
@@ -156,13 +194,25 @@ export async function auditSale({ saleId, companyId }) {
 
   const itemLedgerCheck = ledgerAudit(sale, itemLedgers);
   const partyLedgerCheck = isCashBankSale
-    ? checkResult(partyLedgers.length ? [`Unexpected PartyLedger for cash/bank Sale ${id(sale._id)}`] : [], 0, partyLedgers.length)
+    ? zeroActiveCheck(
+      partyLedgers,
+      (ledger) => ledger.status === "active",
+      `Unexpected PartyLedger for cash/bank Sale ${id(sale._id)}`,
+    )
     : partyLedgerAudit(sale, partyLedgers);
   const cashBankLedgerCheck = isCashBankSale
     ? cashBankLedgerAudit(sale, party, cashBankLedgers)
-    : checkResult(cashBankLedgers.length ? [`Unexpected CashBankLedger for credit Sale ${id(sale._id)}`] : [], 0, cashBankLedgers.length);
+    : zeroActiveCheck(
+      cashBankLedgers,
+      (ledger) => ledger.status === "active",
+      `Unexpected CashBankLedger for credit Sale ${id(sale._id)}`,
+    );
   const outstandingCheck = isCashBankSale
-    ? checkResult(outstandingRecords.length ? [`Unexpected Outstanding record for cash/bank Sale ${id(sale._id)}`] : [], 0, outstandingRecords.length)
+    ? zeroActiveCheck(
+      outstandingRecords,
+      (record) => !record.isCancelled,
+      `Unexpected Outstanding record for cash/bank Sale ${id(sale._id)}`,
+    )
     : outstandingAudit(sale, outstandingRecords);
   const referencesIssues = [];
   if (voucherTimeline.length === 0) referencesIssues.push(`Missing VoucherTimeline entry for Sale ${id(sale._id)}`);
@@ -185,7 +235,9 @@ export async function auditSale({ saleId, companyId }) {
       monthKey: saleMonthKey,
       thisSaleContribution: {
         outwardQuantity: saleItems.reduce((sum, item) => sum + Number(item.actual_qty), 0),
-        transactionCount: saleItems.length,
+        // A Sale contributes this item once for the month, even when the
+        // item appears on multiple physical/batch/godown lines.
+        transactionCount: saleItems.length ? 1 : 0,
       },
       currentMonthlyBalance,
     };
@@ -244,7 +296,7 @@ export async function auditSale({ saleId, companyId }) {
   return {
     sale,
     itemLedgers: itemLedgers.map((ledger) => {
-      const saleItem = saleItemById.get(id(ledger.voucher_item_id));
+      const saleItem = saleItemById.get(id(ledger.sale_item_id || ledger.voucher_item_id));
       return {
         ...ledger,
         saleItem: saleItem && {

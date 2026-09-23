@@ -123,7 +123,7 @@ function buildValidSaleOrderPayload(partyId, seriesId, overrides = {}) {
     items: [
       {
         _id: new mongoose.Types.ObjectId().toString(),
-        id: new mongoose.Types.ObjectId().toString(),
+        id: String(baseContext.product._id),
         name: "Widget A",
         baseUnit: "pcs",
         selectedUnit: "pcs",
@@ -229,6 +229,14 @@ async function bootstrapBaseContext() {
     party,
   };
 
+  baseContext.product = (
+    await createProductMasters("Default Sale Order Product", {
+      igst: 18,
+      cgst: 9,
+      sgst: 9,
+    })
+  ).product;
+
   baseContext.series = await createTestSeries(baseContext.companyId, "saleOrder");
   return baseContext;
 }
@@ -251,6 +259,26 @@ async function createSaleOrderForTest(overrides = {}) {
 
   expect(res.status).toBe(201);
   return res;
+}
+
+function buildSavedItemUpdate(item, overrides = {}) {
+  return {
+    _id: String(item._id),
+    id: String(item.item_id),
+    name: item.item_name,
+    baseUnit: item.base_unit,
+    selectedUnit: item.selected_unit,
+    actualQty: item.actual_qty,
+    billedQty: item.billed_qty,
+    rate: item.rate,
+    // The server ignores this client value for saved rows and uses tax_rate.
+    taxRate: 0,
+    taxInclusive: item.tax_inclusive,
+    discountType: item.discount_type,
+    discountPercentage: item.discount_percentage,
+    discountAmount: item.discount_amount,
+    ...overrides,
+  };
 }
 
 async function createProductMasters(label = "Apple", overrides = {}) {
@@ -301,6 +329,11 @@ async function createProductMasters(label = "Apple", overrides = {}) {
     category: overrides.category ?? category._id,
     sub_category: overrides.sub_category ?? subcategory._id,
     base_unit: "pcs",
+    igst: overrides.igst ?? 0,
+    cgst: overrides.cgst ?? 0,
+    sgst: overrides.sgst ?? 0,
+    cess: overrides.cess ?? 0,
+    addl_cess: overrides.addl_cess ?? 0,
     priceLevels: overrides.priceLevels || [
       {
         priceLevel: wholesale._id,
@@ -495,12 +528,47 @@ describe("POST /api/sale-orders — Business logic", () => {
     });
   });
 
+  it("uses Company and Product master tax instead of client tax fields", async () => {
+    const res = await createSaleOrderForTest({
+      tax_type: "igst",
+      items: [
+        {
+          id: String(baseContext.product._id),
+          name: "Client tax override attempt",
+          baseUnit: "pcs",
+          selectedUnit: "pcs",
+          actualQty: 1,
+          billedQty: 1,
+          rate: 100,
+          taxRate: 99,
+          taxableAmount: 1,
+          igstAmount: 99,
+          totalAmount: 1,
+        },
+      ],
+      totals: { finalAmount: 1 },
+    });
+    const saleOrder = await SaleOrder.findById(
+      res.body.data.saleOrder._id,
+    ).lean();
+
+    expect(saleOrder.tax_type).toBe("cgst_sgst");
+    expect(saleOrder.items[0]).toMatchObject({
+      tax_rate: 18,
+      taxable_amount: 100,
+      igst_amount: 0,
+      cgst_amount: 9,
+      sgst_amount: 9,
+      total_amount: 118,
+    });
+  });
+
   it("accepts legacy mobile item unit fields and returns legacy unit aliases", async () => {
     const res = await createSaleOrderForTest({
       items: [
         {
           _id: new mongoose.Types.ObjectId().toString(),
-          id: new mongoose.Types.ObjectId().toString(),
+          id: String(baseContext.product._id),
           name: "Legacy Box",
           unit: "Box",
           alt_unit: "Piece",
@@ -993,7 +1061,7 @@ describe("GET /api/sale-orders/:saleOrderId", () => {
     expect(res.body.data.saleOrder.items[1].priceLevels[0].priceRate).toBe(410);
   });
 
-  it("does not enrich from a Product outside the Sale Order company", async () => {
+  it("rejects a Product outside the Sale Order company during creation", async () => {
     const otherCompany = await createOwnedCompany(baseContext.token, "Fetch Scope Company");
     const foreignProduct = await Product.create({
       product_name: "Foreign Product Latest",
@@ -1003,7 +1071,9 @@ describe("GET /api/sale-orders/:saleOrderId", () => {
       base_unit: "pcs",
       priceLevels: [{ priceRate: 999, priceDisc: 0 }],
     });
-    const createRes = await createSaleOrderForTest({
+    const res = await postSaleOrder(
+      baseContext.token,
+      buildValidSaleOrderPayload(baseContext.party._id, baseContext.series.seriesId, {
       items: [
         {
           _id: new mongoose.Types.ObjectId().toString(),
@@ -1019,21 +1089,20 @@ describe("GET /api/sale-orders/:saleOrderId", () => {
           totalAmount: 64.9,
         },
       ],
-    });
+      }),
+    );
 
-    const res = await getSaleOrderRequest(createRes.body.data.saleOrder._id);
-
-    expect(res.status).toBe(200);
-    expect(res.body.data.saleOrder.items[0]).toMatchObject({
-      item_id: String(foreignProduct._id),
-      item_name: "Scoped Saved Name",
-      rate: 55,
-      priceLevels: [],
-    });
+    expect(res.status).toBe(400);
+    expect(res.body.message).toBe("Sale order item does not belong to this company");
   });
 
   it("does not alter saved transaction fields while enriching latest Product metadata", async () => {
-    const masters = await createProductMasters("Snapshot");
+    const masters = await createProductMasters("Snapshot", {
+      igst: 18,
+      cgst: 9,
+      sgst: 9,
+      cess: 2,
+    });
     const createRes = await createSaleOrderForTest({
       items: [
         {
@@ -1161,24 +1230,22 @@ describe("GET /api/vouchers", () => {
 describe("PUT /api/sale-orders/:saleOrderId — Update", () => {
   it("Update open order → 200, items/totals recalculated", async () => {
     const createRes = await createSaleOrderForTest();
+    const original = await SaleOrder.findById(
+      createRes.body.data.saleOrder._id,
+    ).lean();
 
     const res = await updateSaleOrderRequest(createRes.body.data.saleOrder._id, {
       transactionDate: "2026-07-01T00:00:00.000Z",
       mailingName: "Updated Mailing Name",
       tax_type: "igst",
       items: [
-        {
-          _id: new mongoose.Types.ObjectId().toString(),
-          id: new mongoose.Types.ObjectId().toString(),
+        buildSavedItemUpdate(original.items[0], {
           name: "Widget B",
-          baseUnit: "pcs",
-          selectedUnit: "pcs",
           actualQty: 3,
           billedQty: 3,
           rate: 150,
-          taxRate: 18,
           totalAmount: 1,
-        },
+        }),
       ],
       additionalCharges: [],
       totals: {
@@ -1198,7 +1265,7 @@ describe("PUT /api/sale-orders/:saleOrderId — Update", () => {
     expect(saleOrder.mailing_name).toBe("Updated Mailing Name");
   });
 
-  it("Sending new party in update body → party_id and party_snapshot must NOT change (frozen after create)", async () => {
+  it("Changing Party replaces its snapshot and derives interstate IGST", async () => {
     const createRes = await createSaleOrderForTest();
     const secondParty = await createTestParty({
       cmp_id: baseContext.companyId,
@@ -1236,8 +1303,312 @@ describe("PUT /api/sale-orders/:saleOrderId — Update", () => {
     const updated = await SaleOrder.findById(createRes.body.data.saleOrder._id).lean();
 
     expect(res.status).toBe(200);
-    expect(String(updated.party_id)).toBe(String(original.party_id));
-    expect(updated.party_snapshot).toEqual(original.party_snapshot);
+    expect(String(updated.party_id)).toBe(String(secondParty._id));
+    expect(updated.party_snapshot).toMatchObject({
+      name: "Replacement Party",
+      gst_no: "32ABCDE1234F1Z7",
+      billing_address: "99 Changed Street",
+      shipping_address: "99 Changed Street",
+      state: "Tamil Nadu",
+    });
+    expect(updated.tax_type).toBe("igst");
+    expect(updated.items[0]).toMatchObject({
+      rate: original.items[0].rate,
+      igst_amount: 36,
+      cgst_amount: 0,
+      sgst_amount: 0,
+    });
+
+    const reverseRes = await updateSaleOrderRequest(
+      createRes.body.data.saleOrder._id,
+      {
+        transactionDate: "2026-07-02T00:00:00.000Z",
+        tax_type: "igst",
+        party: buildPartySelection(baseContext.party),
+        items: [buildSavedItemUpdate(updated.items[0])],
+        additionalCharges: [],
+      },
+    );
+    const reversed = await SaleOrder.findById(
+      createRes.body.data.saleOrder._id,
+    ).lean();
+
+    expect(reverseRes.status).toBe(200);
+    expect(reversed.tax_type).toBe("cgst_sgst");
+    expect(reversed.items[0]).toMatchObject({
+      igst_amount: 0,
+      cgst_amount: 18,
+      sgst_amount: 18,
+    });
+  });
+
+  it("ignores client tax type and returns to CGST/SGST for normalized same-state values", async () => {
+    const createRes = await createSaleOrderForTest();
+    const original = await SaleOrder.findById(
+      createRes.body.data.saleOrder._id,
+    ).lean();
+    const normalizedParty = await createTestParty({
+      cmp_id: baseContext.companyId,
+      Primary_user_id: baseContext.userId,
+      accountGroup: baseContext.accountGroup._id,
+      created_by: baseContext.userId,
+      partyName: "Normalized Kerala Customer",
+      state: "  kErAlA  ",
+    });
+
+    const res = await updateSaleOrderRequest(createRes.body.data.saleOrder._id, {
+      transactionDate: "2026-07-03T00:00:00.000Z",
+      // This deliberately conflicts with the server-derived state rule.
+      tax_type: "igst",
+      party: buildPartySelection(normalizedParty),
+      items: [buildSavedItemUpdate(original.items[0])],
+      additionalCharges: [],
+    });
+    const updated = await SaleOrder.findById(
+      createRes.body.data.saleOrder._id,
+    ).lean();
+
+    expect(res.status).toBe(200);
+    expect(updated.tax_type).toBe("cgst_sgst");
+    expect(updated.items[0]).toMatchObject({
+      igst_amount: 0,
+      cgst_amount: 18,
+      sgst_amount: 18,
+    });
+  });
+
+  it("keeps existing tax snapshots while new edit rows and charges use current masters", async () => {
+    const existingProduct = await createProductMasters("Snapshot Product");
+    const newProduct = await createProductMasters("Current Product");
+    await Product.findByIdAndUpdate(existingProduct.product._id, {
+      igst: 18,
+      cgst: 9,
+      sgst: 9,
+    });
+    await Product.findByIdAndUpdate(newProduct.product._id, {
+      igst: 12,
+      cgst: 6,
+      sgst: 6,
+    });
+    const existingCharge = await AdditionalCharges.create({
+      cmp_id: baseContext.companyId,
+      Primary_user_id: baseContext.userId,
+      additional_charge_id: `EXISTING-${new mongoose.Types.ObjectId()}`,
+      name: "Existing GST Charge",
+      igst: 18,
+      cgst: 9,
+      sgst: 9,
+    });
+    const newCharge = await AdditionalCharges.create({
+      cmp_id: baseContext.companyId,
+      Primary_user_id: baseContext.userId,
+      additional_charge_id: `NEW-${new mongoose.Types.ObjectId()}`,
+      name: "New GST Charge",
+      igst: 12,
+      cgst: 6,
+      sgst: 6,
+    });
+    const createRes = await createSaleOrderForTest({
+      items: [
+        {
+          id: String(existingProduct.product._id),
+          name: "Saved 18 percent row",
+          baseUnit: "pcs",
+          selectedUnit: "pcs",
+          actualQty: 1,
+          billedQty: 1,
+          rate: 100,
+          taxRate: 18,
+          discountAmount: 0,
+        },
+      ],
+      additionalCharges: [
+        { additionalChargeId: String(existingCharge._id), value: 100, action: "add" },
+      ],
+    });
+    const original = await SaleOrder.findById(
+      createRes.body.data.saleOrder._id,
+    ).lean();
+    const interstateParty = await createTestParty({
+      cmp_id: baseContext.companyId,
+      Primary_user_id: baseContext.userId,
+      accountGroup: baseContext.accountGroup._id,
+      created_by: baseContext.userId,
+      partyName: "Tamil Nadu Customer",
+      state: "Tamil Nadu",
+    });
+
+    // Master changes after creation must never rewrite saved row tax snapshots.
+    await Product.findByIdAndUpdate(existingProduct.product._id, {
+      igst: 12,
+      cgst: 6,
+      sgst: 6,
+    });
+    await AdditionalCharges.findByIdAndUpdate(existingCharge._id, {
+      igst: 12,
+      cgst: 6,
+      sgst: 6,
+    });
+
+    const res = await updateSaleOrderRequest(createRes.body.data.saleOrder._id, {
+      transactionDate: "2026-07-04T00:00:00.000Z",
+      tax_type: "cgst_sgst",
+      party: buildPartySelection(interstateParty),
+      items: [
+        buildSavedItemUpdate(original.items[0], { taxRate: 0 }),
+        {
+          id: String(newProduct.product._id),
+          name: "New master-rate row",
+          baseUnit: "pcs",
+          selectedUnit: "pcs",
+          actualQty: 1,
+          billedQty: 1,
+          rate: 100,
+          taxRate: 99,
+          discountAmount: 0,
+        },
+      ],
+      additionalCharges: [
+        {
+          _id: String(original.additional_charges[0]._id),
+          additionalChargeId: String(existingCharge._id),
+          value: 100,
+          action: "add",
+        },
+        {
+          _id: String(newCharge._id),
+          additionalChargeId: String(newCharge._id),
+          value: 100,
+          action: "add",
+        },
+      ],
+      totals: { finalAmount: 1 },
+    });
+    const updated = await SaleOrder.findById(
+      createRes.body.data.saleOrder._id,
+    ).lean();
+
+    expect(res.status).toBe(200);
+    expect(updated.tax_type).toBe("igst");
+    expect(updated.items).toHaveLength(2);
+    expect(updated.items[0]).toMatchObject({
+      rate: 100,
+      tax_rate: 18,
+      igst_amount: 18,
+      cgst_amount: 0,
+      sgst_amount: 0,
+    });
+    expect(updated.items[1]).toMatchObject({
+      tax_rate: 12,
+      igst_amount: 12,
+      cgst_amount: 0,
+      sgst_amount: 0,
+    });
+    expect(updated.additional_charges[0]).toMatchObject({
+      igst: 18,
+      igst_amount: 18,
+      cgst_amount: 0,
+      sgst_amount: 0,
+    });
+    expect(updated.additional_charges[1]).toMatchObject({
+      igst: 12,
+      igst_amount: 12,
+      cgst_amount: 0,
+      sgst_amount: 0,
+    });
+  });
+
+  it("recalculates tax-inclusive percentage and fixed discounts from commercial inputs", async () => {
+    const percentageOrder = await createSaleOrderForTest({
+      items: [
+        {
+          id: String(baseContext.product._id),
+          name: "Inclusive percentage row",
+          baseUnit: "pcs",
+          selectedUnit: "pcs",
+          actualQty: 1,
+          billedQty: 1,
+          rate: 118,
+          taxRate: 18,
+          taxInclusive: true,
+          discountType: "percentage",
+          discountPercentage: 10,
+          discountAmount: 999,
+        },
+      ],
+    });
+    const percentageSaved = await SaleOrder.findById(
+      percentageOrder.body.data.saleOrder._id,
+    ).lean();
+    const fixedOrder = await createSaleOrderForTest({
+      items: [
+        {
+          id: String(baseContext.product._id),
+          name: "Inclusive fixed row",
+          baseUnit: "pcs",
+          selectedUnit: "pcs",
+          actualQty: 1,
+          billedQty: 1,
+          rate: 118,
+          taxRate: 18,
+          taxInclusive: true,
+          discountType: "amount",
+          discountAmount: 20,
+        },
+      ],
+    });
+    const fixedSaved = await SaleOrder.findById(
+      fixedOrder.body.data.saleOrder._id,
+    ).lean();
+    const interstateParty = await createTestParty({
+      cmp_id: baseContext.companyId,
+      Primary_user_id: baseContext.userId,
+      accountGroup: baseContext.accountGroup._id,
+      created_by: baseContext.userId,
+      partyName: "Discount Interstate Customer",
+      state: "Tamil Nadu",
+    });
+
+    const [percentageRes, fixedRes] = await Promise.all([
+      updateSaleOrderRequest(percentageOrder.body.data.saleOrder._id, {
+        transactionDate: "2026-07-05T00:00:00.000Z",
+        party: buildPartySelection(interstateParty),
+        items: [
+          buildSavedItemUpdate(percentageSaved.items[0], {
+            discountAmount: 0,
+            totalAmount: 1,
+          }),
+        ],
+        additionalCharges: [],
+      }),
+      updateSaleOrderRequest(fixedOrder.body.data.saleOrder._id, {
+        transactionDate: "2026-07-05T00:00:00.000Z",
+        party: buildPartySelection(interstateParty),
+        items: [
+          buildSavedItemUpdate(fixedSaved.items[0], { totalAmount: 1 }),
+        ],
+        additionalCharges: [],
+      }),
+    ]);
+    const [percentageUpdated, fixedUpdated] = await Promise.all([
+      SaleOrder.findById(percentageOrder.body.data.saleOrder._id).lean(),
+      SaleOrder.findById(fixedOrder.body.data.saleOrder._id).lean(),
+    ]);
+
+    expect(percentageRes.status).toBe(200);
+    expect(fixedRes.status).toBe(200);
+    expect(percentageUpdated.items[0]).toMatchObject({
+      base_price: 100,
+      discount_amount: 10,
+      taxable_amount: 90,
+      igst_amount: 16.2,
+      total_amount: 106.2,
+    });
+    expect(fixedUpdated.items[0].base_price).toBe(100);
+    expect(fixedUpdated.items[0].discount_amount).toBe(20);
+    expect(fixedUpdated.items[0].taxable_amount).toBe(80);
+    expect(fixedUpdated.items[0].igst_amount).toBeCloseTo(14.4);
+    expect(fixedUpdated.items[0].total_amount).toBeCloseTo(94.4);
   });
 
   it('Update cancelled order → 400 "Cannot edit a cancelled saleOrder"', async () => {

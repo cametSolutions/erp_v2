@@ -2,7 +2,9 @@ import mongoose from "mongoose";
 
 import {
   createSale as createSaleService,
+  cancelSale as cancelSaleService,
   getSaleById as getSaleByIdService,
+  updateSale as updateSaleService,
 } from "../services/sale.service.js";
 import { auditSale as auditSaleService } from "../services/saleAudit.service.js";
 
@@ -36,6 +38,44 @@ export async function getSaleById(req, res) {
   } catch (error) {
     if (process.env.NODE_ENV !== "test") console.error("getSaleById error:", error);
     return res.status(error.statusCode || 500).json({ success: false, message: error.message || "Failed to fetch sale" });
+  }
+}
+
+export async function updateSale(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid id" });
+    }
+    const sale = await updateSaleService(id, req.body || {}, req);
+    return res.status(200).json({ success: true, data: { sale } });
+  } catch (error) {
+    if (process.env.NODE_ENV !== "test") console.error("updateSale error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to update sale",
+    });
+  }
+}
+
+export async function cancelSale(req, res) {
+  try {
+    const { id } = req.params;
+    if (!mongoose.Types.ObjectId.isValid(id)) {
+      return res.status(400).json({ success: false, message: "Invalid id" });
+    }
+    const sale = await cancelSaleService(id, req.body || {}, req);
+    return res.status(200).json({
+      success: true,
+      message: "Sale cancelled successfully",
+      data: { sale },
+    });
+  } catch (error) {
+    if (process.env.NODE_ENV !== "test") console.error("cancelSale error:", error);
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to cancel sale",
+    });
   }
 }
 
