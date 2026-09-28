@@ -1,26 +1,36 @@
 import { getInitialTransactionStatus } from "./transactionState.service.js";
 
-// Normalizes settlement rows before persistence:
-// - converts numeric fields safely
-// - coerces date fields to Date instances
-export function normalizeSettlementDetails(settlement_details = [], transactionDate) {
-  return settlement_details.map((item) => ({
-    outstanding: item?.outstanding,
-    outstanding_number: item?.outstanding_number,
-    outstanding_date: new Date(item?.outstanding_date),
-    outstanding_type: item?.outstanding_type,
-    previous_outstanding_amount: Number(item?.previous_outstanding_amount) || 0,
-    settled_amount: Number(item?.settled_amount) || 0,
+// Builds the stored settlement snapshot from the current Outstanding record.
+// Client-provided bill labels and balances are intentionally not used here.
+export function buildAuthoritativeSettlementDetail(
+  outstanding,
+  settledAmount,
+  settlementDate,
+) {
+  const previousOutstandingAmount =
+    Number(outstanding?.bill_pending_amt) || 0;
+
+  return {
+    outstanding: outstanding?._id,
+    outstanding_number: outstanding?.bill_no,
+    outstanding_date: new Date(outstanding?.bill_date),
+    outstanding_type: outstanding?.classification,
+    previous_outstanding_amount: previousOutstandingAmount,
+    settled_amount: Number(settledAmount) || 0,
     remaining_outstanding_amount:
-      Number(item?.remaining_outstanding_amount) || 0,
-    settlement_date: item?.settlement_date
-      ? new Date(item.settlement_date)
-      : new Date(transactionDate),
-  }));
+      previousOutstandingAmount - (Number(settledAmount) || 0),
+    settlement_date: new Date(settlementDate),
+  };
 }
 
 // Builds Receipt document payload from normalized inputs + issued voucher identity.
-export function buildCashTransactionDocument(data = {}, voucherIdentity = {}, settlement_details = [], advance_amount = 0, date) {
+export function buildCashTransactionDocument(
+  data = {},
+  voucherIdentity = {},
+  settlement_details = [],
+  advance_amount = 0,
+  date,
+) {
   return {
     cmp_id: data.cmp_id,
     voucher_type: data.voucher_type,
@@ -49,7 +59,13 @@ export function buildCashTransactionDocument(data = {}, voucherIdentity = {}, se
 }
 
 // Builds mirrored party-ledger entry for receipt posting.
-export function buildPartyLedgerDocument(data = {}, voucher_id, voucher_number, date, ledger_side) {
+export function buildPartyLedgerDocument(
+  data = {},
+  voucher_id,
+  voucher_number,
+  date,
+  ledger_side,
+) {
   return {
     cmp_id: data.cmp_id,
     voucher_type: data.voucher_type,
@@ -68,7 +84,13 @@ export function buildPartyLedgerDocument(data = {}, voucher_id, voucher_number, 
 }
 
 // Builds mirrored cash/bank-ledger entry for receipt posting.
-export function buildCashBankLedgerDocument(data = {}, voucher_id, voucher_number, date, ledger_side) {
+export function buildCashBankLedgerDocument(
+  data = {},
+  voucher_id,
+  voucher_number,
+  date,
+  direction,
+) {
   return {
     cmp_id: data.cmp_id,
     voucher_type: data.voucher_type,
@@ -79,7 +101,7 @@ export function buildCashBankLedgerDocument(data = {}, voucher_id, voucher_numbe
     cash_bank_name: data.cash_bank_name,
     cash_bank_type: data.cash_bank_type,
     amount: Number(data.amount) || 0,
-    ledger_side,
+    direction,
     party_id: data.party_id,
     party_name: data.party_name,
     instrument_type: data.instrument_type || "cash",
@@ -90,8 +112,8 @@ export function buildCashBankLedgerDocument(data = {}, voucher_id, voucher_numbe
 }
 
 export default {
+  buildAuthoritativeSettlementDetail,
   buildCashBankLedgerDocument,
   buildCashTransactionDocument,
   buildPartyLedgerDocument,
-  normalizeSettlementDetails,
 };

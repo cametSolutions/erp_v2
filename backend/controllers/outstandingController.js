@@ -57,6 +57,8 @@ export const getOutstandingByParty = async (req, res) => {
           bill_amount: 1,
           bill_pending_amt: 1,
           classification: 1,
+          billId: 1,
+          source: 1,
           _id: 1,
         },
       )

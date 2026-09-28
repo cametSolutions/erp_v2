@@ -11,10 +11,10 @@ import {
   updateVoucherTimelineEntry,
 } from "./voucherTimeline.service.js";
 import {
+  buildAuthoritativeSettlementDetail,
   buildCashBankLedgerDocument,
   buildCashTransactionDocument,
   buildPartyLedgerDocument,
-  normalizeSettlementDetails,
 } from "./cashTransactionDocument.service.js";
 import {
   assertTransactionNotAlreadyCancelled,
@@ -47,13 +47,193 @@ function createHttpError(message, statusCode = 500) {
   return error;
 }
 
+const RECEIPT_INSTRUMENT_TYPES = ["cash", "cheque", "upi", "neft", "rtgs"];
+const BANK_INSTRUMENT_TYPES = ["cheque", "upi", "neft", "rtgs"];
+
+function normalizeType(value) {
+  return String(value || "").trim().toLowerCase();
+}
+
+// Current Party documents use `party`; missing type is accepted only for
+// legacy customer records created before partyType became required.
+function validateReceiptParty(party) {
+  const partyType = normalizeType(party?.partyType || "party");
+
+  if (partyType !== "party") {
+    throw createHttpError(
+      "Selected receipt party must be a customer or business party",
+      400,
+    );
+  }
+}
+
+function buildValidatedReceiptData(data, party, cashBank) {
+  const instrumentType = normalizeType(data.instrument_type || "cash");
+  const submittedCashBankType = normalizeType(data.cash_bank_type);
+  const actualCashBankType = normalizeType(cashBank?.partyType);
+
+  if (!RECEIPT_INSTRUMENT_TYPES.includes(instrumentType)) {
+    throw createHttpError("Invalid receipt instrument type", 400);
+  }
+
+  if (
+    !["cash", "bank"].includes(actualCashBankType) ||
+    submittedCashBankType !== actualCashBankType
+  ) {
+    throw createHttpError(
+      "Selected cash/bank ledger does not belong to this company",
+      400,
+    );
+  }
+
+  const expectedCashBankType = BANK_INSTRUMENT_TYPES.includes(instrumentType)
+    ? "bank"
+    : "cash";
+
+  if (actualCashBankType !== expectedCashBankType) {
+    throw createHttpError(
+      instrumentType === "cash"
+        ? "Cash receipts require a cash account"
+        : "Bank instruments require a bank account",
+      400,
+    );
+  }
+
+  let chequeNumber = data.cheque_number || null;
+  let chequeDate = data.cheque_date || null;
+
+  if (instrumentType === "cheque") {
+    chequeNumber = String(chequeNumber || "").trim();
+    if (!chequeNumber) {
+      throw createHttpError("Cheque number is required", 400);
+    }
+
+    if (!chequeDate) {
+      throw createHttpError("Valid cheque date is required", 400);
+    }
+
+    chequeDate = new Date(chequeDate);
+    if (Number.isNaN(chequeDate.getTime())) {
+      throw createHttpError("Valid cheque date is required", 400);
+    }
+  }
+
+  return {
+    ...data,
+    party_name: party.partyName,
+    cash_bank_name: cashBank.partyName,
+    cash_bank_type: actualCashBankType,
+    instrument_type: instrumentType,
+    cheque_number: chequeNumber,
+    cheque_date: chequeDate,
+  };
+}
+
+function validateSubmittedSettlements(settlementDetails, receiptAmount) {
+  const seenOutstandingIds = new Set();
+  let totalSettlement = 0;
+
+  const submittedSettlements = (settlementDetails || []).map((item) => {
+    const submittedOutstandingId = String(item?.outstanding || "");
+    const settledAmount = Number(item?.settled_amount);
+
+    if (!mongoose.Types.ObjectId.isValid(submittedOutstandingId)) {
+      throw createHttpError(
+        "Outstanding bill not found for the selected company and party",
+        400,
+      );
+    }
+
+    // Canonical ObjectId text also rejects the same bill when one client row
+    // uses upper-case hex and another uses lower-case hex.
+    const outstandingId = new mongoose.Types.ObjectId(
+      submittedOutstandingId,
+    ).toString();
+
+    if (seenOutstandingIds.has(outstandingId)) {
+      throw createHttpError(
+        "The same outstanding bill cannot be settled more than once",
+        400,
+      );
+    }
+
+    if (!Number.isFinite(settledAmount) || settledAmount <= 0) {
+      throw createHttpError("Settled amount must be greater than zero", 400);
+    }
+
+    seenOutstandingIds.add(outstandingId);
+    totalSettlement += settledAmount;
+
+    return {
+      outstandingId,
+      settledAmount,
+    };
+  });
+
+  if (totalSettlement > Number(receiptAmount)) {
+    throw createHttpError(
+      "Total settled amount cannot exceed receipt amount",
+      400,
+    );
+  }
+
+  return submittedSettlements;
+}
+
+async function resolveAuthoritativeSettlements({
+  submittedSettlements,
+  cmp_id,
+  party_id,
+  settlementDate,
+  session,
+}) {
+  const resolvedSettlements = [];
+
+  for (const item of submittedSettlements) {
+    const outstanding = await Outstanding.findOne({
+      _id: item.outstandingId,
+      cmp_id,
+      party_id,
+      isCancelled: false,
+      classification: "dr",
+      bill_pending_amt: { $gt: 0 },
+    }).session(session);
+
+    if (!outstanding) {
+      throw createHttpError(
+        "Outstanding bill not found for the selected company and party",
+        400,
+      );
+    }
+
+    const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
+    if (item.settledAmount > currentPendingAmount) {
+      throw createHttpError(
+        "Settled amount cannot exceed the current pending amount",
+        400,
+      );
+    }
+
+    resolvedSettlements.push({
+      outstanding,
+      detail: buildAuthoritativeSettlementDetail(
+        outstanding,
+        item.settledAmount,
+        settlementDate,
+      ),
+    });
+  }
+
+  return resolvedSettlements;
+}
+
 // For receipt flow:
 // - party ledger receives credit
-// - cash/bank ledger receives debit
+// - cash/bank records a direct inward movement
 function resolveLedgerSides(voucher_type) {
   return {
     party_ledger_side: "credit",
-    cash_bank_ledger_side: "credit",
+    cash_bank_direction: "in",
   };
 }
 
@@ -148,8 +328,10 @@ async function createAdvanceReceiptOutstanding({
         billId: String(receipt_id),
         bill_amount: Number(advance_amount) || 0,
         bill_due_date: date,
-        bill_pending_amt: Number(advance_amount) || 0,
-        classification: "dr",
+        // Receipt advances are customer credit, so Outstanding stores their
+        // pending value as a negative CR amount.
+        bill_pending_amt: -(Number(advance_amount) || 0),
+        classification: "cr",
         createdBy: created_by ? String(created_by) : "",
         source: "advance_receipt",
       },
@@ -182,13 +364,14 @@ async function cancelAdvanceReceiptOutstanding({
 
 // Receipt creation service (transactional).
 // Performs:
-// 1) company ownership validation for party + cash/bank ledger
-// 2) voucher identity issuance
-// 3) receipt insert
-// 4) party ledger + cash/bank ledger inserts
-// 5) outstanding adjustments for settled bills
-// 6) advance outstanding creation
-// 7) timeline entry creation
+// 1) party, cash/bank, instrument and cheque validation
+// 2) settlement validation and authoritative Outstanding snapshots
+// 3) voucher identity issuance
+// 4) receipt insert
+// 5) party ledger + cash/bank ledger inserts
+// 6) outstanding adjustments for settled bills
+// 7) advance outstanding creation
+// 8) timeline entry creation
 export async function createCashTransaction(data = {}, req) {
   const session = await mongoose.startSession();
 
@@ -203,7 +386,6 @@ export async function createCashTransaction(data = {}, req) {
         Party.findOne({
           _id: data.cash_bank_id,
           cmp_id: data.cmp_id,
-          partyType: data.cash_bank_type,
         })
           .session(session)
           .lean(),
@@ -216,6 +398,8 @@ export async function createCashTransaction(data = {}, req) {
         );
       }
 
+      validateReceiptParty(party);
+
       if (!cashBank) {
         throw createHttpError(
           "Selected cash/bank ledger does not belong to this company",
@@ -223,36 +407,45 @@ export async function createCashTransaction(data = {}, req) {
         );
       }
 
+      const validatedData = buildValidatedReceiptData(data, party, cashBank);
+      const date = new Date(validatedData.date);
+      const submittedSettlements = validateSubmittedSettlements(
+        validatedData.settlement_details,
+        validatedData.amount,
+      );
+      const resolvedSettlements = await resolveAuthoritativeSettlements({
+        submittedSettlements,
+        cmp_id: validatedData.cmp_id,
+        party_id: validatedData.party_id,
+        settlementDate: date,
+        session,
+      });
+      const settlement_details = resolvedSettlements.map(
+        (item) => item.detail,
+      );
+      const settled_amount = settlement_details.reduce(
+        (total, item) => total + (Number(item.settled_amount) || 0),
+        0,
+      );
+      const advance_amount =
+        (Number(validatedData.amount) || 0) - settled_amount;
+
       const voucherIdentity = await issueVoucherIdentity({
-        cmpId: data.cmp_id,
-        voucherType: data.voucher_type,
-        seriesId: data.series_id,
-        userId: data.created_by,
+        cmpId: validatedData.cmp_id,
+        voucherType: validatedData.voucher_type,
+        seriesId: validatedData.series_id,
+        userId: validatedData.created_by,
         session,
       });
 
-      const date = new Date(data.date);
-      const settlement_details = normalizeSettlementDetails(
-        data.settlement_details || [],
-        date,
-      );
-      const { party_ledger_side, cash_bank_ledger_side } = resolveLedgerSides(
-        data.voucher_type,
-      );
-      const settled_amount = settlement_details.reduce(
-        (total, item) => total + (Number(item?.settled_amount) || 0),
-        0,
-      );
-      // Remaining amount after bill settlements is tracked as advance.
-      const advance_amount = Math.max(
-        (Number(data.amount) || 0) - settled_amount,
-        0,
+      const { party_ledger_side, cash_bank_direction } = resolveLedgerSides(
+        validatedData.voucher_type,
       );
 
       const [cashTransaction] = await Receipt.create(
         [
           buildCashTransactionDocument(
-            data,
+            validatedData,
             voucherIdentity,
             settlement_details,
             advance_amount,
@@ -265,7 +458,7 @@ export async function createCashTransaction(data = {}, req) {
       await PartyLedger.create(
         [
           buildPartyLedgerDocument(
-            data,
+            validatedData,
             cashTransaction._id,
             cashTransaction.voucher_number,
             date,
@@ -276,69 +469,42 @@ export async function createCashTransaction(data = {}, req) {
       );
 
       await updatePartyMonthlyBalance({
-        cmp_id: data.cmp_id,
-        party_id: data.party_id,
+        cmp_id: validatedData.cmp_id,
+        party_id: validatedData.party_id,
         date,
-        amount: Number(data.amount) || 0,
-        voucher_type: data.voucher_type,
+        amount: Number(validatedData.amount) || 0,
+        voucher_type: validatedData.voucher_type,
         session,
       });
 
       await CashBankLedger.create(
         [
           buildCashBankLedgerDocument(
-            data,
+            validatedData,
             cashTransaction._id,
             cashTransaction.voucher_number,
             date,
-            cash_bank_ledger_side,
+            cash_bank_direction,
           ),
         ],
         { session },
       );
 
-      for (const item of settlement_details) {
-        if (!item?.outstanding || !item?.settled_amount) {
-          continue;
-        }
-
-        const outstanding = await Outstanding.findOne({
-          _id: item.outstanding,
-          cmp_id: data.cmp_id,
-          party_id: data.party_id,
-          isCancelled: false,
-        }).session(session);
-
-        if (!outstanding) {
-          throw createHttpError(
-            "Outstanding bill not found for the selected company and party",
-            400,
-          );
-        }
-
-        const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
-        const settledAmount = Number(item.settled_amount) || 0;
-
-        if (settledAmount <= 0 || settledAmount > currentPendingAmount) {
-          throw createHttpError(
-            "Settled amount cannot exceed the current pending amount",
-            400,
-          );
-        }
-
-        outstanding.bill_pending_amt = currentPendingAmount - settledAmount;
+      for (const item of resolvedSettlements) {
+        const { outstanding, detail } = item;
+        outstanding.bill_pending_amt = detail.remaining_outstanding_amount;
         await outstanding.save({ session });
       }
 
       await createAdvanceReceiptOutstanding({
-        cmp_id: data.cmp_id,
-        party_id: data.party_id,
-        party_name: data.party_name,
+        cmp_id: validatedData.cmp_id,
+        party_id: validatedData.party_id,
+        party_name: validatedData.party_name,
         receipt_id: cashTransaction._id,
         voucher_number: cashTransaction.voucher_number,
         date,
         advance_amount,
-        created_by: data.created_by || null,
+        created_by: validatedData.created_by || null,
         session,
       });
 
@@ -594,7 +760,15 @@ export async function getCashBankLedgerBalances(filters = {}, req) {
             cash_bank_type: "$cash_bank_type",
           },
           current_balance: {
-            $sum: { $ifNull: ["$amount", 0] },
+            // Cash/Bank rows store positive magnitudes; direction carries
+            // whether a movement raises or lowers its balance.
+            $sum: {
+              $cond: [
+                { $eq: ["$direction", "in"] },
+                { $ifNull: ["$amount", 0] },
+                { $multiply: [{ $ifNull: ["$amount", 0] }, -1] },
+              ],
+            },
           },
         },
       },
@@ -644,10 +818,163 @@ export async function getCashBankLedgerBalances(filters = {}, req) {
   );
 }
 
+// Cash/Bank drill-down reads the ledger itself, rather than rebuilding entries
+// from Sale or Receipt documents. This keeps edits and cancellations consistent
+// with the balance report, which also includes only active ledger rows.
+export async function getCashBankLedgerTransactions(filters = {}, req) {
+  const {
+    cmp_id,
+    cash_bank_id,
+    page = 1,
+    limit = 20,
+    from,
+    to,
+    voucher_type,
+    direction,
+  } = filters;
+  const ownerId = resolveAdminOwnerId(req);
+  const pageNum = Math.max(parseInt(page, 10) || 1, 1);
+  const limitNum = Math.min(Math.max(parseInt(limit, 10) || 20, 1), 100);
+  const account = await Party.findOne({
+    _id: cash_bank_id,
+    cmp_id,
+    Primary_user_id: ownerId,
+    partyType: { $in: ["cash", "bank"] },
+  })
+    .select("_id partyName partyType")
+    .lean();
+
+  if (!account) {
+    const error = createHttpError("Cash/bank account not found", 404);
+    throw error;
+  }
+
+  const accountMatch = {
+    cmp_id: new mongoose.Types.ObjectId(cmp_id),
+    cash_bank_id: new mongoose.Types.ObjectId(cash_bank_id),
+    status: "active",
+  };
+  const detailMatch = {};
+
+  if (from || to) {
+    detailMatch.date = {};
+    if (from) detailMatch.date.$gte = new Date(from);
+    if (to) {
+      const endDate = new Date(to);
+      endDate.setHours(23, 59, 59, 999);
+      detailMatch.date.$lte = endDate;
+    }
+  }
+  if (voucher_type) detailMatch.voucher_type = voucher_type;
+  if (direction) detailMatch.direction = direction;
+
+  const [result, currentBalanceRows, filteredSummaryRows] = await Promise.all([
+    CashBankLedger.aggregate([
+    { $match: accountMatch },
+    // The stable ordering also makes the running balance deterministic.
+    { $sort: { date: 1, _id: 1 } },
+    {
+      $setWindowFields: {
+        sortBy: { date: 1, _id: 1 },
+        output: {
+          running_balance: {
+            $sum: {
+              $cond: [
+                { $eq: ["$direction", "in"] },
+                "$amount",
+                { $multiply: ["$amount", -1] },
+              ],
+            },
+            window: { documents: ["unbounded", "current"] },
+          },
+        },
+      },
+    },
+    ...(Object.keys(detailMatch).length > 0 ? [{ $match: detailMatch }] : []),
+    { $skip: (pageNum - 1) * limitNum },
+    { $limit: limitNum },
+    {
+      $project: {
+        _id: 1,
+        cash_bank_id: 1,
+        date: 1,
+        voucher_type: 1,
+        voucher_id: 1,
+        voucher_number: 1,
+        party_name: 1,
+        narration: 1,
+        amount: 1,
+        direction: 1,
+        running_balance: 1,
+        tally_status: 1,
+      },
+    },
+  ]),
+    CashBankLedger.aggregate([
+      { $match: accountMatch },
+      {
+        $group: {
+          _id: null,
+          balance: {
+            $sum: {
+              $cond: [
+                { $eq: ["$direction", "in"] },
+                "$amount",
+                { $multiply: ["$amount", -1] },
+              ],
+            },
+          },
+        },
+      },
+    ]),
+    CashBankLedger.aggregate([
+      { $match: accountMatch },
+      ...(Object.keys(detailMatch).length > 0 ? [{ $match: detailMatch }] : []),
+      {
+        $group: {
+          _id: "$direction",
+          amount: { $sum: { $abs: "$amount" } },
+          total: { $sum: 1 },
+        },
+      },
+    ]),
+  ]);
+
+  const inSummary = filteredSummaryRows.find((row) => row._id === "in");
+  const outSummary = filteredSummaryRows.find((row) => row._id === "out");
+  const total = filteredSummaryRows.reduce(
+    (count, row) => count + (Number(row.total) || 0),
+    0,
+  );
+  const items = result.map((entry) => ({
+    ...entry,
+    direction: entry.direction,
+  }));
+
+  return {
+    account: {
+      id: account._id,
+      name: account.partyName || "--",
+      type: account.partyType,
+    },
+    summary: {
+      // Keep the headline aligned with the unfiltered Cash/Bank balance API.
+      balance: Number(currentBalanceRows[0]?.balance) || 0,
+      totalIn: Number(inSummary?.amount) || 0,
+      totalOut: Number(outSummary?.amount) || 0,
+    },
+    items,
+    total,
+    page: pageNum,
+    hasMore: pageNum * limitNum < total,
+  };
+}
+
 export default {
   createCashTransaction,
   cancelCashTransaction,
   getCashTransactionById,
   getCashTransactions,
   getCashBankLedgerBalances,
+  getCashBankLedgerTransactions,
 };

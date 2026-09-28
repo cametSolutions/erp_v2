@@ -232,9 +232,8 @@ function buildSaleCashBankLedger({ sale, party, amount, userId }) {
     cash_bank_name: party.partyName,
     cash_bank_type: party.partyType,
     amount,
-    // Keep the existing CashBankLedger convention used by receipts: a sale
-    // settled through this account is an inward/credit ledger movement.
-    ledger_side: "credit",
+    // A cash or bank Sale moves money into the selected Cash/Bank account.
+    direction: "in",
     // A cash/bank sale has no separate debtor; the selected account is both
     // the sale party and the settlement account.
     party_id: party._id,
@@ -285,6 +284,7 @@ function mapSaleItems(items) {
     mfgdt: item.mfgdt,
     expdt: item.expdt,
     mrp: item.mrp,
+    price_level_id: item.price_level_id,
     rate: item.rate,
     initial_price_source: item.initial_price_source,
     discount_type: item.discount_type,

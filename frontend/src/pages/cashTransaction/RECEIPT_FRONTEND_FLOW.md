@@ -55,6 +55,22 @@ Settlement algorithm:
   - `getRemainingAmountToAllocate(...)`
   - `redistributeCheckedBills(...)`
 - On continue, selected bill rows are converted into `settlement_details` payload rows.
+- The header Back action commits the same recalculated settlement rows as Continue.
+  This prevents a changed amount from being paired with older settlement details.
+- Create performs a final client check that total settlement does not exceed
+  the Receipt amount. The backend repeats this validation authoritatively.
+
+Backend settlement rules:
+
+- The client supplies the Outstanding id and settled amount.
+- The backend loads the active positive DR Outstanding for the selected company
+  and party.
+- Bill number, bill date, classification, previous amount, remaining amount,
+  and settlement date are derived from backend data.
+- One Outstanding id may appear only once in a Receipt.
+- Total settlement must not exceed the Receipt amount.
+- Excess Receipt amount is stored as a negative CR `advance_receipt`
+  Outstanding row.
 
 ## 5) Create Payload Flow
 
@@ -105,6 +121,11 @@ Cancel mutation effects:
 - Instrument change resets:
   - selected cash/bank account
   - cheque fields (when switching to cash)
+- Backend payer/account rules:
+  - Receipt payer must be a normal `party`, not a Cash or Bank master
+  - cash instrument requires a Cash master
+  - cheque, UPI, NEFT, and RTGS require a Bank master
+  - cheque requires a non-empty number and valid date
 
 ## 8) Quick Example Trace
 

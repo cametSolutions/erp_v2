@@ -25,9 +25,11 @@ const CashBankLedgerSchema = new Schema(
       required: true,
     },
     amount: { type: Number, required: true },
-    ledger_side: {
+    // Cash/Bank is a movement ledger, not a double-entry ledger. The actual
+    // debit/credit concepts remain on accounting ledgers such as PartyLedger.
+    direction: {
       type: String,
-      enum: ["debit", "credit"],
+      enum: ["in", "out"],
       required: true,
     },
     party_id: { type: Schema.Types.ObjectId, ref: "Party", required: true },

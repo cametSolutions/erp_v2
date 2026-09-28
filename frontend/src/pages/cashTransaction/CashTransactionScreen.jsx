@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  createElement,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   AlertCircle,
   BadgeIndianRupee,
@@ -10,6 +17,7 @@ import {
 } from "lucide-react";
 import { useSelector } from "react-redux";
 import { useNavigate } from "react-router-dom";
+import { toast } from "sonner";
 
 import { cashTransactionService } from "@/api/services/cashTransaction.service";
 import PartySelectSheet from "@/components/PartySelectSheet";
@@ -66,7 +74,7 @@ function formatDateLabel(value) {
  * }} props
  * @returns {JSX.Element}
  */
-function DetailCard({ title, subtitle, icon: Icon, tone = "blue", children }) {
+function DetailCard({ title, subtitle, icon, tone = "blue", children }) {
   const tones = {
     blue: {
       card: "border-sky-100",
@@ -91,7 +99,7 @@ function DetailCard({ title, subtitle, icon: Icon, tone = "blue", children }) {
         <span
           className={`mt-0.5 inline-flex h-9 w-9 items-center justify-center rounded-xl border ${currentTone.icon}`}
         >
-          <Icon className="h-4.5 w-4.5" />
+          {createElement(icon, { className: "h-4.5 w-4.5" })}
         </span>
         <div>
           <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-slate-500">
@@ -156,6 +164,17 @@ function redistributeCheckedBills(bills = [], amount = 0) {
   });
 }
 
+// Both Continue and the header Back action save the same minimal settlement
+// request, so amount and settlement details cannot represent different edits.
+function buildSettlementDetails(bills) {
+  return bills
+    .filter((bill) => bill.checked && (Number(bill?.settled_amount) || 0) > 0)
+    .map((bill) => ({
+      outstanding: bill._id,
+      settled_amount: Number(bill?.settled_amount) || 0,
+    }));
+}
+
 /**
  * Step-2 view: amount entry + outstanding settlement allocation.
  *
@@ -167,7 +186,6 @@ function redistributeCheckedBills(bills = [], amount = 0) {
  *   bills: Array<object>,
  *   setBills: (updater:any)=>void,
  *   onContinue: ()=>void,
- *   onBack: ()=>void,
  *   isLoading: boolean,
  *   isError: boolean,
  *   error: any,
@@ -183,7 +201,6 @@ function AmountSettlementStep({
   bills,
   setBills,
   onContinue,
-  onBack,
   isLoading,
   isError,
   error,
@@ -437,6 +454,13 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     setHeaderReady(Boolean(builder));
   }, []);
 
+  const outstandingClassification = voucher_type === "receipt" ? "dr" : "cr";
+
+  const commitSettlementStep = useCallback(() => {
+    setSettlementDetails(buildSettlementDetails(bills));
+    setStep("main");
+  }, [bills, setSettlementDetails, setStep]);
+
   // Instrument change resets cheque details and selected cash/bank ledger.
   useEffect(() => {
     if (instrumentType === "cash") {
@@ -445,18 +469,17 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     }
 
     setCashBank(null);
-  }, [instrumentType]);
+  }, [instrumentType, setCashBank, setChequeDate, setChequeNumber]);
 
   // Integrates settlement-step back button into mobile header.
   useEffect(() => {
     setHeaderOptions({
-      onBack: step === "settlement" ? () => setStep("main") : undefined,
+      onBack: step === "settlement" ? commitSettlementStep : undefined,
     });
 
     return () => resetHeaderOptions();
-  }, [resetHeaderOptions, setHeaderOptions, step]);
+  }, [commitSettlementStep, resetHeaderOptions, setHeaderOptions, step]);
 
-  const outstandingClassification = voucher_type === "receipt" ? "dr" : "cr";
   const outstandingQuery = useSettlementOutstandingQuery({
     partyId: party?._id || "",
     cmp_id,
@@ -468,7 +491,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   useEffect(() => {
     if (!outstandingQuery.data?.items) return;
     setBills(calculateAutoSettlement(amount, outstandingQuery.data.items));
-  }, [amount, outstandingQuery.data]);
+  }, [amount, outstandingQuery.data, setBills]);
 
   const createCashTransactionMutation = useCreateCashTransaction({
     cmp_id,
@@ -509,10 +532,6 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   const cashBankType = instrumentType === "cash" ? "cash" : "bank";
   const createLoading =
     createCashTransactionMutation.isPending || createCashTransactionMutation.isLoading;
-  const createErrorMessage =
-    createCashTransactionMutation.error?.response?.data?.message ||
-    createCashTransactionMutation.error?.message ||
-    null;
   const disableCreate =
     !cmp_id ||
     !headerReady ||
@@ -521,35 +540,18 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
     (Number(amount) || 0) <= 0 ||
     (instrumentType === "cheque" && (!chequeNumber || !chequeDate));
 
-  // Converts selected bill settlements into backend payload shape.
-  const handleContinueFromSettlement = () => {
-    const nextSettlementDetails = bills
-      .filter((bill) => bill.checked && (Number(bill?.settled_amount) || 0) > 0)
-      .map((bill) => {
-        const previousOutstandingAmount = Number(bill?.bill_pending_amt) || 0;
-        const settledAmount = Number(bill?.settled_amount) || 0;
-
-        return {
-          outstanding: bill._id,
-          outstanding_number: bill.bill_no || "",
-          outstanding_date: bill.bill_date,
-          outstanding_type: bill.classification || outstandingClassification,
-          previous_outstanding_amount: previousOutstandingAmount,
-          settled_amount: settledAmount,
-          remaining_outstanding_amount: Math.max(
-            previousOutstandingAmount - settledAmount,
-            0
-          ),
-          settlement_date: transactionDate || new Date().toISOString(),
-        };
-      });
-
-    setSettlementDetails(nextSettlementDetails);
-    setStep("main");
-  };
-
   // Final create action.
   const handleCreate = () => {
+    const totalSettled = settlementDetails.reduce(
+      (total, item) => total + (Number(item?.settled_amount) || 0),
+      0,
+    );
+
+    if (totalSettled > (Number(amount) || 0)) {
+      toast.error("Total settled amount cannot exceed receipt amount");
+      return;
+    }
+
     const headerPayload = buildHeaderPayloadRef.current
       ? buildHeaderPayloadRef.current()
       : {};
@@ -579,8 +581,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
         setAmount={setAmount}
         bills={bills}
         setBills={setBills}
-        onContinue={handleContinueFromSettlement}
-        onBack={() => setStep("main")}
+        onContinue={commitSettlementStep}
         isLoading={outstandingQuery.isLoading}
         isError={outstandingQuery.isError}
         error={outstandingQuery.error}

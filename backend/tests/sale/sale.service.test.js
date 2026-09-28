@@ -8,6 +8,7 @@ import ItemMonthlyBalance from "../../Model/ItemMonthlyBalanceSchema.js";
 import Outstanding from "../../Model/outstandingShcema.js";
 import PartyLedger from "../../Model/PartyLedger.js";
 import PartyMonthlyBalance from "../../Model/PartyMonthlyBalance.js";
+import PriceLevel from "../../Model/PriceLevel.js";
 import Product from "../../Model/ProductSchema.js";
 import { Godown } from "../../Model/ProductSubDetails.js";
 import Receipt from "../../Model/Receipt.js";
@@ -16,6 +17,7 @@ import VoucherSeries from "../../Model/VoucherSeriesSchema.js";
 import VoucherTimeline from "../../Model/VoucherTimeline.js";
 import { cancelSale, createSale, getSaleById, updateSale } from "../../services/sale.service.js";
 import { auditSale } from "../../services/saleAudit.service.js";
+import { getGlobalLsp, getPartyLsp } from "../../services/pricing.service.js";
 import { getVouchers } from "../../services/voucher.service.js";
 import { repairCashBankSales } from "../../utils/repairCashBankSales.js";
 import { createTestCompany } from "../helpers/company.js";
@@ -204,7 +206,7 @@ async function assertCashBankAccounting({
     cash_bank_name: party.partyName,
     cash_bank_type: party.partyType,
     party_name: party.partyName,
-    ledger_side: "credit",
+    direction: "in",
     status: "active",
     tally_status: "pending",
     created_by: context.user._id,
@@ -298,6 +300,61 @@ async function setupSaleContext() {
 }
 
 describe("createSale", () => {
+  it("snapshots the current header price level and each line's resolved price level", async () => {
+    const { context, party, godown, product, rowId, seriesId } = await setupSaleContext();
+    const lsp = await PriceLevel.create({
+      pricelevel: "LSP", pricelevel_id: "sale-service-lsp",
+      cmp_id: context.company._id, Primary_user_id: context.user._id,
+    });
+    const gsp = await PriceLevel.create({
+      pricelevel: "GSP", pricelevel_id: "sale-service-gsp",
+      cmp_id: context.company._id, Primary_user_id: context.user._id,
+    });
+    const line = {
+      itemId: String(product._id), godownId: String(godown._id),
+      godownStockRowId: String(rowId), selectedUnit: "NOS", actualQty: 1,
+      billedQty: 1, taxInclusive: false, discountType: "amount", discountValue: 0,
+    };
+
+    const sale = await createSale({
+      request_id: "sale-price-level-snapshots",
+      selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15",
+      partyId: String(party._id), priceLevelId: String(gsp._id),
+      items: [
+        { ...line, rate: 100, priceLevelId: String(lsp._id), initialPriceSource: "priceLevel" },
+        { ...line, rate: 80, priceLevelId: String(gsp._id), initialPriceSource: "priceLevel" },
+      ], additionalCharges: [],
+    }, { companyId: String(context.company._id), user: context.user });
+
+    expectId(sale.price_level_id, gsp._id);
+    expectId(sale.items[0].price_level_id, lsp._id);
+    expectId(sale.items[1].price_level_id, gsp._id);
+    expect(sale.items.map((item) => item.rate)).toEqual([100, 80]);
+  });
+
+  it("rejects an item price level outside the product owner and company scope", async () => {
+    const { context, party, godown, product, rowId, seriesId } = await setupSaleContext();
+    const foreignLevel = await PriceLevel.create({
+      pricelevel: "Foreign", pricelevel_id: "foreign-price-level",
+      cmp_id: new mongoose.Types.ObjectId(),
+      Primary_user_id: new mongoose.Types.ObjectId(),
+    });
+
+    await expect(createSale({
+      request_id: "sale-foreign-line-price-level",
+      selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15",
+      partyId: String(party._id), additionalCharges: [],
+      items: [{
+        itemId: String(product._id), godownId: String(godown._id),
+        godownStockRowId: String(rowId), selectedUnit: "NOS", actualQty: 1,
+        billedQty: 1, rate: 100, priceLevelId: String(foreignLevel._id),
+        taxInclusive: false, discountType: "amount", discountValue: 0,
+      }],
+    }, { companyId: String(context.company._id), user: context.user })).rejects.toThrow(
+      "priceLevelId does not belong",
+    );
+  });
+
   it("posts every Sale effect atomically and groups repeated stock-row movement", async () => {
     const { context, party, godown, product, rowId, seriesId, charge } =
       await setupSaleContext();
@@ -516,7 +573,7 @@ describe("createSale", () => {
         cash_bank_id: party._id,
         cash_bank_type: partyType,
         amount: sale.totals.final_amount,
-        ledger_side: "credit",
+        direction: "in",
         status: "active",
         tally_status: "pending",
       });
@@ -742,6 +799,44 @@ describe("createSale", () => {
 });
 
 describe("updateSale", () => {
+  it("preserves saved line price-level snapshots while the header keeps the current level", async () => {
+    const { context, party, godown, product, rowId, seriesId } = await setupSaleContext();
+    const lsp = await PriceLevel.create({
+      pricelevel: "LSP", pricelevel_id: "sale-edit-lsp",
+      cmp_id: context.company._id, Primary_user_id: context.user._id,
+    });
+    const gsp = await PriceLevel.create({
+      pricelevel: "GSP", pricelevel_id: "sale-edit-gsp",
+      cmp_id: context.company._id, Primary_user_id: context.user._id,
+    });
+    const line = {
+      itemId: String(product._id), godownId: String(godown._id),
+      godownStockRowId: String(rowId), selectedUnit: "NOS", actualQty: 1,
+      billedQty: 1, taxInclusive: false, discountType: "amount", discountValue: 0,
+    };
+    const created = await createSale({
+      request_id: "sale-edit-price-level-snapshot",
+      selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15",
+      partyId: String(party._id), priceLevelId: String(gsp._id),
+      items: [{ ...line, rate: 100, priceLevelId: String(lsp._id) }], additionalCharges: [],
+    }, { companyId: String(context.company._id), user: context.user });
+
+    const updated = await updateSale(created._id, {
+      transactionDate: "2026-07-15", partyId: String(party._id),
+      priceLevelId: String(gsp._id), additionalCharges: [],
+      items: [
+        { ...line, saleItemId: String(created.items[0]._id), rate: 100, priceLevelId: String(lsp._id) },
+        { ...line, rate: 80, priceLevelId: String(gsp._id) },
+      ],
+    }, { companyId: String(context.company._id), user: context.user });
+
+    expectId(updated.price_level_id, gsp._id);
+    expectId(updated.items[0].price_level_id, lsp._id);
+    expect(updated.items[0].rate).toBe(100);
+    expectId(updated.items[1].price_level_id, gsp._id);
+    expect(updated.items[1].rate).toBe(80);
+  });
+
   it("reposts a pending Sale in place while retaining its line, ledgers, outstanding and identity", async () => {
     const { context, party, godown, product, rowId, seriesId } = await setupSaleContext();
     const request = {
@@ -1087,7 +1182,7 @@ describe("updateSale", () => {
     await updateSale(sale._id, { transactionDate: "2026-07-15", partyId: String(cashParty._id), items: [{ ...line, _id: itemId }], additionalCharges: [] }, { companyId: String(context.company._id), user: context.user });
     expect(await PartyLedger.findOne({ voucher_id: sale._id, status: "active" }).lean()).toBeNull();
     expect(await PartyLedger.findById(firstPartyLedger._id).lean()).toMatchObject({ party_id: party._id, status: "cancelled" });
-    expect(await CashBankLedger.findOne({ voucher_id: sale._id, status: "active" }).lean()).toMatchObject({ cash_bank_id: cashParty._id, ledger_side: "credit" });
+    expect(await CashBankLedger.findOne({ voucher_id: sale._id, status: "active" }).lean()).toMatchObject({ cash_bank_id: cashParty._id, direction: "in" });
     expect(await Outstanding.findOne({ billId: String(sale._id), source: "sale" }).lean()).toMatchObject({ isCancelled: true, bill_amount: 0 });
     const firstCashLedger = await CashBankLedger.findOne({ voucher_id: sale._id, status: "active" }).lean();
 
@@ -1422,6 +1517,38 @@ describe("getSaleById", () => {
     });
     expect(fetched.items).toHaveLength(1);
     expect(inaccessible).toBeNull();
+  });
+});
+
+describe("Sale price history", () => {
+  it("uses an active Sale for LSP/GSP and excludes it after cancellation", async () => {
+    const { context, party, godown, product, rowId, seriesId } = await setupSaleContext();
+    await createSale({
+      request_id: "sale-price-history-active",
+      selectedSeries: { _id: String(seriesId) }, transactionDate: "2026-07-15",
+      partyId: String(party._id), additionalCharges: [],
+      items: [{
+        itemId: String(product._id), godownId: String(godown._id),
+        godownStockRowId: String(rowId), selectedUnit: "NOS", actualQty: 1,
+        billedQty: 1, rate: 123, taxInclusive: false,
+        discountType: "amount", discountValue: 0,
+      }],
+    }, { companyId: String(context.company._id), user: context.user });
+
+    const request = { user: { id: String(context.user._id), role: "admin" } };
+    await expect(getPartyLsp({
+      partyId: String(party._id), productId: String(product._id),
+    }, request)).resolves.toMatchObject({ price: 123 });
+    await expect(getGlobalLsp({ productId: String(product._id) }, request)).resolves.toMatchObject({ price: 123 });
+
+    await Sale.updateOne(
+      { cmp_id: context.company._id, party_id: party._id },
+      { $set: { status: "cancelled" } },
+    );
+
+    await expect(getPartyLsp({
+      partyId: String(party._id), productId: String(product._id),
+    }, request)).resolves.toMatchObject({ price: null });
   });
 });
 
