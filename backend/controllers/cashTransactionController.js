@@ -28,6 +28,7 @@ function normalizeSettlementDetails(settlement_details = []) {
 function buildCashTransactionPayload(body = {}, userId = null) {
   return {
     cmp_id: body.cmp_id,
+    request_id: String(body.request_id || body.requestId || "").trim(),
     voucher_type: body.voucher_type,
     series_id: body.series_id || body.selectedSeries?._id || null,
     voucher_number: body.voucher_number,
@@ -76,6 +77,7 @@ export async function createCashTransaction(req, res) {
 
     if (
       !payload.cmp_id ||
+      !payload.request_id ||
       !payload.voucher_type ||
       !payload.series_id ||
       !payload.date ||
@@ -106,10 +108,12 @@ export async function createCashTransaction(req, res) {
       });
     }
 
-    const cashTransaction = await createCashTransactionService(payload, req);
+    const { cashTransaction, isIdempotentReplay } =
+      await createCashTransactionService(payload, req);
 
-    return res.status(201).json({
+    return res.status(isIdempotentReplay ? 200 : 201).json({
       success: true,
+      idempotent_replay: isIdempotentReplay,
       data: {
         cashTransaction,
       },

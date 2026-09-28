@@ -1,5 +1,7 @@
 import mongoose from "mongoose";
 
+import { getCashBankVoucherModel } from "../utils/cashBankVoucherModel.js";
+
 import Company from "../Model/CompanySchema.js";
 import CashBankLedger from "../Model/CashBankLedger.js";
 import ItemLedger from "../Model/ItemLedger.js";
@@ -225,6 +227,7 @@ function buildSaleCashBankLedger({ sale, party, amount, userId }) {
   return {
     cmp_id: sale.cmp_id,
     voucher_type: "sale",
+    voucher_model: getCashBankVoucherModel("sale"),
     voucher_id: sale._id,
     voucher_number: sale.voucher_number,
     date: sale.date,

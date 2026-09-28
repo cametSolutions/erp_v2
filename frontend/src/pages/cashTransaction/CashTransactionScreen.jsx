@@ -421,6 +421,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
   const [partySheetOpen, setPartySheetOpen] = useState(false);
   const [cashBankSheetOpen, setCashBankSheetOpen] = useState(false);
   const {
+    requestId,
     transactionDate,
     setTransactionDate,
     selectedSeries,
@@ -557,6 +558,7 @@ export default function CashTransactionScreen({ voucher_type = "receipt" }) {
       : {};
     const payload = cashTransactionService.buildCreateCashTransactionPayload({
       cmp_id,
+      requestId,
       voucher_type,
       party,
       cashBank,

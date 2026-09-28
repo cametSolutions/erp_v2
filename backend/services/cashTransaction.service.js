@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import mongoose from "mongoose";
 
 import CashBankLedger from "../Model/CashBankLedger.js";
@@ -17,9 +18,7 @@ import {
   buildPartyLedgerDocument,
 } from "./cashTransactionDocument.service.js";
 import {
-  assertTransactionNotAlreadyCancelled,
   getCancelledTransactionStatus,
-  markTransactionCancelled,
 } from "./transactionState.service.js";
 import { issueVoucherIdentity } from "./voucherIdentity.service.js";
 import {
@@ -49,9 +48,83 @@ function createHttpError(message, statusCode = 500) {
 
 const RECEIPT_INSTRUMENT_TYPES = ["cash", "cheque", "upi", "neft", "rtgs"];
 const BANK_INSTRUMENT_TYPES = ["cheque", "upi", "neft", "rtgs"];
+const MONEY_TOLERANCE = 0.000001;
 
 function normalizeType(value) {
   return String(value || "").trim().toLowerCase();
+}
+
+function sameId(left, right) {
+  return String(left || "") === String(right || "");
+}
+
+function sameAmount(left, right) {
+  return Math.abs(Number(left) - Number(right)) <= MONEY_TOLERANCE;
+}
+
+function normalizeFingerprintDate(value, fieldName) {
+  if (!value) return null;
+
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) {
+    throw createHttpError(`${fieldName} must be a valid date`, 400);
+  }
+
+  return date.toISOString();
+}
+
+// The fingerprint contains request-controlled accounting inputs only. Names and
+// settlement snapshots are excluded because the backend reloads them from DB.
+function buildReceiptRequestFingerprint(data) {
+  const settlements = (data.settlement_details || [])
+    .map((item) => ({
+      outstanding: String(item?.outstanding || "").toLowerCase(),
+      settled_amount: Number(item?.settled_amount),
+    }))
+    .sort((left, right) =>
+      `${left.outstanding}:${left.settled_amount}`.localeCompare(
+        `${right.outstanding}:${right.settled_amount}`,
+      ),
+    );
+
+  const normalizedRequest = {
+    cmp_id: String(data.cmp_id || ""),
+    voucher_type: normalizeType(data.voucher_type),
+    series_id: String(data.series_id || ""),
+    date: normalizeFingerprintDate(data.date, "Receipt date"),
+    party_id: String(data.party_id || ""),
+    cash_bank_id: String(data.cash_bank_id || ""),
+    cash_bank_type: normalizeType(data.cash_bank_type),
+    instrument_type: normalizeType(data.instrument_type || "cash"),
+    amount: Number(data.amount),
+    settlements,
+    narration: data.narration ? String(data.narration) : null,
+    cheque_number: data.cheque_number
+      ? String(data.cheque_number).trim()
+      : null,
+    cheque_date: normalizeFingerprintDate(data.cheque_date, "Cheque date"),
+    created_by: String(data.created_by || ""),
+  };
+
+  return createHash("sha256")
+    .update(JSON.stringify(normalizedRequest))
+    .digest("hex");
+}
+
+function assertMatchingIdempotentReceipt(receipt, requestFingerprint) {
+  if (receipt.request_fingerprint !== requestFingerprint) {
+    throw createHttpError(
+      "request_id has already been used for a different Receipt submission",
+      409,
+    );
+  }
+}
+
+function isRequestIdDuplicateKeyError(error) {
+  return (
+    error?.code === 11000 &&
+    (error?.keyPattern?.request_id || error?.keyValue?.request_id)
+  );
 }
 
 // Current Party documents use `party`; missing type is accepted only for
@@ -238,34 +311,26 @@ function resolveLedgerSides(voucher_type) {
 }
 
 // Updates per-party monthly debit/credit aggregate used in outstanding analytics.
-// `reverse=true` is used while cancelling transactions.
 async function updatePartyMonthlyBalance({
   cmp_id,
   party_id,
   date,
   amount,
-  voucher_type,
   session,
-  reverse = false,
 }) {
   const month_key = formatMonthKey(date);
-  const multiplier = reverse ? -1 : 1;
-  const total_debit = 0;
-  const total_credit = amount * multiplier;
 
-  const doc = await PartyMonthlyBalance.findOneAndUpdate(
+  await PartyMonthlyBalance.findOneAndUpdate(
     { cmp_id, party_id, month_key },
     {
       $setOnInsert: {
         cmp_id,
         party_id,
         month_key,
-        net_amount: 0,
       },
       $inc: {
-        total_debit,
-        total_credit,
-        transaction_count: 1 * multiplier,
+        total_credit: Number(amount),
+        transaction_count: 1,
       },
     },
     {
@@ -275,15 +340,46 @@ async function updatePartyMonthlyBalance({
       runValidators: true,
     },
   );
+}
 
-  const net_amount =
-    (Number(doc?.total_debit) || 0) - (Number(doc?.total_credit) || 0);
+// Cancellation must reverse an existing bucket. It must never upsert a new
+// negative bucket when the original monthly posting is missing or corrupted.
+async function reversePartyMonthlyBalance({
+  cmp_id,
+  party_id,
+  date,
+  amount,
+  session,
+}) {
+  const monthlyBalance = await PartyMonthlyBalance.findOne({
+    cmp_id,
+    party_id,
+    month_key: formatMonthKey(date),
+  }).session(session);
 
-  await PartyMonthlyBalance.updateOne(
-    { _id: doc._id },
-    { $set: { net_amount } },
-    { session },
-  );
+  if (!monthlyBalance) {
+    throw createHttpError(
+      "Expected PartyMonthlyBalance is missing; Receipt was not cancelled",
+      409,
+    );
+  }
+
+  const currentCredit = Number(monthlyBalance.total_credit) || 0;
+  const currentCount = Number(monthlyBalance.transaction_count) || 0;
+  const nextCredit = currentCredit - Number(amount);
+  const nextCount = currentCount - 1;
+
+  if (nextCredit < -MONEY_TOLERANCE || nextCount < 0) {
+    throw createHttpError(
+      "PartyMonthlyBalance cannot be reversed safely",
+      409,
+    );
+  }
+
+  monthlyBalance.total_credit =
+    Math.abs(nextCredit) <= MONEY_TOLERANCE ? 0 : nextCredit;
+  monthlyBalance.transaction_count = nextCount;
+  await monthlyBalance.save({ session });
 }
 
 // Creates outstanding row for advance amount (receipt amount not mapped to bill settlement).
@@ -340,52 +436,127 @@ async function createAdvanceReceiptOutstanding({
   );
 }
 
-// Zeroes advance-outstanding rows created for a receipt during cancellation.
+// Cancels the one historical advance row while preserving its original amount.
 async function cancelAdvanceReceiptOutstanding({
   cmp_id,
+  party_id,
   receipt_id,
+  advance_amount,
   session,
 }) {
-  await Outstanding.updateMany(
-    {
-      cmp_id,
-      billId: String(receipt_id),
-      source: "advance_receipt",
-    },
-    {
-      $set: {
-        bill_amount: 0,
-        bill_pending_amt: 0,
-      },
-    },
-    { session },
-  );
+  const advances = await Outstanding.find({
+    cmp_id,
+    billId: String(receipt_id),
+    source: "advance_receipt",
+  }).session(session);
+
+  if (Number(advance_amount) <= 0) {
+    if (advances.length > 0) {
+      throw createHttpError(
+        "Receipt advance relationship is inconsistent",
+        409,
+      );
+    }
+    return;
+  }
+
+  if (advances.length !== 1) {
+    throw createHttpError(
+      "Expected advance Outstanding is missing or duplicated",
+      409,
+    );
+  }
+
+  const advance = advances[0];
+  if (
+    advance.isCancelled ||
+    !sameId(advance.party_id, party_id) ||
+    advance.classification !== "cr" ||
+    !sameAmount(advance.bill_amount, advance_amount) ||
+    !sameAmount(advance.bill_pending_amt, -Number(advance_amount))
+  ) {
+    throw createHttpError(
+      "Advance Outstanding does not match the active Receipt credit",
+      409,
+    );
+  }
+
+  advance.bill_pending_amt = 0;
+  advance.isCancelled = true;
+  await advance.save({ session });
 }
 
 // Receipt creation service (transactional).
 // Performs:
-// 1) party, cash/bank, instrument and cheque validation
-// 2) settlement validation and authoritative Outstanding snapshots
-// 3) voucher identity issuance
-// 4) receipt insert
-// 5) party ledger + cash/bank ledger inserts
-// 6) outstanding adjustments for settled bills
-// 7) advance outstanding creation
-// 8) timeline entry creation
+// 1) idempotent replay/conflict detection
+// 2) party, cash/bank, instrument and cheque validation
+// 3) settlement validation and authoritative Outstanding snapshots
+// 4) voucher identity issuance
+// 5) receipt insert
+// 6) party ledger + cash/bank ledger inserts
+// 7) outstanding adjustments for settled bills
+// 8) advance outstanding creation
+// 9) timeline entry creation
 export async function createCashTransaction(data = {}, req) {
+  const requestId = String(data.request_id || "").trim();
+  if (!requestId || requestId.length > 128) {
+    throw createHttpError("A valid request_id is required", 400);
+  }
+
+  const requestFingerprint = buildReceiptRequestFingerprint(data);
+  const receiptData = {
+    ...data,
+    request_id: requestId,
+    request_fingerprint: requestFingerprint,
+  };
+  const existingReceipt = await Receipt.findOne({
+    cmp_id: receiptData.cmp_id,
+    request_id: requestId,
+  }).lean();
+
+  if (existingReceipt) {
+    assertMatchingIdempotentReceipt(existingReceipt, requestFingerprint);
+    return {
+      cashTransaction: existingReceipt,
+      isIdempotentReplay: true,
+    };
+  }
+
   const session = await mongoose.startSession();
 
   try {
     let createdCashTransaction = null;
+    let isIdempotentReplay = false;
 
     await session.withTransaction(async () => {
+      // withTransaction can rerun this callback after a transient conflict.
+      createdCashTransaction = null;
+      isIdempotentReplay = false;
+
+      const transactionExistingReceipt = await Receipt.findOne({
+        cmp_id: receiptData.cmp_id,
+        request_id: requestId,
+      })
+        .session(session)
+        .lean();
+
+      if (transactionExistingReceipt) {
+        assertMatchingIdempotentReceipt(
+          transactionExistingReceipt,
+          requestFingerprint,
+        );
+        createdCashTransaction = transactionExistingReceipt;
+        isIdempotentReplay = true;
+        return;
+      }
+
       const [party, cashBank] = await Promise.all([
-        Party.findOne({ _id: data.party_id, cmp_id: data.cmp_id })
+        Party.findOne({ _id: receiptData.party_id, cmp_id: receiptData.cmp_id })
           .session(session)
           .lean(),
         Party.findOne({
-          _id: data.cash_bank_id,
-          cmp_id: data.cmp_id,
+          _id: receiptData.cash_bank_id,
+          cmp_id: receiptData.cmp_id,
         })
           .session(session)
           .lean(),
@@ -407,7 +578,11 @@ export async function createCashTransaction(data = {}, req) {
         );
       }
 
-      const validatedData = buildValidatedReceiptData(data, party, cashBank);
+      const validatedData = buildValidatedReceiptData(
+        receiptData,
+        party,
+        cashBank,
+      );
       const date = new Date(validatedData.date);
       const submittedSettlements = validateSubmittedSettlements(
         validatedData.settlement_details,
@@ -473,7 +648,6 @@ export async function createCashTransaction(data = {}, req) {
         party_id: validatedData.party_id,
         date,
         amount: Number(validatedData.amount) || 0,
-        voucher_type: validatedData.voucher_type,
         session,
       });
 
@@ -518,14 +692,168 @@ export async function createCashTransaction(data = {}, req) {
       );
     });
 
-    return createdCashTransaction;
+    return {
+      cashTransaction: createdCashTransaction,
+      isIdempotentReplay,
+    };
+  } catch (error) {
+    // The unique index is the final guarantee when simultaneous transactions
+    // both begin before either can observe the other's Receipt.
+    if (isRequestIdDuplicateKeyError(error)) {
+      const committedReceipt = await Receipt.findOne({
+        cmp_id: receiptData.cmp_id,
+        request_id: requestId,
+      }).lean();
+
+      if (committedReceipt) {
+        assertMatchingIdempotentReceipt(
+          committedReceipt,
+          requestFingerprint,
+        );
+        return {
+          cashTransaction: committedReceipt,
+          isIdempotentReplay: true,
+        };
+      }
+    }
+
+    throw error;
   } finally {
     await session.endSession();
   }
 }
 
-// Receipt cancellation service (transactional).
-// Reverses accounting and outstanding impacts made during creation.
+async function validateReceiptLedgers(transaction, session) {
+  const [partyLedgers, cashBankLedgers] = await Promise.all([
+    PartyLedger.find({
+      voucher_id: transaction._id,
+      voucher_type: transaction.voucher_type,
+      status: "active",
+    }).session(session),
+    CashBankLedger.find({
+      voucher_id: transaction._id,
+      voucher_type: transaction.voucher_type,
+      status: "active",
+    }).session(session),
+  ]);
+
+  if (partyLedgers.length !== 1) {
+    throw createHttpError(
+      "Expected active PartyLedger is missing or duplicated",
+      409,
+    );
+  }
+  if (cashBankLedgers.length !== 1) {
+    throw createHttpError(
+      "Expected active CashBankLedger is missing or duplicated",
+      409,
+    );
+  }
+
+  const partyLedger = partyLedgers[0];
+  if (
+    !sameId(partyLedger.cmp_id, transaction.cmp_id) ||
+    !sameId(partyLedger.party_id, transaction.party_id) ||
+    !sameId(partyLedger.against_id, transaction.cash_bank_id) ||
+    partyLedger.ledger_side !== "credit" ||
+    !sameAmount(partyLedger.amount, transaction.amount)
+  ) {
+    throw createHttpError(
+      "PartyLedger does not match the original Receipt posting",
+      409,
+    );
+  }
+
+  const cashBankLedger = cashBankLedgers[0];
+  if (
+    !sameId(cashBankLedger.cmp_id, transaction.cmp_id) ||
+    !sameId(cashBankLedger.cash_bank_id, transaction.cash_bank_id) ||
+    !sameId(cashBankLedger.party_id, transaction.party_id) ||
+    cashBankLedger.cash_bank_type !== transaction.cash_bank_type ||
+    cashBankLedger.direction !== "in" ||
+    !sameAmount(cashBankLedger.amount, transaction.amount)
+  ) {
+    throw createHttpError(
+      "CashBankLedger does not match the original Receipt posting",
+      409,
+    );
+  }
+
+  return { partyLedger, cashBankLedger };
+}
+
+async function restoreReceiptSettlements(transaction, session) {
+  const restoredIds = new Set();
+
+  for (const item of transaction.settlement_details || []) {
+    const outstandingId = String(item?.outstanding || "");
+    const settledAmount = Number(item?.settled_amount);
+
+    if (
+      !mongoose.Types.ObjectId.isValid(outstandingId) ||
+      !Number.isFinite(settledAmount) ||
+      settledAmount <= 0 ||
+      restoredIds.has(outstandingId)
+    ) {
+      throw createHttpError(
+        "Receipt settlement history cannot be reversed safely",
+        409,
+      );
+    }
+    restoredIds.add(outstandingId);
+
+    const outstanding = await Outstanding.findOne({
+      _id: outstandingId,
+      cmp_id: transaction.cmp_id,
+      party_id: transaction.party_id,
+      isCancelled: false,
+    }).session(session);
+
+    if (!outstanding) {
+      throw createHttpError(
+        "Expected active Outstanding is missing for Receipt cancellation",
+        409,
+      );
+    }
+
+    const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
+    const expectedClassification =
+      currentPendingAmount < 0 ? "cr" : "dr";
+    if (outstanding.classification !== expectedClassification) {
+      throw createHttpError(
+        "Outstanding classification does not match its active balance",
+        409,
+      );
+    }
+
+    const restoredPendingAmount = currentPendingAmount + settledAmount;
+    if (
+      restoredPendingAmount - Number(outstanding.bill_amount) >
+      MONEY_TOLERANCE
+    ) {
+      throw createHttpError(
+        "Outstanding reversal would exceed its bill amount",
+        409,
+      );
+    }
+
+    // Add this Receipt's settlement to the current value instead of replacing
+    // it with a stale snapshot; later legitimate transactions stay intact.
+    outstanding.bill_pending_amt = restoredPendingAmount;
+    outstanding.classification = restoredPendingAmount < 0 ? "cr" : "dr";
+    if (
+      outstanding.source === "sale" &&
+      sameAmount(outstanding.bill_amount, 0) &&
+      sameAmount(restoredPendingAmount, 0)
+    ) {
+      outstanding.isCancelled = true;
+    }
+    await outstanding.save({ session });
+  }
+}
+
+// The conditional Receipt state update is the cancellation claim. Only one
+// concurrent request can proceed to reverse the accounting records.
 export async function cancelCashTransaction(id, data = {}, req) {
   const session = await mongoose.startSession();
 
@@ -533,125 +861,85 @@ export async function cancelCashTransaction(id, data = {}, req) {
     let updatedCashTransaction = null;
 
     await session.withTransaction(async () => {
-      const transaction = await Receipt.findOne(
-        applyTransactionCreatorScope(req, {
-          _id: id,
-          cmp_id: data.cmp_id,
-        }),
-      ).session(session);
+      const accessFilter = applyTransactionCreatorScope(req, {
+        _id: id,
+        cmp_id: data.cmp_id,
+      });
+      const visibleReceipt = await Receipt.findOne(accessFilter)
+        .session(session)
+        .lean();
 
-      if (!transaction) {
+      if (!visibleReceipt) {
         throw createHttpError("Cash transaction not found", 404);
       }
+      if (visibleReceipt.status === "cancelled") {
+        throw createHttpError("receipt is already cancelled", 400);
+      }
 
-      assertTransactionNotAlreadyCancelled("receipt", transaction.status);
-
-      markTransactionCancelled(transaction, "receipt");
-      transaction.cancelled_at = new Date();
-      transaction.cancelled_by = data.cancelled_by || null;
-      transaction.cancellation_reason = data.cancellation_reason || null;
-      transaction.updated_by = data.cancelled_by || data.updated_by || null;
-
-      await transaction.save({ session });
-
-      await PartyLedger.updateMany(
-        {
-          voucher_id: transaction._id,
-          voucher_type: transaction.voucher_type,
-        },
+      const transaction = await Receipt.findOneAndUpdate(
+        { ...accessFilter, status: "active" },
         {
           $set: {
-            status: getCancelledTransactionStatus(transaction.voucher_type),
+            status: getCancelledTransactionStatus("receipt"),
+            cancelled_at: new Date(),
+            cancelled_by: data.cancelled_by || null,
+            cancellation_reason: data.cancellation_reason || null,
+            updated_by: data.cancelled_by || data.updated_by || null,
           },
         },
-        { session },
+        { returnDocument: "after", session, runValidators: true },
       );
 
-      await updatePartyMonthlyBalance({
+      if (!transaction) {
+        throw createHttpError(
+          "Receipt is no longer available for cancellation",
+          409,
+        );
+      }
+
+      const { partyLedger, cashBankLedger } =
+        await validateReceiptLedgers(transaction, session);
+
+      await reversePartyMonthlyBalance({
         cmp_id: transaction.cmp_id,
         party_id: transaction.party_id,
         date: transaction.date,
         amount: Number(transaction.amount) || 0,
-        voucher_type: transaction.voucher_type,
         session,
-        reverse: true,
       });
 
-      await CashBankLedger.updateMany(
-        {
-          voucher_id: transaction._id,
-          voucher_type: transaction.voucher_type,
-        },
-        {
-          $set: {
-            status: getCancelledTransactionStatus(transaction.voucher_type),
-          },
-        },
-        { session },
-      );
-
-      for (const item of transaction.settlement_details || []) {
-        if (!item?.outstanding || !item?.settled_amount) {
-          continue;
-        }
-
-        const outstanding = await Outstanding.findOne({
-          _id: item.outstanding,
-          cmp_id: transaction.cmp_id,
-          party_id: transaction.party_id,
-          isCancelled: false,
-        }).session(session);
-
-        if (!outstanding) {
-          throw createHttpError(
-            "Outstanding bill not found for the selected company and party",
-            400,
-          );
-        }
-
-        const settledAmount = Number(item.settled_amount) || 0;
-        if (settledAmount <= 0) {
-          throw createHttpError(
-            "Settled amount must be greater than zero",
-            400,
-          );
-        }
-
-        const currentPendingAmount = Number(outstanding.bill_pending_amt) || 0;
-        // Add back settled amount to pending because receipt is being reversed.
-        outstanding.bill_pending_amt = currentPendingAmount + settledAmount;
-        outstanding.classification =
-          Number(outstanding.bill_pending_amt) < 0 ? "cr" : "dr";
-        // A cancelled Sale keeps this row active only while a Receipt still
-        // references it. Once that final Receipt is cancelled, close it.
-        if (
-          outstanding.source === "sale" &&
-          Number(outstanding.bill_amount) === 0 &&
-          Number(outstanding.bill_pending_amt) === 0
-        ) {
-          outstanding.isCancelled = true;
-        }
-        await outstanding.save({ session });
-      }
-
+      await restoreReceiptSettlements(transaction, session);
       await cancelAdvanceReceiptOutstanding({
         cmp_id: transaction.cmp_id,
+        party_id: transaction.party_id,
         receipt_id: transaction._id,
+        advance_amount: transaction.advance_amount,
         session,
       });
 
-      updatedCashTransaction = transaction.toObject();
+      partyLedger.status = getCancelledTransactionStatus("receipt");
+      cashBankLedger.status = getCancelledTransactionStatus("receipt");
+      await partyLedger.save({ session });
+      await cashBankLedger.save({ session });
 
-      await updateVoucherTimelineEntry(
+      const timeline = await updateVoucherTimelineEntry(
         {
           voucher_id: transaction._id,
           voucher_type: transaction.voucher_type,
         },
         buildVoucherTimelineUpdatePayload(transaction, {
-          status: transaction.status || null,
+          status: transaction.status,
         }),
         session,
       );
+      if (!timeline) {
+        throw createHttpError(
+          "Expected VoucherTimeline entry is missing",
+          409,
+        );
+      }
+
+      updatedCashTransaction = transaction.toObject();
     });
 
     return updatedCashTransaction;

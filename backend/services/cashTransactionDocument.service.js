@@ -1,4 +1,5 @@
 import { getInitialTransactionStatus } from "./transactionState.service.js";
+import { getCashBankVoucherModel } from "../utils/cashBankVoucherModel.js";
 
 // Builds the stored settlement snapshot from the current Outstanding record.
 // Client-provided bill labels and balances are intentionally not used here.
@@ -33,6 +34,8 @@ export function buildCashTransactionDocument(
 ) {
   return {
     cmp_id: data.cmp_id,
+    request_id: data.request_id,
+    request_fingerprint: data.request_fingerprint,
     voucher_type: data.voucher_type,
     series_id: voucherIdentity.series?._id || data.series_id || null,
     series_name: voucherIdentity.series?.seriesName || null,
@@ -77,7 +80,6 @@ export function buildPartyLedgerDocument(
     amount: Number(data.amount) || 0,
     ledger_side,
     against_id: data.cash_bank_id,
-    narration: data.narration || null,
     status: getInitialTransactionStatus(data.voucher_type),
     created_by: data.created_by || null,
   };
@@ -94,6 +96,7 @@ export function buildCashBankLedgerDocument(
   return {
     cmp_id: data.cmp_id,
     voucher_type: data.voucher_type,
+    voucher_model: getCashBankVoucherModel(data.voucher_type),
     voucher_id,
     voucher_number,
     date,

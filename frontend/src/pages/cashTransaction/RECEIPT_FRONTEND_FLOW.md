@@ -16,6 +16,7 @@ This document explains how receipt creation and receipt detail work in the front
 - `frontend/src/hooks/useCashTransactionDraft.js`
   - Stores all in-progress receipt data in localStorage, scoped by company and voucher type.
   - Fields include:
+    - one `requestId` for the logical Receipt submission
     - transaction date + selected series
     - party and cash/bank account
     - instrument type
@@ -76,6 +77,7 @@ Backend settlement rules:
 
 - `cashTransactionService.buildCreateCashTransactionPayload(...)` builds final API body.
 - Includes:
+  - the draft's stable `request_id`
   - header payload from `TransactionHeader`
   - party + cash/bank ids/names
   - instrument fields
@@ -93,6 +95,16 @@ Create mutation:
     - party queries
   - shows success/error toast
 
+Idempotent retry behaviour:
+
+- A new draft receives one unique request id.
+- The request id is stored with the company-scoped draft.
+- A network failure does not replace it, so pressing Create again retries the
+  same logical request.
+- The id changes only when the draft is cleared for a genuinely new Receipt.
+- The backend returns the existing Receipt for an identical retry and returns
+  `409` if the same id is reused with different accounting inputs.
+
 ## 6) Receipt Detail Flow
 
 - `ReceiptDetailView` displays:
@@ -109,7 +121,36 @@ Cancel mutation effects:
 - invalidates transaction/outstanding/party lists
 - invalidates voucher summary totals
 
-## 7) Key Guard Rules
+Backend cancellation safety:
+
+- An atomic active-to-cancelled Receipt update claims the cancellation.
+- Exactly one active matching PartyLedger and CashBankLedger must exist.
+- The existing PartyMonthlyBalance must be large enough to reverse safely;
+  cancellation never creates a replacement monthly bucket.
+- Each settlement amount is added back to the current Outstanding balance, so
+  later legitimate settlement activity is preserved.
+- An advance keeps its historical amount, receives a zero pending balance and
+  is marked `isCancelled: true`.
+- Any validation or write failure rolls the complete cancellation transaction
+  back.
+
+## 7) Shared Schema and Cash/Bank Voucher References
+
+- `backend/schemas/CashTransactionSchema.js` contains the reusable Receipt and
+  Payment document structure but does not register a Mongoose model.
+- `Receipt` registers the `receipts` collection and `Payment` structurally
+  registers the separate `payments` collection.
+- Receipt CashBankLedger rows store both:
+  - `voucher_type: "receipt"` for business/API filtering
+  - `voucher_model: "Receipt"` for Mongoose dynamic population
+- Sale rows use `sale` / `Sale`; the structural Payment mapping is
+  `payment` / `Payment`.
+- `voucher_id` uses `refPath: "voucher_model"`.
+- Existing ledger rows are handled by the explicit dry-run-first
+  `migrateCashBankLedgerVoucherModels.js` utility. It never guesses mappings
+  for unknown voucher types.
+
+## 8) Key Guard Rules
 
 - Create disabled when:
   - no company
@@ -127,7 +168,7 @@ Cancel mutation effects:
   - cheque, UPI, NEFT, and RTGS require a Bank master
   - cheque requires a non-empty number and valid date
 
-## 8) Quick Example Trace
+## 9) Quick Example Trace
 
 1. User opens Create Receipt.
 2. Selects party.

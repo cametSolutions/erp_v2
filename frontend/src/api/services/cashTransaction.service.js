@@ -12,6 +12,7 @@ function normalizeOptionalVoucherPart(value) {
 // Supports mixed key styles expected by backend mappers.
 export function buildCreateCashTransactionPayload({
   cmp_id,
+  requestId,
   voucher_type,
   party,
   cashBank,
@@ -33,6 +34,7 @@ export function buildCreateCashTransactionPayload({
     ...sanitizedHeaderPayload,
     cmp_id,
     cmpId: cmp_id,
+    request_id: requestId,
     voucher_type,
     party_id: party?._id || party?.id || null,
     party_name: party?.partyName || party?.name || "",
