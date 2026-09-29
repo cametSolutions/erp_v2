@@ -16,6 +16,7 @@ export const getOutstandingByParty = async (req, res) => {
       classification = "",
       isCancelled,
       positiveOnly = "",
+      all = "",
     } = req.query;
     const cmp_id = req.companyId;
 
@@ -30,7 +31,8 @@ export const getOutstandingByParty = async (req, res) => {
 
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 20;
-    const skip = (pageNum - 1) * limitNum;
+    const fetchAll = String(all).toLowerCase() === "true";
+    const skip = fetchAll ? 0 : (pageNum - 1) * limitNum;
 
     const baseFilter = {
       Primary_user_id: owner,
@@ -48,28 +50,34 @@ export const getOutstandingByParty = async (req, res) => {
       baseFilter.bill_pending_amt = { $gt: 0 };
     }
 
+    const itemsQuery = Outstanding.find(
+      baseFilter,
+      {
+        bill_no: 1,
+        bill_date: 1,
+        bill_amount: 1,
+        bill_pending_amt: 1,
+        classification: 1,
+        billId: 1,
+        source: 1,
+        _id: 1,
+      },
+    )
+      .sort({ bill_date: 1 })
+      .lean();
+
+    // Existing callers keep their pagination limit. Receipt allocation opts
+    // into this explicit read-only mode to calculate from a complete bill set.
+    if (!fetchAll) {
+      itemsQuery.skip(skip).limit(limitNum);
+    }
+
     const [items, total] = await Promise.all([
-      Outstanding.find(
-        baseFilter,
-        {
-          bill_no: 1,
-          bill_date: 1,
-          bill_amount: 1,
-          bill_pending_amt: 1,
-          classification: 1,
-          billId: 1,
-          source: 1,
-          _id: 1,
-        },
-      )
-        .sort({ bill_date: 1 })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
+      itemsQuery,
       Outstanding.countDocuments(baseFilter),
     ]);
 
-    const hasMore = skip + items.length < total;
+    const hasMore = !fetchAll && skip + items.length < total;
 
     return res.json({
       items,

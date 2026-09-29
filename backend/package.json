@@ -7,6 +7,8 @@
     "start": "nodemon server.js",
     "backfill:voucher-timeline": "node utils/backfillVoucherTimeline.js",
     "backfill:product-godown-list-ids": "node utils/backfillProductGodownListIds.js",
+    "migrate:product-master-index": "node utils/migrateProductMasterLookupIndex.js",
+    "migrate:product-source": "node utils/backfillProductSource.js",
     "repair-cash-bank-sales": "node utils/repairCashBankSales.js",
     "migrate-cash-bank-ledger-sides": "node utils/migrateCashBankLedgerSides.js",
     "migrate-cash-bank-voucher-models": "node utils/migrateCashBankLedgerVoucherModels.js",

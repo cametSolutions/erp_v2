@@ -1,7 +1,12 @@
 import mongoose from "mongoose";
 
 import Product from "../Model/ProductSchema.js";
+import ItemLedger from "../Model/ItemLedger.js";
+import Sale from "../Model/Sale.js";
+import SaleOrder from "../Model/SaleOrder.js";
 import { Brand, Category, Godown, Subcategory } from "../Model/ProductSubDetails.js";
+import { ManualProductInputError, prepareManualProductPayload } from "../services/manualProduct.service.js";
+import { resolveAdminOwnerId } from "../utils/companyScope.js";
 import { resolveCompanyScope } from "../utils/companyScope.js";
 
 const PRODUCT_POPULATE = [
@@ -9,6 +14,30 @@ const PRODUCT_POPULATE = [
   { path: "category", select: "category category_id" },
   { path: "sub_category", select: "subcategory subcategory_id" },
 ];
+
+function hasDifferentInventoryStructure(product, payload) {
+  if (Number(product.saleable_stock || 0) !== Number(payload.saleable_stock || 0)) return true;
+  if (product.batchEnabled !== payload.batchEnabled || product.gdnEnabled !== payload.gdnEnabled) return true;
+  if (product.base_unit !== payload.base_unit || product.alt_unit !== payload.alt_unit) return true;
+  if (Number(product.base_denominator || 0) !== Number(payload.base_denominator || 0)) return true;
+  if (Number(product.alt_conversion || 0) !== Number(payload.alt_conversion || 0)) return true;
+  const currentRows = product.GodownList || [];
+  const nextRows = payload.GodownList || [];
+  if (currentRows.length !== nextRows.length) return true;
+  return nextRows.some((row) => {
+    const current = currentRows.find((item) => String(item._id) === String(row._id));
+    return !current || String(current.godown) !== String(row.godown) || String(current.batch || "") !== String(row.batch || "") || Number(current.balance_stock || 0) !== Number(row.balance_stock || 0);
+  });
+}
+
+async function hasProductHistory(productId, cmp_id) {
+  const [ledger, sale, saleOrder] = await Promise.all([
+    ItemLedger.exists({ cmp_id, item_id: productId }),
+    Sale.exists({ cmp_id, "items.item_id": productId }),
+    SaleOrder.exists({ cmp_id, "items.item_id": productId }),
+  ]);
+  return Boolean(ledger || sale || saleOrder);
+}
 
 /**
  * Adds the Godown display name without changing the stored Godown ObjectId.
@@ -87,6 +116,7 @@ async function listProductMasters(Model, fieldName, req, res) {
     const filter = {
       Primary_user_id: owner,
       cmp_id,
+      is_deleted: { $ne: true },
     };
 
     const trimmedSearch = String(search || "").trim();
@@ -230,6 +260,7 @@ export const getProductById = async (req, res) => {
       _id: id,
       Primary_user_id: owner,
       cmp_id,
+      is_deleted: { $ne: true },
     })
       .populate(PRODUCT_POPULATE)
       .lean();
@@ -250,6 +281,90 @@ export const getProductById = async (req, res) => {
   }
 };
 
+export const createManualProduct = async (req, res) => {
+  try {
+    const scope = {
+      cmp_id: req.companyId,
+      Primary_user_id: resolveAdminOwnerId(req),
+    };
+    const payload = await prepareManualProductPayload(req.body, scope);
+    const product = await Product.create(payload);
+    const populatedProduct = await Product.findById(product._id)
+      .populate(PRODUCT_POPULATE)
+      .lean();
+    const [enrichedProduct] = await enrichGodownNames([populatedProduct], {
+      owner: scope.Primary_user_id,
+      cmp_id: scope.cmp_id,
+    });
+
+    return res.status(201).json(enrichedProduct);
+  } catch (error) {
+    if (error instanceof ManualProductInputError || error?.name === "ValidationError") {
+      return res.status(error.statusCode || 400).json({ message: error.message });
+    }
+    if (error?.code === 11000) {
+      return res.status(409).json({ message: "A product with this identifier already exists" });
+    }
+    console.error("createManualProduct error:", error);
+    return res.status(500).json({ message: "Failed to create product" });
+  }
+};
+
+export const updateManualProduct = async (req, res) => {
+  try {
+    const scope = { cmp_id: req.companyId, Primary_user_id: resolveAdminOwnerId(req) };
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product ID" });
+    }
+    const product = await Product.findOne({ _id: req.params.id, ...scope, product_source: "manual", is_deleted: { $ne: true } });
+    if (!product) return res.status(404).json({ message: "Manual active product not found" });
+
+    const payload = await prepareManualProductPayload(req.body, scope, product);
+    if (await hasProductHistory(product._id, scope.cmp_id)) {
+      if (hasDifferentInventoryStructure(product, payload)) {
+        return res.status(409).json({ message: "Inventory fields cannot be changed after transactions. Use a stock-adjustment workflow." });
+      }
+    }
+
+    product.set(payload);
+    await product.save();
+    const populatedProduct = await Product.findById(product._id).populate(PRODUCT_POPULATE).lean();
+    const [enrichedProduct] = await enrichGodownNames([populatedProduct], { owner: scope.Primary_user_id, cmp_id: scope.cmp_id });
+    return res.json(enrichedProduct);
+  } catch (error) {
+    if (error instanceof ManualProductInputError || error?.name === "ValidationError") {
+      return res.status(error.statusCode || 400).json({ message: error.message });
+    }
+    if (error?.code === 11000) return res.status(409).json({ message: "A product with this identifier already exists" });
+    console.error("updateManualProduct error:", error);
+    return res.status(500).json({ message: "Failed to update product" });
+  }
+};
+
+export const deleteManualProduct = async (req, res) => {
+  try {
+    const scope = { cmp_id: req.companyId, Primary_user_id: resolveAdminOwnerId(req) };
+    if (!mongoose.Types.ObjectId.isValid(req.params.id)) {
+      return res.status(400).json({ message: "Invalid product ID" });
+    }
+    const product = await Product.findOne({ _id: req.params.id, ...scope, product_source: "manual", is_deleted: { $ne: true } });
+    if (!product) return res.status(404).json({ message: "Manual active product not found" });
+    const hasStock = Number(product.saleable_stock || 0) !== 0 || (product.GodownList || []).some((row) => Number(row.balance_stock || 0) !== 0);
+    if (hasStock) return res.status(409).json({ message: "Products with remaining stock cannot be deleted" });
+    if (await hasProductHistory(product._id, scope.cmp_id)) {
+      return res.status(409).json({ message: "Products with transaction history cannot be deleted" });
+    }
+    product.is_deleted = true;
+    product.deleted_at = new Date();
+    product.deleted_by = scope.Primary_user_id;
+    await product.save();
+    return res.json({ message: "Product archived" });
+  } catch (error) {
+    console.error("deleteManualProduct error:", error);
+    return res.status(500).json({ message: "Failed to delete product" });
+  }
+};
+
 export const listBrands = async (req, res) =>
   listProductMasters(Brand, "brand", req, res);
 
@@ -258,3 +373,6 @@ export const listCategories = async (req, res) =>
 
 export const listSubcategories = async (req, res) =>
   listProductMasters(Subcategory, "subcategory", req, res);
+
+export const listGodowns = async (req, res) =>
+  listProductMasters(Godown, "godown", req, res);

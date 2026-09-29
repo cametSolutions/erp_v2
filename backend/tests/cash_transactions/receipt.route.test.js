@@ -453,6 +453,53 @@ describe("POST /api/cash-transactions - Auth & middleware", () => {
   });
 });
 
+describe("GET /api/outstanding/party/:partyId - Receipt complete list", () => {
+  it("returns every eligible pending debit bill only when all=true is requested", async () => {
+    const bills = [];
+    for (let index = 1; index <= 21; index += 1) {
+      bills.push(
+        await createOutstandingForParty({
+          billNo: `INV-RECEIPT-ALL-${index}`,
+          billAmount: 50,
+          pendingAmount: 50,
+        }),
+      );
+    }
+
+    const paged = await request(app)
+      .get(`/api/outstanding/party/${baseContext.party._id}`)
+      .set("Authorization", `Bearer ${baseContext.token}`)
+      .query({
+        cmp_id: String(baseContext.companyId),
+        classification: "dr",
+        isCancelled: false,
+        positiveOnly: true,
+        limit: 20,
+      });
+    const complete = await request(app)
+      .get(`/api/outstanding/party/${baseContext.party._id}`)
+      .set("Authorization", `Bearer ${baseContext.token}`)
+      .query({
+        cmp_id: String(baseContext.companyId),
+        classification: "dr",
+        isCancelled: false,
+        positiveOnly: true,
+        all: true,
+      });
+
+    expect(paged.status).toBe(200);
+    expect(paged.body.items).toHaveLength(20);
+    expect(paged.body.hasMore).toBe(true);
+    expect(complete.status).toBe(200);
+    expect(complete.body.items).toHaveLength(21);
+    expect(complete.body.total).toBe(21);
+    expect(complete.body.hasMore).toBe(false);
+    expect(complete.body.items.map((bill) => bill._id)).toEqual(
+      expect.arrayContaining(bills.map((bill) => String(bill._id))),
+    );
+  });
+});
+
 describe("POST /api/cash-transactions - Validation failures", () => {
   it("Missing series_id -> 400 required fields error", async () => {
     const payload = buildValidReceiptPayload(
