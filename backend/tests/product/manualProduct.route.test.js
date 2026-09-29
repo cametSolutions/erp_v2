@@ -65,7 +65,7 @@ describe("Manual Product creation", () => {
     expect(response.body.GodownList).toHaveLength(1);
     expect(response.body.GodownList[0].balance_stock).toBe(0);
     expect(response.body.GodownList[0].is_placeholder).toBe(true);
-    expect(response.body.product_master_id).toBeUndefined();
+    expect(response.body.product_master_id).toBe(response.body._id);
 
     const saleList = await request(app)
       .get(`/api/product?cmp_id=${companyId}&for_sale=true`)
@@ -121,7 +121,7 @@ describe("Manual Product creation", () => {
     expect(response.body.priceLevels).toHaveLength(2);
   });
 
-  it("allows multiple manual products without Tally product IDs and retains tax snapshots", async () => {
+  it("assigns each manual product its MongoDB ID as the master ID and retains tax snapshots", async () => {
     const { token, companyId, classification } = await createContext();
     const first = await request(app).post(`/api/product?cmp_id=${companyId}`).set("Authorization", `Bearer ${token}`).send(productPayload());
     await TaxClassification.updateOne({ _id: classification._id }, { $set: { "on_value.igst_rate": 12, "on_value.cgst_rate": 6, "on_value.sgst_utgst_rate": 6 } });
@@ -131,7 +131,9 @@ describe("Manual Product creation", () => {
     expect(second.status).toBe(201);
     expect(first.body.igst).toBe(18);
     expect(second.body.igst).toBe(12);
-    expect(await Product.countDocuments({ cmp_id: companyId, product_master_id: { $exists: false } })).toBe(2);
+    expect(first.body.product_master_id).toBe(first.body._id);
+    expect(second.body.product_master_id).toBe(second.body._id);
+    expect(await Product.countDocuments({ cmp_id: companyId, product_master_id: { $exists: true } })).toBe(2);
   });
 
   it("rejects duplicate names and HSN classifications that are not On Value", async () => {

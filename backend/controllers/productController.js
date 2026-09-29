@@ -288,7 +288,12 @@ export const createManualProduct = async (req, res) => {
       Primary_user_id: resolveAdminOwnerId(req),
     };
     const payload = await prepareManualProductPayload(req.body, scope);
-    const product = await Product.create(payload);
+    // Mongoose assigns the document ObjectId when the model is instantiated.
+    // Manual products use that stable identifier as their master ID too, while
+    // Tally imports retain the external master IDs supplied by Tally.
+    const product = new Product(payload);
+    product.product_master_id = String(product._id);
+    await product.save();
     const populatedProduct = await Product.findById(product._id)
       .populate(PRODUCT_POPULATE)
       .lean();
@@ -303,6 +308,8 @@ export const createManualProduct = async (req, res) => {
       return res.status(error.statusCode || 400).json({ message: error.message });
     }
     if (error?.code === 11000) {
+      console.log(error);
+      
       return res.status(409).json({ message: "A product with this identifier already exists" });
     }
     console.error("createManualProduct error:", error);
