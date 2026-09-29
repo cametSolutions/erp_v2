@@ -29,6 +29,7 @@ import printConfigRoutes from "./routes/printConfig/printConfigRoutes.js";
 import companySettingsRoutes from "./routes/companySettings/companySettingsRoutes.js";
 import integrationRoutes from "./routes/admin/integrationRoutes.js";
 import devRoute from "./routes/dev/devRoute.js";
+import taxClassificationRoute from "./routes/taxClassification/taxClassificationRoute.js";
 
 const app = express();
 
@@ -116,6 +117,7 @@ app.use("/api/tally", tallyDataRoute);
 app.use("/api/print-config", protect, printConfigRoutes);
 app.use("/api/company-settings", companySettingsRoutes);
 app.use("/api/admin/integrations", integrationRoutes);
+app.use("/api/tax-classifications", taxClassificationRoute);
 
 // Destructive development utilities are not registered outside development.
 if (process.env.NODE_ENV === "development") {

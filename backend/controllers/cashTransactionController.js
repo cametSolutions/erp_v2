@@ -4,6 +4,7 @@ import {
   cancelCashTransaction as cancelCashTransactionService,
   createCashTransaction as createCashTransactionService,
   getCashBankLedgerBalances as getCashBankLedgerBalancesService,
+  getCashBankLedgerTransactions as getCashBankLedgerTransactionsService,
   getCashTransactionById as getCashTransactionByIdService,
   getCashTransactions as getCashTransactionsService,
 } from "../services/cashTransaction.service.js";
@@ -13,18 +14,12 @@ function firstDefined(...values) {
   return values.find((value) => value !== undefined);
 }
 
-// Normalizes settlement rows from request into numeric-safe shape.
+// Receipt settlement requests contain only the record id and requested amount.
+// All bill snapshot fields are loaded from Outstanding in the service layer.
 function normalizeSettlementDetails(settlement_details = []) {
   return settlement_details.map((item) => ({
     outstanding: item?.outstanding,
-    outstanding_number: item?.outstanding_number,
-    outstanding_date: item?.outstanding_date,
-    outstanding_type: item?.outstanding_type,
-    previous_outstanding_amount: Number(item?.previous_outstanding_amount) || 0,
-    settled_amount: Number(item?.settled_amount) || 0,
-    remaining_outstanding_amount:
-      Number(item?.remaining_outstanding_amount) || 0,
-    settlement_date: item?.settlement_date || null,
+    settled_amount: Number(item?.settled_amount),
   }));
 }
 
@@ -33,6 +28,7 @@ function normalizeSettlementDetails(settlement_details = []) {
 function buildCashTransactionPayload(body = {}, userId = null) {
   return {
     cmp_id: body.cmp_id,
+    request_id: String(body.request_id || body.requestId || "").trim(),
     voucher_type: body.voucher_type,
     series_id: body.series_id || body.selectedSeries?._id || null,
     voucher_number: body.voucher_number,
@@ -81,6 +77,7 @@ export async function createCashTransaction(req, res) {
 
     if (
       !payload.cmp_id ||
+      !payload.request_id ||
       !payload.voucher_type ||
       !payload.series_id ||
       !payload.date ||
@@ -111,10 +108,12 @@ export async function createCashTransaction(req, res) {
       });
     }
 
-    const cashTransaction = await createCashTransactionService(payload, req);
+    const { cashTransaction, isIdempotentReplay } =
+      await createCashTransactionService(payload, req);
 
-    return res.status(201).json({
+    return res.status(isIdempotentReplay ? 200 : 201).json({
       success: true,
+      idempotent_replay: isIdempotentReplay,
       data: {
         cashTransaction,
       },
@@ -295,10 +294,40 @@ export async function getCashBankLedgerBalances(req, res) {
   }
 }
 
+export async function getCashBankLedgerTransactions(req, res) {
+  try {
+    const { cashBankId } = req.params;
+    const { page, limit, from, to, voucher_type, direction } = req.query || {};
+    const cmp_id = req.companyId;
+
+    if (!mongoose.Types.ObjectId.isValid(cashBankId)) {
+      return res.status(400).json({ success: false, message: "Invalid cash/bank account id" });
+    }
+    if (direction && !["in", "out"].includes(String(direction))) {
+      return res.status(400).json({ success: false, message: "direction must be in or out" });
+    }
+    if (voucher_type && !["sale", "receipt", "payment"].includes(String(voucher_type))) {
+      return res.status(400).json({ success: false, message: "Invalid voucher_type" });
+    }
+
+    const history = await getCashBankLedgerTransactionsService(
+      { cmp_id, cash_bank_id: cashBankId, page, limit, from, to, voucher_type, direction },
+      req,
+    );
+    return res.status(200).json({ success: true, data: history });
+  } catch (error) {
+    return res.status(error.statusCode || 500).json({
+      success: false,
+      message: error.message || "Failed to fetch cash/bank transactions",
+    });
+  }
+}
+
 export default {
   createCashTransaction,
   cancelCashTransaction,
   getCashTransactionById,
   getCashTransactions,
   getCashBankLedgerBalances,
+  getCashBankLedgerTransactions,
 };

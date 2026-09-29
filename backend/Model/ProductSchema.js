@@ -180,6 +180,20 @@ const productSchema = new Schema(
       trim: true,
     },
 
+    // This field is only written by server-side creation/import flows. Legacy
+    // records deliberately remain unclassified until an administrator migrates
+    // them, so a Tally item cannot become manually editable by accident.
+    product_source: {
+      type: String,
+      enum: ["manual", "tally", "legacy"],
+      default: "legacy",
+      immutable: true,
+      index: true,
+    },
+    is_deleted: { type: Boolean, default: false, index: true },
+    deleted_at: { type: Date, default: null },
+    deleted_by: { type: Schema.Types.ObjectId, ref: "User", default: null },
+
     batchEnabled: {
       type: Boolean,
       default: false,
@@ -225,7 +239,13 @@ productSchema.pre("validate", function validateUnitContract() {
 // Indexes
 productSchema.index(
   { cmp_id: 1, Primary_user_id: 1, product_master_id: 1 },
-  { unique: true, background: true, name: "product_master_lookup_idx" }
+  {
+    unique: true,
+    background: true,
+    name: "product_master_lookup_idx",
+    // Tally IDs must remain unique; documents without one are manual products.
+    partialFilterExpression: { product_master_id: { $type: "string" } },
+  }
 );
 
 productSchema.index(

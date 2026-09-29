@@ -26,6 +26,12 @@ const CompanySettingsSchema = new mongoose.Schema(
           default: [],
         },
       },
+      sale: {
+        termsAndConditions: {
+          type: [String],
+          default: [],
+        },
+      },
     },
   },
   {

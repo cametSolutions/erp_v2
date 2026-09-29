@@ -1,6 +1,7 @@
 import mongoose from "mongoose";
 
 import AdditionalCharges from "../Model/AdditionalCharges.js";
+import PriceLevel from "../Model/PriceLevel.js";
 import Product from "../Model/ProductSchema.js";
 import { Godown } from "../Model/ProductSubDetails.js";
 
@@ -20,6 +21,11 @@ function requiredObjectId(value, field) {
     throw createSaleValidationError(`${field} must be a valid ObjectId`);
   }
   return String(value);
+}
+
+function optionalObjectId(value, field) {
+  if (value === undefined || value === null || value === "") return null;
+  return requiredObjectId(value, field);
 }
 
 function finiteNumber(value, field, { minimum = 0, maximum = Infinity } = {}) {
@@ -144,6 +150,12 @@ export function normalizeSaleItemInput(input = {}) {
       "billedQty",
     ),
     rate: finiteNumber(input.rate, "rate"),
+    // A Sale line keeps the level that resolved its frozen transaction rate.
+    // LSP, GSP and manual rates intentionally leave this null.
+    price_level_id: optionalObjectId(
+      firstDefined(input.priceLevelId, input.price_level_id),
+      "priceLevelId",
+    ),
     tax_inclusive: booleanValue(
       firstDefined(input.taxInclusive, input.tax_inclusive, false),
       "taxInclusive",
@@ -241,6 +253,24 @@ export async function resolveSaleItemMaster(item, { cmpId, session } = {}) {
       "selectedUnit is not valid for the selected Product",
     );
   }
+
+  if (item.price_level_id) {
+    // Do not accept a cross-company or cross-owner pricing reference merely
+    // because the client supplied a valid ObjectId.
+    const priceLevel = await PriceLevel.findOne({
+      _id: item.price_level_id,
+      cmp_id,
+      Primary_user_id: product.Primary_user_id,
+    })
+      .session(session || null)
+      .lean();
+    if (!priceLevel) {
+      throw createSaleValidationError(
+        "priceLevelId does not belong to the selected Product company",
+      );
+    }
+  }
+
   return {
     ...item,
     item_name: product.product_name,

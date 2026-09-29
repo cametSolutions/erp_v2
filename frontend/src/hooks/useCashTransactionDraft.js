@@ -5,9 +5,19 @@ function getReceiptDraftStorageKey(cmp_id, voucher_type) {
   return `cash-transaction-draft-${voucher_type || "receipt"}-${cmp_id || "default"}`;
 }
 
+// One id belongs to one logical save attempt and is persisted with the draft.
+function createRequestId() {
+  if (globalThis.crypto?.randomUUID) {
+    return globalThis.crypto.randomUUID();
+  }
+
+  return `${Date.now()}-${Math.random().toString(16).slice(2)}`;
+}
+
 // Creates blank draft state used for initialization/reset.
 function createDefaultDraft() {
   return {
+    requestId: createRequestId(),
     transactionDate: new Date().toISOString(),
     selectedSeries: null,
     party: null,
@@ -41,6 +51,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
     [cmp_id, voucher_type],
   );
   const [hasHydrated, setHasHydrated] = useState(false);
+  const [requestId, setRequestId] = useState(() => createRequestId());
   const [transactionDate, setTransactionDate] = useState(
     () => createDefaultDraft().transactionDate,
   );
@@ -59,6 +70,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
   // Resets in-memory state to default values.
   const resetDraftState = useCallback(() => {
     const nextDraft = createDefaultDraft();
+    setRequestId(nextDraft.requestId);
     setTransactionDate(nextDraft.transactionDate);
     setSelectedSeries(nextDraft.selectedSeries);
     setParty(nextDraft.party);
@@ -104,6 +116,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
 
       const draft = JSON.parse(rawDraft);
 
+      setRequestId(draft?.requestId || createRequestId());
       setTransactionDate(
         draft?.transactionDate || createDefaultDraft().transactionDate,
       );
@@ -136,6 +149,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
       localStorage.setItem(
         draftStorageKey,
         JSON.stringify({
+          requestId,
           transactionDate,
           selectedSeries,
           party,
@@ -165,6 +179,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
     instrumentType,
     narration,
     party,
+    requestId,
     selectedSeries,
     settlementDetails,
     step,
@@ -172,6 +187,7 @@ export function useCashTransactionDraft({ cmp_id, voucher_type }) {
   ]);
 
   return {
+    requestId,
     transactionDate,
     setTransactionDate,
     selectedSeries,

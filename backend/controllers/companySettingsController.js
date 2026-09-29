@@ -17,19 +17,21 @@ const buildUpdateFields = (payload = {}) => {
       payload.dataEntry.voucher.defaultBankAccountId || null;
   }
 
-  if (
-    Object.prototype.hasOwnProperty.call(
-      payload?.dataEntry?.order || {},
-      "termsAndConditions"
-    )
-  ) {
-    updateFields["dataEntry.order.termsAndConditions"] = Array.isArray(
-      payload.dataEntry.order.termsAndConditions
-    )
-      ? payload.dataEntry.order.termsAndConditions
-          .map((line) => String(line || "").trim())
-          .filter((line) => line !== "")
-      : [];
+  for (const source of ["order", "sale"]) {
+    if (
+      Object.prototype.hasOwnProperty.call(
+        payload?.dataEntry?.[source] || {},
+        "termsAndConditions"
+      )
+    ) {
+      updateFields[`dataEntry.${source}.termsAndConditions`] = Array.isArray(
+        payload.dataEntry[source].termsAndConditions
+      )
+        ? payload.dataEntry[source].termsAndConditions
+            .map((line) => String(line || "").trim())
+            .filter((line) => line !== "")
+        : [];
+    }
   }
 
   return updateFields;

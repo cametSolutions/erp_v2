@@ -4,6 +4,7 @@ import {
   cancelCashTransaction,
   createCashTransaction,
   getCashBankLedgerBalances,
+  getCashBankLedgerTransactions,
   getCashTransactionById,
   getCashTransactions,
 } from "../../controllers/cashTransactionController.js";
@@ -20,6 +21,9 @@ router.put("/:id/cancel", protect, requireCompanyAccess, cancelCashTransaction);
 
 // Fetch computed balances for cash/bank ledgers in selected company scope.
 router.get("/cash-bank-balances", protect, requireCompanyAccess, getCashBankLedgerBalances);
+
+// Must be registered before /:id so "cash-bank" is never treated as an ID.
+router.get("/cash-bank/:cashBankId/transactions", protect, requireCompanyAccess, getCashBankLedgerTransactions);
 
 // Fetch one receipt by id.
 router.get("/:id", protect, requireCompanyAccess, getCashTransactionById);

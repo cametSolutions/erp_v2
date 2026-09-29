@@ -149,7 +149,7 @@ function cashBankLedgerAudit(sale, party, ledgers) {
     if (!sameId(ledger.cash_bank_id, sale.party_id)) issues.push(`CashBankLedger account does not match Sale ${id(sale._id)}`);
     if (ledger.cash_bank_type !== party.partyType) issues.push(`CashBankLedger account type does not match Sale party type`);
     if (!sameDate(ledger.date, sale.date)) issues.push(`CashBankLedger date does not match Sale ${id(sale._id)}`);
-    if (ledger.ledger_side !== "credit") issues.push(`CashBankLedger ledger_side is ${ledger.ledger_side}, expected credit`);
+    if (ledger.direction !== "in") issues.push(`CashBankLedger direction is ${ledger.direction}, expected in`);
     if (!sameNumber(ledger.amount, sale.totals.final_amount)) issues.push(`CashBankLedger amount ${ledger.amount} does not match Sale final_amount ${sale.totals.final_amount}`);
     if (ledger.status !== sale.status) issues.push(`CashBankLedger status does not match Sale ${id(sale._id)}`);
     if (ledger.tally_status !== sale.tally_status) issues.push(`CashBankLedger tally_status does not match Sale ${id(sale._id)}`);
