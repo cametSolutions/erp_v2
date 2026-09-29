@@ -236,7 +236,6 @@ export const addProducts = async (req, res) => {
       Brand.find({
         cmp_id: cmpObjectId,
         Primary_user_id: primaryUserObjectId,
-        product_source: "tally",
         brand_id: { $in: [...brandIds] },
       }).lean(),
       Category.find({
