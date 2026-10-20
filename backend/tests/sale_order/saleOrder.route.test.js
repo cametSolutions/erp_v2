@@ -256,6 +256,14 @@ function getSaleOrderByRequestId(requestId) {
     .query({ cmp_id: String(baseContext.companyId) });
 }
 
+function verifySaleOrderByRequestId(requestId, payload) {
+  return request(app)
+    .post(`/api/sale-orders/by-request-id/${requestId}/verify`)
+    .set("Authorization", `Bearer ${baseContext.token}`)
+    .query({ cmp_id: String(baseContext.companyId) })
+    .send({ payload });
+}
+
 async function createSaleOrderForTest(overrides = {}) {
   const payload = buildValidSaleOrderPayload(
     baseContext.party._id,
@@ -472,6 +480,21 @@ describe("POST /api/sale-orders — Business logic", () => {
     expect((await getSaleOrderByRequestId("sale-order-request-missing")).status).toBe(404);
   });
 
+  it("verifies matching and conflicting Sale Order recovery payloads", async () => {
+    const payload = buildValidSaleOrderPayload(
+      baseContext.party._id,
+      baseContext.series.seriesId,
+      { request_id: "sale-order-verify" },
+    );
+    await postSaleOrder(baseContext.token, payload);
+
+    expect((await verifySaleOrderByRequestId(payload.request_id, payload)).body.data.outcome).toBe("match");
+    expect((await verifySaleOrderByRequestId(payload.request_id, {
+      ...payload,
+      items: [{ ...payload.items[0], actualQty: 3, billedQty: 3 }],
+    })).body.data.outcome).toBe("conflict");
+  });
+
   it("creates a Sale Order and timeline with pending Tally status", async () => {
     const created = await createSaleOrderForTest();
     const saleOrder = await SaleOrder.findById(created.body.data.saleOrder._id).lean();
@@ -482,6 +505,28 @@ describe("POST /api/sale-orders — Business logic", () => {
 
     expect(saleOrder).toMatchObject({ status: "open", tally_ref: { tally_status: "pending", tally_accepted_at: null, tally_voucher_id: null } });
     expect(timeline).toMatchObject({ status: "open", tally_status: "pending" });
+  });
+
+  it("rejects invalid financial input before creating a Sale Order or timeline", async () => {
+    const payload = buildValidSaleOrderPayload(
+      baseContext.party._id,
+      baseContext.series.seriesId,
+      {
+        items: [{
+          ...buildValidSaleOrderPayload(
+            baseContext.party._id,
+            baseContext.series.seriesId,
+          ).items[0],
+          rate: "Infinity",
+        }],
+      },
+    );
+
+    const res = await postSaleOrder(baseContext.token, payload);
+
+    expect(res.status).toBe(400);
+    expect(await SaleOrder.countDocuments({ request_id: payload.request_id })).toBe(0);
+    expect(await VoucherTimeline.countDocuments({ cmp_id: baseContext.companyId })).toBe(0);
   });
 
   it("replays an identical request ID without another Sale Order or timeline", async () => {
@@ -1364,6 +1409,42 @@ describe("PUT /api/sale-orders/:saleOrderId — Update", () => {
     expect(saleOrder.totals.total_tax_amount).toBe(81);
     expect(saleOrder.totals.final_amount).toBe(531);
     expect(saleOrder.mailing_name).toBe("Updated Mailing Name");
+  });
+
+  it("rejects invalid edit totals without changing the saved Sale Order or timeline", async () => {
+    const createRes = await createSaleOrderForTest();
+    const saleOrderId = createRes.body.data.saleOrder._id;
+    const before = await SaleOrder.findById(saleOrderId).lean();
+    const timelineBefore = await VoucherTimeline.findOne({
+      cmp_id: baseContext.companyId,
+      voucher_id: saleOrderId,
+      voucher_type: "saleOrder",
+    }).lean();
+
+    const res = await updateSaleOrderRequest(saleOrderId, {
+      transactionDate: "2026-07-01T00:00:00.000Z",
+      items: [buildSavedItemUpdate(before.items[0], {
+        actualQty: 1e308,
+        billedQty: 1e308,
+        rate: 1e308,
+      })],
+      additionalCharges: [],
+    });
+
+    const after = await SaleOrder.findById(saleOrderId).lean();
+    const timelineAfter = await VoucherTimeline.findOne({
+      cmp_id: baseContext.companyId,
+      voucher_id: saleOrderId,
+      voucher_type: "saleOrder",
+    }).lean();
+
+    expect(res.status).toBe(400);
+    expect(after).toMatchObject({
+      date: before.date,
+      items: before.items,
+      totals: before.totals,
+    });
+    expect(timelineAfter).toEqual(timelineBefore);
   });
 
   it("Changing Party replaces its snapshot and derives interstate IGST", async () => {

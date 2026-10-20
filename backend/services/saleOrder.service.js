@@ -478,15 +478,13 @@ export async function createSaleOrder(data = {}, req) {
         return;
       }
       // Ownership guardrail: sale order cannot reference party from another company.
-      const [company, party] = await Promise.all([
-        Company.findById(cmpId).session(session).lean(),
-        Party.findOne({
+      const company = await Company.findById(cmpId).session(session).lean();
+      const party = await Party.findOne({
         _id: partyId,
         cmp_id: cmpId,
       })
         .session(session)
-        .lean(),
-      ]);
+        .lean();
 
       if (!company) {
         throw createHttpError("Company not found", 400);
@@ -588,6 +586,53 @@ export async function findSaleOrderByRequestId(
     .lean();
 }
 
+/** Read-only recovery verification; it never writes legacy fingerprint data. */
+export async function verifySaleOrderByRequestId(
+  requestId,
+  payload,
+  { cmp_id } = {},
+  req,
+) {
+  const request_id = requiredRequestId(requestId);
+  const filter = applyTransactionCreatorScope(req, { cmp_id, request_id });
+  const saleOrder = await SaleOrder.findOne(filter).lean();
+  if (!saleOrder) return { outcome: "not_found" };
+  if (!saleOrder.request_fingerprint) {
+    return { outcome: "unverifiable", saleOrder };
+  }
+
+  try {
+    if (requiredRequestId(payload?.request_id ?? payload?.requestId) !== request_id) {
+      return { outcome: "unverifiable", saleOrder };
+    }
+    const verificationPayload = {
+      ...payload,
+      cmpId: req.companyId,
+      userId: req.user?._id || req.user?.id || null,
+    };
+    const selectedSeries = normalizeSelectedSeries(verificationPayload);
+    const candidateFingerprint = buildSaleOrderRequestFingerprint(
+      verificationPayload,
+      {
+        cmpId: verificationPayload.cmpId,
+        userId: verificationPayload.userId,
+        partyId:
+          verificationPayload.party?._id ||
+          verificationPayload.party?.id ||
+          verificationPayload.party_id ||
+          null,
+        selectedSeries,
+      },
+    );
+    return {
+      outcome: saleOrder.request_fingerprint === candidateFingerprint ? "match" : "conflict",
+      saleOrder,
+    };
+  } catch {
+    return { outcome: "unverifiable", saleOrder };
+  }
+}
+
 // Update flow summary:
 // 1) Start transaction
 // 2) Optional party ownership check (only when party is provided in payload)
@@ -660,12 +705,10 @@ export async function updateSaleOrder(id, data = {}, req) {
       const selectedPartyId = canReplaceParty
         ? requestedPartyId
         : saleOrder.party_id;
-      const [company, party] = await Promise.all([
-        Company.findById(cmpId).session(session).lean(),
-        Party.findOne({ _id: selectedPartyId, cmp_id: cmpId })
-          .session(session)
-          .lean(),
-      ]);
+      const company = await Company.findById(cmpId).session(session).lean();
+      const party = await Party.findOne({ _id: selectedPartyId, cmp_id: cmpId })
+        .session(session)
+        .lean();
       if (!company) throw createHttpError("Company not found", 400);
       if (!party) {
         throw createHttpError("Selected party does not belong to this company", 400);
